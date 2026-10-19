@@ -64,4 +64,37 @@ is accepted.
   between lookups (`--delay`). If the daily quota runs out it stops, keeps what it already
   added, and lists the indicators still to check.
 
+## Keeping the feed fresh
+
+Attacker infrastructure rotates: command-and-control servers are re-leased within weeks,
+so a static blocklist slowly fills with addresses that VirusTotal no longer flags and that
+may by now serve legitimate traffic. `--recheck` re-verifies the rows the script added:
+
+```
+python3 vt_check.py --recheck --dry-run      # list what would change, write nothing
+python3 vt_check.py --recheck                # re-verify rows checked 60+ days ago
+python3 vt_check.py --recheck --max-age 30   # ... 30+ days ago (0 = every row)
+git commit -am "Re-verify stale indicators" && git push
+```
+
+- Only rows whose COMMENT ends in `VT n/m malicious YYYY-MM-DD` (the note the script
+  writes) and whose date is `--max-age` days old or more are looked up, one every 15 s.
+  Hand-written rows are never touched.
+- Rows still flagged by at least `--min-malicious` engines get a fresh ratio, date and
+  CONFIDENCE in place; rows that fell below are removed.
+- The header line, the order of the rows and every other row stay exactly as they are.
+- The file is rewritten after every change, so if the daily quota runs out (or you press
+  Ctrl-C) it is left consistent. Refreshed rows carry today's date and are skipped next time,
+  so running the command again the next day resumes where it stopped.
+
+### Monthly re-check on GitHub Actions
+
+`.github/workflows/recheck.yml` runs `--recheck` on the 1st of every month (or on demand
+from the Actions tab, with a custom max age) and commits the result. It does nothing until
+the repository has a `VT_API_KEY` secret: Settings → Secrets and variables → Actions →
+New repository secret. A full run takes about 15 s per stale row, within the free key's
+500 lookups a day; if it stops early the rows done so far are still committed and the job
+is marked failed so GitHub notifies you. Note that GitHub pauses scheduled workflows in
+repositories with no activity for 60 days.
+
 Tests: `python3 -m unittest`

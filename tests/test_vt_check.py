@@ -1,9 +1,12 @@
+import contextlib
+import io
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import vt_check
 
@@ -11,6 +14,13 @@ REPO = Path(__file__).resolve().parent.parent
 HEADER = "# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT\n"
 EXISTING = "test-domain-01,example.com,Domain,high,high,AB,TEST ENTRY\n"
 TODAY = "2026-10-19"
+SHA256 = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
+
+# Rows as vt_check.py writes them, dated relative to TODAY (max age defaults to 60 days).
+OLD = "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - VT 12/93 malicious 2026-08-01\n"  # 79 days
+OLD_IP = "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,VT 6/86 malicious 2026-07-15\n"  # 96 days
+OLD_HASH = f"vt-sha256-9634a68018,{SHA256},SHA256,high,high,AV,VT 60/65 malicious 2026-06-30\n"  # 111 days
+RECENT = "vt-domain-ec0f4e8e0a,bad.example.net,Domain,high,high,AB,VT 11/91 malicious 2026-10-01\n"  # 18 days
 
 
 def vt_object(obj_type, obj_id, malicious, suspicious=0, undetected=20, harmless=60):
@@ -293,6 +303,159 @@ class RunTest(unittest.TestCase):
         self.assertTrue(lines[2].startswith("vt-domain-e3daa29865,evil.com,"))
 
 
+class RecheckTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.feed = Path(tmp.name) / "feed.csv"
+        self.feed.write_text(HEADER + EXISTING + OLD)
+        self.sleeps = []
+
+    def recheck(self, fake, **kwargs):
+        return vt_check.recheck(
+            self.feed,
+            fake,
+            sleep=self.sleeps.append,
+            today=TODAY,
+            out=lambda *a: None,
+            **kwargs,
+        )
+
+    def statuses(self, results):
+        return {r.indicator: r.status for r in results}
+
+    def test_old_row_still_malicious_gets_a_fresh_ratio_and_date(self):
+        fake = FakeVT({"/domains/evil.com": vt_object("domain", "evil.com", malicious=11)})
+
+        results = self.recheck(fake)
+
+        self.assertEqual(self.statuses(results)["evil.com"], "refreshed")
+        self.assertEqual(
+            self.feed.read_text(),
+            HEADER + EXISTING
+            + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - VT 11/91 malicious 2026-10-19\n",
+        )
+
+    def test_confidence_follows_the_new_detection_count(self):
+        fake = FakeVT({"/domains/evil.com": vt_object("domain", "evil.com", malicious=4)})
+
+        self.recheck(fake)
+
+        row = self.feed.read_text().splitlines()[2].split(",")
+        self.assertEqual(row[3], "low")
+
+    def test_old_row_no_longer_malicious_is_removed(self):
+        fake = FakeVT({"/domains/evil.com": vt_object("domain", "evil.com", malicious=2)})
+
+        results = self.recheck(fake)
+
+        self.assertEqual(self.statuses(results)["evil.com"], "removed")
+        self.assertEqual(self.feed.read_text(), HEADER + EXISTING)
+
+    def test_recent_and_hand_written_rows_are_kept_without_a_lookup(self):
+        self.feed.write_text(HEADER + EXISTING + RECENT + OLD)
+        fake = FakeVT({"/domains/evil.com": vt_object("domain", "evil.com", malicious=11)})
+
+        results = self.recheck(fake)
+
+        self.assertEqual(fake.calls, ["/domains/evil.com"])
+        self.assertEqual(
+            self.statuses(results),
+            {"example.com": "kept", "bad.example.net": "kept", "evil.com": "refreshed"},
+        )
+        self.assertEqual(self.feed.read_text().splitlines()[:3], (HEADER + EXISTING + RECENT).splitlines())
+
+    def test_max_age_is_configurable(self):
+        self.feed.write_text(HEADER + RECENT)
+        fake = FakeVT({"/domains/bad.example.net": vt_object("domain", "bad.example.net", malicious=11)})
+
+        self.recheck(fake, max_age=10)
+
+        self.assertEqual(fake.calls, ["/domains/bad.example.net"])
+
+    def test_threshold_is_configurable(self):
+        fake = FakeVT({"/domains/evil.com": vt_object("domain", "evil.com", malicious=2)})
+
+        results = self.recheck(fake, min_malicious=1)
+
+        self.assertEqual(self.statuses(results)["evil.com"], "refreshed")
+
+    def test_rows_keep_their_order_and_the_header_its_bytes(self):
+        self.feed.write_text(HEADER + OLD_IP + OLD + EXISTING)
+        fake = FakeVT({
+            "/ip_addresses/203.0.113.7": vt_object("ip_address", "203.0.113.7", malicious=6),
+            "/domains/evil.com": vt_object("domain", "evil.com", malicious=0),
+        })
+
+        self.recheck(fake)
+
+        self.assertEqual(self.feed.read_bytes().split(b"\n")[0], HEADER.rstrip("\n").encode())
+        self.assertEqual(self.feed.read_text().splitlines(), [
+            HEADER.rstrip("\n"),
+            "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,VT 6/86 malicious 2026-10-19",
+            EXISTING.rstrip("\n"),
+        ])
+
+    def test_quota_stop_updates_rows_done_so_far_and_leaves_the_rest_untouched(self):
+        self.feed.write_text(HEADER + OLD + OLD_IP + OLD_HASH)
+        fake = FakeVT({
+            "/domains/evil.com": vt_object("domain", "evil.com", malicious=11),
+            "/ip_addresses/203.0.113.7": vt_error(429, "QuotaExceededError"),
+        })
+
+        results = self.recheck(fake)
+
+        self.assertEqual(
+            self.statuses(results),
+            {"evil.com": "refreshed", "203.0.113.7": "quota", SHA256: "unchecked"},
+        )
+        self.assertNotIn(f"/files/{SHA256}", fake.calls)
+        self.assertEqual(
+            self.feed.read_text(),
+            HEADER
+            + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - VT 11/91 malicious 2026-10-19\n"
+            + OLD_IP + OLD_HASH,
+        )
+
+    def test_dry_run_reports_changes_without_writing(self):
+        self.feed.write_text(HEADER + OLD + OLD_IP)
+        fake = FakeVT({
+            "/domains/evil.com": vt_object("domain", "evil.com", malicious=11),
+            "/ip_addresses/203.0.113.7": vt_object("ip_address", "203.0.113.7", malicious=1),
+        })
+
+        results = self.recheck(fake, dry_run=True)
+
+        self.assertEqual(self.statuses(results), {"evil.com": "would-refresh", "203.0.113.7": "would-remove"})
+        self.assertEqual(self.feed.read_text(), HEADER + OLD + OLD_IP)
+
+    def test_waits_between_lookups_only(self):
+        self.feed.write_text(HEADER + EXISTING + OLD + RECENT + OLD_IP)
+        fake = FakeVT({
+            "/domains/evil.com": vt_object("domain", "evil.com", malicious=11),
+            "/ip_addresses/203.0.113.7": vt_object("ip_address", "203.0.113.7", malicious=6),
+        })
+
+        self.recheck(fake, delay=15)
+
+        self.assertEqual(len(fake.calls), 2)
+        self.assertEqual(self.sleeps, [15])
+
+    def test_row_virustotal_no_longer_knows_is_left_alone(self):
+        results = self.recheck(FakeVT({}))
+
+        self.assertEqual(self.statuses(results)["evil.com"], "not-found")
+        self.assertEqual(self.feed.read_text(), HEADER + EXISTING + OLD)
+
+    def test_bad_api_key_raises_and_leaves_feed_untouched(self):
+        fake = FakeVT({"/domains/evil.com": vt_error(401, "WrongCredentialsError")})
+
+        with self.assertRaises(vt_check.VTError):
+            self.recheck(fake)
+
+        self.assertEqual(self.feed.read_text(), HEADER + EXISTING + OLD)
+
+
 class CommandLineTest(unittest.TestCase):
     def run_cli(self, *args, stdin="", env_key=None):
         env = {k: v for k, v in os.environ.items() if k != "VT_API_KEY"}
@@ -336,6 +499,28 @@ class CommandLineTest(unittest.TestCase):
                     ("9.9.9.9", "Lazarus campaign"),
                 ],
             )
+
+    def test_recheck_rejects_indicator_arguments(self):
+        proc = self.run_cli("--recheck", "evil.com", env_key="dummy")
+
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("do not pass indicators", proc.stderr)
+
+    def test_recheck_from_the_command_line_rewrites_the_feed_and_summarises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            feed = Path(tmp) / "feed.csv"
+            feed.write_text(HEADER + EXISTING + OLD)
+            fake = FakeVT({"/domains/evil.com": vt_object("domain", "evil.com", malicious=1)})
+            output = io.StringIO()
+
+            with patch.object(vt_check, "make_fetch", return_value=fake), \
+                    patch.dict(os.environ, {"VT_API_KEY": "dummy"}), \
+                    contextlib.redirect_stdout(output):
+                code = vt_check.main(["--recheck", "--feed", str(feed)])
+
+            self.assertEqual(code, 0)
+            self.assertEqual(feed.read_text(), HEADER + EXISTING)
+            self.assertIn("1 kept, 1 removed", output.getvalue())
 
 
 if __name__ == "__main__":

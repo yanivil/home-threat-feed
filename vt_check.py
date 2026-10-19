@@ -4,11 +4,17 @@
     export VT_API_KEY=...        # your VirusTotal API key (never commit it)
     python3 vt_check.py evil.com 203.0.113.7 https://bad.example/x <sha256>
     python3 vt_check.py -f iocs.txt --dry-run
+    python3 vt_check.py --recheck [--max-age 60] [--dry-run]   # re-verify old feed rows
 
 An indicators file has one indicator per line, optionally followed by whitespace
 and a label (group, source...) that goes into the COMMENT column. Tab-separated
 label fields are joined with " - ". Blank lines and lines starting with # are skipped.
 Defanged input (evil[.]com, hxxps://...) is accepted.
+
+--recheck looks up again every feed row whose COMMENT ends in "VT n/m malicious
+YYYY-MM-DD" dated --max-age days ago or more: rows still flagged by enough engines
+get a fresh ratio, date and confidence, rows that fell below are removed. Rows
+without such a note (hand-written ones) are never touched.
 """
 
 import argparse
@@ -23,7 +29,7 @@ import time
 import urllib.error
 import urllib.request
 from collections import Counter, namedtuple
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 API_BASE = "https://www.virustotal.com/api/v3"
@@ -37,6 +43,10 @@ DOMAIN_RE = re.compile(
     r"(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)+"
     r"(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})"
 )
+
+# The note feed_row() puts at the end of COMMENT; --recheck finds rows by it.
+VT_NOTE_RE = re.compile(r"VT (\d+)/(\d+) malicious (\d{4}-\d{2}-\d{2})$")
+RECHECK_TYPES = ("IP", "Domain", "URL", "MD5", "SHA1", "SHA256")
 
 Result = namedtuple("Result", "indicator status detail")
 
@@ -113,6 +123,25 @@ def feed_values(text):
     return values
 
 
+def lookup(fetch, ioc_type, value):
+    """Fetch an indicator's VirusTotal object.
+
+    Return (None, "", last_analysis_stats) on success, or (status, detail, None)
+    with status "quota", "not-found" or "error". Raise VTError on a refused key.
+    """
+    status, body = fetch(api_path(ioc_type, value))
+    error = (body.get("error") or {}).get("code", "") if isinstance(body, dict) else ""
+    if status in (401, 403):
+        raise VTError(f"VirusTotal refused the API key: HTTP {status} {error}")
+    if status == 429:
+        return "quota", f"{error} - stopping", None
+    if status == 404:
+        return "not-found", "VirusTotal has no record", None
+    if status != 200:
+        return "error", f"HTTP {status} {error}", None
+    return None, "", body["data"]["attributes"].get("last_analysis_stats", {})
+
+
 def run(indicators, feed_path, fetch, *, min_malicious=3, dry_run=False,
         delay=FREE_API_DELAY, sleep=time.sleep, today=None, out=print):
     """Look up each indicator and append rows for the malicious ones to the feed.
@@ -153,22 +182,11 @@ def run(indicators, feed_path, fetch, *, min_malicious=3, dry_run=False,
             sleep(delay)
         checked.add(value.lower())
 
-        status, body = fetch(api_path(ioc_type, value))
-        error = (body.get("error") or {}).get("code", "") if isinstance(body, dict) else ""
-        if status in (401, 403):
-            raise VTError(f"VirusTotal refused the API key: HTTP {status} {error}")
-        if status == 429:
-            stopped = True
-            record(raw, "quota", f"{error} - stopping")
+        problem, detail, stats = lookup(fetch, ioc_type, value)
+        if problem:
+            stopped = problem == "quota"
+            record(raw, problem, detail)
             continue
-        if status == 404:
-            record(raw, "not-found", "VirusTotal has no record")
-            continue
-        if status != 200:
-            record(raw, "error", f"HTTP {status} {error}")
-            continue
-
-        stats = body["data"]["attributes"].get("last_analysis_stats", {})
         malicious = stats.get("malicious", 0)
         ratio = f"{ioc_type} {malicious}/{sum(stats.values())} malicious"
         if malicious < min_malicious:
@@ -183,6 +201,80 @@ def run(indicators, feed_path, fetch, *, min_malicious=3, dry_run=False,
         needs_newline = False
         in_feed.add(value.lower())
         record(raw, "added", ratio)
+
+    return results
+
+
+def recheck(feed_path, fetch, *, max_age=60, min_malicious=3, dry_run=False,
+            delay=FREE_API_DELAY, sleep=time.sleep, today=None, out=print):
+    """Look up again the feed rows whose VirusTotal check is `max_age` days old or more.
+
+    Rows that `min_malicious` engines still flag get a fresh ratio, date and
+    confidence; rows that fell below are removed. Every other row, the header
+    and the row order stay exactly as they were. The file is rewritten after
+    each change, so a run that stops early (quota, Ctrl-C) leaves it consistent.
+    """
+    today = today or date.today().isoformat()
+    cutoff = date.fromisoformat(today) - timedelta(days=max_age)
+    feed_path = Path(feed_path)
+    with feed_path.open(newline="") as f:
+        lines = f.read().split("\n")
+    results = []
+    looked_up = False
+    stopped = False
+
+    def record(value, status, detail="", quiet=False):
+        results.append(Result(value, status, detail))
+        if not quiet:
+            out(f"{value}: {status}" + (f" ({detail})" if detail else ""))
+
+    def save():
+        with feed_path.open("w", newline="") as f:
+            f.write("\n".join(line for line in lines if line is not None))
+
+    for i, line in enumerate(lines):
+        fields = line.split(",")
+        if line.startswith("#") or len(fields) != 7:
+            continue
+        value, ioc_type, comment = fields[1], fields[2], fields[6]
+        note = VT_NOTE_RE.search(comment)
+        try:
+            checked = date.fromisoformat(note.group(3)) if note else None
+        except ValueError:
+            checked = None
+        if checked is None or ioc_type not in RECHECK_TYPES:
+            record(value, "kept", "no VirusTotal date", quiet=True)
+            continue
+        if checked > cutoff:
+            record(value, "kept", f"checked {checked}", quiet=True)
+            continue
+        if stopped:
+            record(value, "unchecked")
+            continue
+        if looked_up:
+            sleep(delay)
+        looked_up = True
+
+        problem, detail, stats = lookup(fetch, ioc_type, value)
+        if problem:
+            stopped = problem == "quota"
+            record(value, problem, detail)
+            continue
+        malicious = stats.get("malicious", 0)
+        total = sum(stats.values())
+        change = f"{ioc_type} {note.group(1)}/{note.group(2)} -> {malicious}/{total} malicious"
+        if malicious < min_malicious:
+            record(value, "would-remove" if dry_run else "removed", change)
+            if not dry_run:
+                lines[i] = None
+                save()
+            continue
+        fields[3] = confidence(malicious)
+        fields[6] = comment[:note.start()] + f"VT {malicious}/{total} malicious {today}"
+        record(value, "would-refresh" if dry_run else "refreshed", change)
+        if not dry_run:
+            lines[i] = ",".join(fields)
+            save()
 
     return results
 
@@ -232,25 +324,39 @@ def main(argv=None):
                         help="COMMENT text for indicators without a label of their own")
     parser.add_argument("--min-malicious", type=int, default=3,
                         help="engines that must flag an indicator before it is added (default 3)")
-    parser.add_argument("--feed", type=Path, default=FEED, help="feed CSV to append to")
+    parser.add_argument("--feed", type=Path, default=FEED, help="feed CSV to append to (with --recheck: to rewrite)")
     parser.add_argument("--delay", type=float, default=FREE_API_DELAY,
                         help=f"seconds between lookups (default {FREE_API_DELAY}, the free-key rate)")
-    parser.add_argument("--dry-run", action="store_true", help="show what would be added, change nothing")
+    parser.add_argument("--dry-run", action="store_true", help="show what would change, change nothing")
+    parser.add_argument("--recheck", action="store_true",
+                        help="instead of adding indicators, re-verify the feed's own rows: rows whose "
+                             "VirusTotal check is old get a fresh ratio and date, or are removed")
+    parser.add_argument("--max-age", type=int, default=60, metavar="DAYS",
+                        help="with --recheck, re-verify rows checked DAYS or more days ago (default 60, 0 = all)")
     args = parser.parse_args(argv)
 
     api_key = os.environ.get("VT_API_KEY", "").strip()
     if not api_key:
         parser.error("set the VT_API_KEY environment variable to your VirusTotal API key")
     entries = read_indicators(args.file, args.indicators, args.label)
-    if not entries:
+    if args.recheck and entries:
+        parser.error("--recheck re-verifies the rows already in the feed; do not pass indicators")
+    if not args.recheck and not entries:
         parser.error("no indicators given")
 
     say = lambda *a: print(*a, flush=True)
-    say(f"Checking {len(entries)} indicators against VirusTotal "
-        f"(min {args.min_malicious} malicious detections{', dry run' if args.dry_run else ''})")
+    mode = f"min {args.min_malicious} malicious detections{', dry run' if args.dry_run else ''}"
     try:
-        results = run(entries, args.feed, make_fetch(api_key), min_malicious=args.min_malicious,
-                      dry_run=args.dry_run, delay=args.delay, out=say)
+        if args.recheck:
+            say(f"Re-checking {args.feed.name} rows last verified {args.max_age}+ days ago "
+                f"on VirusTotal ({mode})")
+            results = recheck(args.feed, make_fetch(api_key), max_age=args.max_age,
+                              min_malicious=args.min_malicious, dry_run=args.dry_run,
+                              delay=args.delay, out=say)
+        else:
+            say(f"Checking {len(entries)} indicators against VirusTotal ({mode})")
+            results = run(entries, args.feed, make_fetch(api_key), min_malicious=args.min_malicious,
+                          dry_run=args.dry_run, delay=args.delay, out=say)
     except VTError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -258,7 +364,8 @@ def main(argv=None):
     counts = Counter(r.status for r in results)
     say("Summary: " + ", ".join(f"{n} {status}" for status, n in counts.most_common()))
     if counts["quota"]:
-        say(f"VirusTotal quota reached; {counts['unchecked'] + 1} indicators still need checking.")
+        what = "rows" if args.recheck else "indicators"
+        say(f"VirusTotal quota reached; {counts['unchecked'] + 1} {what} still need checking.")
         return 1
     return 0
 

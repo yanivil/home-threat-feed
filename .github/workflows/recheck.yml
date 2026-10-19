@@ -1,0 +1,51 @@
+name: Re-verify stale indicators
+
+on:
+  schedule:
+    - cron: "17 3 1 * *"  # 1st of every month, 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      max_age:
+        description: "Re-verify rows checked this many days ago or more (0 = every row)"
+        default: "60"
+
+permissions:
+  contents: write
+
+jobs:
+  recheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180  # 15 s per stale row; the free key allows 500 lookups a day
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Re-verify stale rows on VirusTotal
+        id: recheck
+        # A quota stop exits 1 but leaves refreshed rows worth committing.
+        continue-on-error: true
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          MAX_AGE: ${{ inputs.max_age || '60' }}
+        run: |
+          if [ -z "$VT_API_KEY" ]; then
+            echo "::warning::VT_API_KEY secret is not set; add it under Settings > Secrets and variables > Actions"
+            exit 0
+          fi
+          python3 vt_check.py --recheck --max-age "$MAX_AGE"
+
+      - name: Commit the updated feed
+        run: |
+          if git diff --quiet -- spark-ioc-feed.csv; then
+            echo "Feed unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Re-verify stale indicators on VirusTotal" -- spark-ioc-feed.csv
+          git push
+
+      - name: Fail the job if the re-check stopped early
+        if: steps.recheck.outcome == 'failure'
+        run: |
+          echo "::error::The re-check stopped early (quota or API error); rows done so far were committed. Re-run tomorrow to continue."
+          exit 1
