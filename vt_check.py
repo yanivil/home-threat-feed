@@ -12,9 +12,10 @@ label fields are joined with " - ". Blank lines and lines starting with # are sk
 Defanged input (evil[.]com, hxxps://...) is accepted.
 
 --recheck looks up again every feed row whose COMMENT ends in "VT n/m malicious
-YYYY-MM-DD" dated --max-age days ago or more: rows still flagged by enough engines
-get a fresh ratio, date and confidence, rows that fell below are removed. Rows
-without such a note (hand-written ones) are never touched.
+YYYY-MM-DD" once that date is old enough for the row's TYPE (IPs 60 days, domains
+and URLs 180, hashes never; --max-age DAYS applies DAYS to every type): rows still
+flagged by enough engines get a fresh ratio, date and confidence, rows that fell
+below are removed. Rows without such a note (hand-written ones) are never touched.
 """
 
 import argparse
@@ -46,6 +47,10 @@ DOMAIN_RE = re.compile(
 
 # The note feed_row() puts at the end of COMMENT; --recheck finds rows by it.
 VT_NOTE_RE = re.compile(r"VT (\d+)/(\d+) malicious (\d{4}-\d{2}-\d{2})$")
+# Days after which --recheck looks a row up again, per TYPE. Attacker IPs are
+# re-leased within weeks and domains re-registered after a year or so, while a
+# malicious file stays malicious: hashes are rechecked only when --max-age says so.
+MAX_AGE = {"IP": 60, "Domain": 180, "URL": 180}
 RECHECK_TYPES = ("IP", "Domain", "URL", "MD5", "SHA1", "SHA256")
 
 Result = namedtuple("Result", "indicator status detail")
@@ -205,17 +210,19 @@ def run(indicators, feed_path, fetch, *, min_malicious=3, dry_run=False,
     return results
 
 
-def recheck(feed_path, fetch, *, max_age=60, min_malicious=3, dry_run=False,
+def recheck(feed_path, fetch, *, max_age=None, min_malicious=3, dry_run=False,
             delay=FREE_API_DELAY, sleep=time.sleep, today=None, out=print):
-    """Look up again the feed rows whose VirusTotal check is `max_age` days old or more.
+    """Look up again the feed rows whose VirusTotal check is old enough for their type.
 
-    Rows that `min_malicious` engines still flag get a fresh ratio, date and
-    confidence; rows that fell below are removed. Every other row, the header
-    and the row order stay exactly as they were. The file is rewritten after
-    each change, so a run that stops early (quota, Ctrl-C) leaves it consistent.
+    "Old enough" is MAX_AGE days for the row's TYPE (never for hashes), or
+    `max_age` days for every type when given. Rows that `min_malicious` engines
+    still flag get a fresh ratio, date and confidence; rows that fell below are
+    removed. Every other row, the header and the row order stay exactly as they
+    were. The file is rewritten after each change, so a run that stops early
+    (quota, Ctrl-C) leaves it consistent.
     """
     today = today or date.today().isoformat()
-    cutoff = date.fromisoformat(today) - timedelta(days=max_age)
+    today_date = date.fromisoformat(today)
     feed_path = Path(feed_path)
     with feed_path.open(newline="") as f:
         lines = f.read().split("\n")
@@ -245,7 +252,11 @@ def recheck(feed_path, fetch, *, max_age=60, min_malicious=3, dry_run=False,
         if checked is None or ioc_type not in RECHECK_TYPES:
             record(value, "kept", "no VirusTotal date", quiet=True)
             continue
-        if checked > cutoff:
+        age_limit = MAX_AGE.get(ioc_type) if max_age is None else max_age
+        if age_limit is None:
+            record(value, "kept", f"{ioc_type} rows are not rechecked", quiet=True)
+            continue
+        if checked > today_date - timedelta(days=age_limit):
             record(value, "kept", f"checked {checked}", quiet=True)
             continue
         if stopped:
@@ -331,8 +342,9 @@ def main(argv=None):
     parser.add_argument("--recheck", action="store_true",
                         help="instead of adding indicators, re-verify the feed's own rows: rows whose "
                              "VirusTotal check is old get a fresh ratio and date, or are removed")
-    parser.add_argument("--max-age", type=int, default=60, metavar="DAYS",
-                        help="with --recheck, re-verify rows checked DAYS or more days ago (default 60, 0 = all)")
+    parser.add_argument("--max-age", type=int, default=None, metavar="DAYS",
+                        help="with --recheck, re-verify rows of every type checked DAYS or more days ago "
+                             "(0 = every row); default per type: IPs 60, domains and URLs 180, hashes never")
     args = parser.parse_args(argv)
 
     api_key = os.environ.get("VT_API_KEY", "").strip()
@@ -348,8 +360,9 @@ def main(argv=None):
     mode = f"min {args.min_malicious} malicious detections{', dry run' if args.dry_run else ''}"
     try:
         if args.recheck:
-            say(f"Re-checking {args.feed.name} rows last verified {args.max_age}+ days ago "
-                f"on VirusTotal ({mode})")
+            ages = (f"{args.max_age}+ days ago, every type" if args.max_age is not None
+                    else ", ".join(f"{t} {d}+" for t, d in MAX_AGE.items()) + " days ago, hashes never")
+            say(f"Re-checking {args.feed.name} rows last verified {ages} on VirusTotal ({mode})")
             results = recheck(args.feed, make_fetch(api_key), max_age=args.max_age,
                               min_malicious=args.min_malicious, dry_run=args.dry_run,
                               delay=args.delay, out=say)

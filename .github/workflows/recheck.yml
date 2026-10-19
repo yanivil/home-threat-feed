@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       max_age:
-        description: "Re-verify rows checked this many days ago or more (0 = every row)"
-        default: "60"
+        description: "--max-age override: re-verify rows of every type checked this many days ago or more (empty = per-type defaults, 0 = every row)"
+        default: ""
 
 permissions:
   contents: write
@@ -25,13 +25,13 @@ jobs:
         continue-on-error: true
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
-          MAX_AGE: ${{ inputs.max_age || '60' }}
+          MAX_AGE: ${{ inputs.max_age }}
         run: |
           if [ -z "$VT_API_KEY" ]; then
             echo "::warning::VT_API_KEY secret is not set; add it under Settings > Secrets and variables > Actions"
             exit 0
           fi
-          python3 vt_check.py --recheck --max-age "$MAX_AGE"
+          python3 vt_check.py --recheck ${MAX_AGE:+--max-age "$MAX_AGE"}
 
       - name: Commit the updated feed
         run: |

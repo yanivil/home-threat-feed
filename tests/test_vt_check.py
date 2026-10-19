@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,9 +17,17 @@ EXISTING = "test-domain-01,example.com,Domain,high,high,AB,TEST ENTRY\n"
 TODAY = "2026-10-19"
 SHA256 = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
 
-# Rows as vt_check.py writes them, dated relative to TODAY (max age defaults to 60 days).
-OLD = "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - VT 12/93 malicious 2026-08-01\n"  # 79 days
+
+def aged(days):
+    """ISO date `days` days before TODAY."""
+    return (date.fromisoformat(TODAY) - timedelta(days=days)).isoformat()
+
+
+# Rows as vt_check.py writes them, dated relative to TODAY. --recheck looks IPs up
+# again after 60 days, domains and URLs after 180, hashes never.
+OLD = "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - VT 12/93 malicious 2026-03-01\n"  # 232 days
 OLD_IP = "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,VT 6/86 malicious 2026-07-15\n"  # 96 days
+OLD_URL = "vt-url-5a1d6f0c2e,https://bad.example/x,URL,medium,high,AB,VT 9/90 malicious 2026-02-01\n"  # 260 days
 OLD_HASH = f"vt-sha256-9634a68018,{SHA256},SHA256,high,high,AV,VT 60/65 malicious 2026-06-30\n"  # 111 days
 RECENT = "vt-domain-ec0f4e8e0a,bad.example.net,Domain,high,high,AB,VT 11/91 malicious 2026-10-01\n"  # 18 days
 
@@ -365,13 +374,60 @@ class RecheckTest(unittest.TestCase):
         )
         self.assertEqual(self.feed.read_text().splitlines()[:3], (HEADER + EXISTING + RECENT).splitlines())
 
-    def test_max_age_is_configurable(self):
-        self.feed.write_text(HEADER + RECENT)
-        fake = FakeVT({"/domains/bad.example.net": vt_object("domain", "bad.example.net", malicious=11)})
+    def test_each_type_has_its_own_default_age(self):
+        def row(name, value, ioc_type, days):
+            return f"{name},{value},{ioc_type},high,high,AB,VT 9/90 malicious {aged(days)}\n"
+
+        self.feed.write_text(
+            HEADER
+            + row("ip-due", "203.0.113.7", "IP", 60)
+            + row("ip-fresh", "203.0.113.8", "IP", 59)
+            + row("domain-due", "evil.com", "Domain", 180)
+            + row("domain-fresh", "bad.example.net", "Domain", 179)
+            + row("url-due", "https://bad.example/x", "URL", 180)
+            + row("hash-never", SHA256, "SHA256", 400)
+        )
+        fake = FakeVT({
+            "/ip_addresses/203.0.113.7": vt_object("ip_address", "203.0.113.7", malicious=9),
+            "/domains/evil.com": vt_object("domain", "evil.com", malicious=9),
+            vt_check.api_path("URL", "https://bad.example/x"): vt_object("url", "x", malicious=9),
+        })
+
+        results = self.recheck(fake)
+
+        self.assertEqual(fake.calls, [
+            "/ip_addresses/203.0.113.7",
+            "/domains/evil.com",
+            vt_check.api_path("URL", "https://bad.example/x"),
+        ])
+        self.assertEqual(self.statuses(results), {
+            "203.0.113.7": "refreshed",
+            "203.0.113.8": "kept",
+            "evil.com": "refreshed",
+            "bad.example.net": "kept",
+            "https://bad.example/x": "refreshed",
+            SHA256: "kept",
+        })
+
+    def test_hashes_are_never_rechecked_by_default(self):
+        self.feed.write_text(HEADER + OLD_HASH)
+        fake = FakeVT({f"/files/{SHA256}": vt_object("file", SHA256, malicious=0)})
+
+        self.recheck(fake)
+
+        self.assertEqual(fake.calls, [])
+        self.assertEqual(self.feed.read_text(), HEADER + OLD_HASH)
+
+    def test_max_age_overrides_the_per_type_defaults(self):
+        self.feed.write_text(HEADER + RECENT + OLD_HASH)
+        fake = FakeVT({
+            "/domains/bad.example.net": vt_object("domain", "bad.example.net", malicious=11),
+            f"/files/{SHA256}": vt_object("file", SHA256, malicious=60, undetected=5, harmless=0),
+        })
 
         self.recheck(fake, max_age=10)
 
-        self.assertEqual(fake.calls, ["/domains/bad.example.net"])
+        self.assertEqual(fake.calls, ["/domains/bad.example.net", f"/files/{SHA256}"])
 
     def test_threshold_is_configurable(self):
         fake = FakeVT({"/domains/evil.com": vt_object("domain", "evil.com", malicious=2)})
@@ -397,7 +453,7 @@ class RecheckTest(unittest.TestCase):
         ])
 
     def test_quota_stop_updates_rows_done_so_far_and_leaves_the_rest_untouched(self):
-        self.feed.write_text(HEADER + OLD + OLD_IP + OLD_HASH)
+        self.feed.write_text(HEADER + OLD + OLD_IP + OLD_URL)
         fake = FakeVT({
             "/domains/evil.com": vt_object("domain", "evil.com", malicious=11),
             "/ip_addresses/203.0.113.7": vt_error(429, "QuotaExceededError"),
@@ -407,14 +463,14 @@ class RecheckTest(unittest.TestCase):
 
         self.assertEqual(
             self.statuses(results),
-            {"evil.com": "refreshed", "203.0.113.7": "quota", SHA256: "unchecked"},
+            {"evil.com": "refreshed", "203.0.113.7": "quota", "https://bad.example/x": "unchecked"},
         )
-        self.assertNotIn(f"/files/{SHA256}", fake.calls)
+        self.assertNotIn(vt_check.api_path("URL", "https://bad.example/x"), fake.calls)
         self.assertEqual(
             self.feed.read_text(),
             HEADER
             + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - VT 11/91 malicious 2026-10-19\n"
-            + OLD_IP + OLD_HASH,
+            + OLD_IP + OLD_URL,
         )
 
     def test_dry_run_reports_changes_without_writing(self):

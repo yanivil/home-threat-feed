@@ -72,14 +72,17 @@ may by now serve legitimate traffic. `--recheck` re-verifies the rows the script
 
 ```
 python3 vt_check.py --recheck --dry-run      # list what would change, write nothing
-python3 vt_check.py --recheck                # re-verify rows checked 60+ days ago
-python3 vt_check.py --recheck --max-age 30   # ... 30+ days ago (0 = every row)
+python3 vt_check.py --recheck                # IPs checked 60+ days ago, domains and URLs 180+
+python3 vt_check.py --recheck --max-age 30   # every type, 30+ days ago (0 = every row)
 git commit -am "Re-verify stale indicators" && git push
 ```
 
 - Only rows whose COMMENT ends in `VT n/m malicious YYYY-MM-DD` (the note the script
-  writes) and whose date is `--max-age` days old or more are looked up, one every 15 s.
-  Hand-written rows are never touched.
+  writes) are looked up, one every 15 s, and only once old enough for their TYPE: IPs after
+  60 days (attacker servers are re-leased within weeks), domains and URLs after 180 (domains
+  drop and get re-registered on a scale of months), hashes never (a malicious file stays
+  malicious, so a hash can never block something legitimate). `--max-age DAYS` applies DAYS
+  to every type, hashes included. Hand-written rows are never touched.
 - Rows still flagged by at least `--min-malicious` engines get a fresh ratio, date and
   CONFIDENCE in place; rows that fell below are removed.
 - The header line, the order of the rows and every other row stay exactly as they are.
@@ -90,7 +93,7 @@ git commit -am "Re-verify stale indicators" && git push
 ### Monthly re-check on GitHub Actions
 
 `.github/workflows/recheck.yml` runs `--recheck` on the 1st of every month (or on demand
-from the Actions tab, with a custom max age) and commits the result. It does nothing until
+from the Actions tab, optionally with a `--max-age` override) and commits the result. It does nothing until
 the repository has a `VT_API_KEY` secret: Settings → Secrets and variables → Actions →
 New repository secret. A full run takes about 15 s per stale row, within the free key's
 500 lookups a day; if it stops early the rows done so far are still committed and the job
