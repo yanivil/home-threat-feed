@@ -1,0 +1,297 @@
+# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT
+test-domain-01,example.com,Domain,high,high,AB,TEST ENTRY - verify the feed works by browsing to example.com then remove this line
+test-hash-eicar,44d88612fea8a8f36de82e1278abb02f,MD5,high,high,AV,EICAR test file MD5 - safe to keep
+vt-domain-381783eca4,cloud.g-drive.cam,Domain,high,high,AB,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 13/92 malicious 2026-10-19
+vt-domain-e96d10b853,googeldrive.cam,Domain,high,high,AB,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 13/92 malicious 2026-10-19
+vt-domain-fad3e880b8,drivegoogel.cam,Domain,high,high,AB,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 13/92 malicious 2026-10-19
+vt-domain-265132b8d7,googelmeet.online,Domain,high,high,AB,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 12/92 malicious 2026-10-19
+vt-domain-359a402bdb,meetonline.cam,Domain,high,high,AB,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 14/92 malicious 2026-10-19
+vt-domain-9f9a553962,asdfafadafg.online,Domain,medium,high,AB,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 9/92 malicious 2026-10-19
+vt-sha256-0d5c6b7b58,6e7d9b33f1e72ea1ede71373a604ecdb060dab7d42055179c1eede9ecd1fd239,SHA256,high,high,AV,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 44/75 malicious 2026-10-19
+vt-sha256-0b2559e869,f5b12772db6817f7a765a6fe7565fd3d4f87edc28e42fe3ec0244a372a410fc9,SHA256,high,high,AV,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 20/75 malicious 2026-10-19
+vt-sha256-3a52919fd7,53f35e49eb9b271fd8cbcd3daacb525328dbf159a03dbd1c7adebe0363daa402,SHA256,high,high,AV,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 38/75 malicious 2026-10-19
+vt-sha256-479d1b3aae,3fd810a3aa0039993393741b32287c367a9a5037a41e826906440887cdd3ed13,SHA256,high,high,AV,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 38/75 malicious 2026-10-19
+vt-sha256-29bb4e77c1,76273382e4252c1f60a2251141e108942494409c759358320735891762c0682e,SHA256,high,high,AV,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 36/75 malicious 2026-10-19
+vt-sha256-5176178942,f5ba1645694c62f527ed6ceda8c68a5c3dd92b4032439167e8e937e72803b4bd,SHA256,high,high,AV,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 37/75 malicious 2026-10-19
+vt-sha256-52cc49db74,7cc571aca6d8715d9aaad3d83e1bcd30467565d583db1dfe73697c5d00a1f875,SHA256,high,high,AV,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 38/75 malicious 2026-10-19
+vt-sha256-895323f093,d2d19c7f2e4a5fdcfb34b26f048077d2c4fe26637ed2c90e9e9bdf32307c377e,SHA256,high,high,AV,Handala Hack / Void Manticore - Group-IB 2026-09-17 - VT 40/75 malicious 2026-10-19
+vt-sha256-d928d490ad,65359388b49ae2a982111ebe8ac837d0f3294ceab7a712df20d0f6c19bf3029e,SHA256,high,high,AV,Handala Hack / Void Manticore - Group-IB 2026-09-17 - VT 40/75 malicious 2026-10-19
+vt-sha256-2c1dff0ca9,5380ffda12f97cf4d8e0fe02e0580aa1a48b4b6da95e7f8a30029ad125c51b3f,SHA256,high,high,AV,Handala Hack / Void Manticore - Group-IB 2026-09-17 - VT 24/75 malicious 2026-10-19
+vt-sha256-165b5c42a0,138a4c9cd617912c2269fae64b6b12d57e926a36c2c62f25ee05a32cdf102212,SHA256,high,high,AV,Handala Hack / Void Manticore - Group-IB 2026-09-17 - VT 19/75 malicious 2026-10-19
+vt-sha256-6ee40d146c,bb56792212abe160fff643631fb69b2081601e6310fc6669fd9d52d690ec1903,SHA256,high,high,AV,Handala Hack / Void Manticore - Group-IB 2026-09-17 - VT 29/72 malicious 2026-10-19
+vt-sha256-99f38b4fde,c9e5cbc98e91aa35a260a1f85d7a5605dc7aa8d2d0b71eb6f063147d4dfa1b5f,SHA256,high,high,AV,Handala Hack / Void Manticore - Group-IB 2026-09-17 - VT 23/75 malicious 2026-10-19
+vt-sha256-d85e6ee4e1,4a3b003994112b4dd24ac8b9cc4757f4a12576b57b3cc8f5028d85fbceb7c405,SHA256,high,high,AV,Handala Hack / Void Manticore - Group-IB 2026-09-17 - VT 22/75 malicious 2026-10-19
+vt-sha256-2b7630190b,0d74156089292eee308017c8e8a7550739ecb6149ff379810f7c54b1dbaabc91,SHA256,high,high,AV,Handala Hack / Void Manticore - Group-IB 2026-09-17 - VT 30/75 malicious 2026-10-19
+vt-domain-de74b76f4b,healthcomfsdpower.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 14/92 malicious 2026-10-19
+vt-domain-feb112a4af,visitfinancedentists.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 17/92 malicious 2026-10-19
+vt-domain-19c5784d98,lifespotify.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 16/92 malicious 2026-10-19
+vt-domain-409928694b,sahi-finance.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 17/92 malicious 2026-10-19
+vt-domain-491dc39722,msmanagementgrp.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 13/92 malicious 2026-10-19
+vt-domain-6560adf590,msmanagementgrpmedia.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 13/92 malicious 2026-10-19
+vt-domain-674bbdcf68,healthful-hub.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 16/92 malicious 2026-10-19
+vt-domain-acd45e6ca4,neumedicahealthcare.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 17/92 malicious 2026-10-19
+vt-domain-c92db66d7a,optimumhealthcredit.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 18/92 malicious 2026-10-19
+vt-domain-17bd7dbd38,healthfullyrecipes.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 17/92 malicious 2026-10-19
+vt-domain-6776c3b947,refreshhealthandwellness.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 19/92 malicious 2026-10-19
+vt-domain-42fce16dae,healthvitalitycare.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 19/92 malicious 2026-10-19
+vt-domain-3b946aa56b,aceofspadesmanagement.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 17/92 malicious 2026-10-19
+vt-domain-3d64df122a,glmediaagency.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 19/92 malicious 2026-10-19
+vt-domain-edc118f111,digimediaskill.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 17/92 malicious 2026-10-19
+vt-domain-0c53833b5c,healthyweightplan.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 18/92 malicious 2026-10-19
+vt-domain-35e75f221d,mens-health-online.com,Domain,high,high,AB,Mirage Kitten / UNC1549 / Imperial Kitten - Kaspersky Securelist 2026-09-01 - VT 19/92 malicious 2026-10-19
+vt-domain-70c27db64c,locat.sbs,Domain,high,high,AB,Tortoiseshell / Imperial Kitten / UNC1549 - Group-IB 2026-08-26 - VT 14/92 malicious 2026-10-19
+vt-domain-448a328e29,tiktok-u.sbs,Domain,high,high,AB,Tortoiseshell / Imperial Kitten / UNC1549 - Group-IB 2026-08-26 - VT 14/92 malicious 2026-10-19
+vt-domain-b99f6cd830,neexportfolio.com,Domain,high,high,AB,Tortoiseshell / Imperial Kitten / UNC1549 - Group-IB 2026-08-26 - VT 22/92 malicious 2026-10-19
+vt-ip-785893fa2b,172.86.98.113,IP,high,high,AB,Tortoiseshell / Imperial Kitten / UNC1549 - Group-IB 2026-08-26 - VT 11/92 malicious 2026-10-19
+vt-ip-e538863ec2,185.253.116.81,IP,medium,high,AB,Tortoiseshell / Imperial Kitten / UNC1549 - Group-IB 2026-08-26 - VT 6/92 malicious 2026-10-19
+vt-md5-1f199bd092,db58adc4a6c192520ed509b20a928279,MD5,high,high,AV,Tortoiseshell / Imperial Kitten / UNC1549 - Group-IB 2026-08-26 - VT 39/76 malicious 2026-10-19
+vt-md5-3e26a517ef,07dd28b748656e9e1a870c538d6df68c,MD5,high,high,AV,Tortoiseshell / Imperial Kitten / UNC1549 - Group-IB 2026-08-26 - VT 43/75 malicious 2026-10-19
+vt-domain-d4b9509809,realhealthshop.com,Domain,high,high,AB,Mirage Kitten / UNC1549 - Kaspersky Securelist 2026-07-28 - VT 20/92 malicious 2026-10-19
+vt-domain-d33845f98b,tjconsultingservices.com,Domain,high,high,AB,Mirage Kitten / UNC1549 - Kaspersky Securelist 2026-07-28 - VT 19/92 malicious 2026-10-19
+vt-domain-908b9c9972,businessmixture.com,Domain,high,high,AB,Mirage Kitten / UNC1549 - Kaspersky Securelist 2026-07-28 - VT 21/92 malicious 2026-10-19
+vt-domain-80bcc32349,aecert.org,Domain,high,high,AB,Mirage Kitten / UNC1549 - Kaspersky Securelist 2026-07-28 - VT 19/92 malicious 2026-10-19
+vt-domain-bbe68b3a8e,global-reds.com,Domain,high,high,AB,Mirage Kitten / UNC1549 - Kaspersky Securelist 2026-07-28 - VT 20/92 malicious 2026-10-19
+vt-domain-43ce974dd7,maadinglobal.com,Domain,high,high,AB,Mirage Kitten / UNC1549 - Kaspersky Securelist 2026-07-28 - VT 16/92 malicious 2026-10-19
+vt-domain-5ed47de2dd,business-deegital.com,Domain,high,high,AB,Mirage Kitten / UNC1549 - Kaspersky Securelist 2026-07-28 - VT 18/92 malicious 2026-10-19
+vt-domain-9de9971480,thehealth-life.com,Domain,high,high,AB,Mirage Kitten / UNC1549 - Kaspersky Securelist 2026-07-28 - VT 16/92 malicious 2026-10-19
+vt-domain-6841ccc953,buisness-centeral-transportation.com,Domain,high,high,AB,Mirage Kitten / UNC1549 - Kaspersky Securelist 2026-07-28 - VT 20/92 malicious 2026-10-19
+vt-domain-d3a1bacbfc,healthcarezoomcenteral.org,Domain,high,high,AB,Mirage Kitten / UNC1549 - Kaspersky Securelist 2026-07-28 - VT 21/92 malicious 2026-10-19
+vt-md5-77b44d8778,a239e655709a2518dd0b7bdbed163679,MD5,high,high,AV,Mirage Kitten / UNC1549 - Kaspersky Securelist 2026-07-28 - VT 39/75 malicious 2026-10-19
+vt-ip-74441569de,175.110.121.39,IP,high,high,AB,Iranian-affiliated APT (CyberAv3ngers lineage) - CISA AA26-097A 2026-07-22 - VT 10/92 malicious 2026-10-19
+vt-ip-030d89ee3d,192.142.54.79,IP,medium,high,AB,Iranian-affiliated APT (CyberAv3ngers lineage) - CISA AA26-097A 2026-07-22 - VT 6/92 malicious 2026-10-19
+vt-ip-09037e43c0,185.225.17.225,IP,medium,high,AB,Iranian-affiliated APT (CyberAv3ngers lineage) - CISA AA26-097A 2026-07-22 - VT 8/92 malicious 2026-10-19
+vt-ip-3e6776faef,79.133.46.209,IP,high,high,AB,Iranian-affiliated APT (CyberAv3ngers lineage) - CISA AA26-097A 2026-07-22 - VT 10/92 malicious 2026-10-19
+vt-domain-4bced3604f,uasputnik.com,Domain,high,high,AB,UAC-0277 - CERT-UA UAC-0277 2026-09-30 - VT 23/92 malicious 2026-10-19
+vt-domain-f8abfa9f71,uasputn.com,Domain,high,high,AB,UAC-0277 - CERT-UA UAC-0277 2026-09-30 - VT 10/92 malicious 2026-10-19
+vt-domain-e5b15fc7e9,sputnk.com,Domain,high,high,AB,UAC-0277 - CERT-UA UAC-0277 2026-09-30 - VT 11/92 malicious 2026-10-19
+vt-domain-f187a0265e,fsputnik.com,Domain,high,high,AB,UAC-0277 - CERT-UA UAC-0277 2026-09-30 - VT 17/92 malicious 2026-10-19
+vt-domain-95d70a327d,ahahahahadebili.help,Domain,medium,high,AB,UAC-0277 - CERT-UA UAC-0277 2026-09-30 - VT 7/92 malicious 2026-10-19
+vt-domain-52e9e67e27,ukrainerada.top,Domain,medium,high,AB,UAC-0277 - CERT-UA UAC-0277 2026-09-30 - VT 9/92 malicious 2026-10-19
+vt-domain-8fb765d325,ilovecutecatics.com,Domain,medium,high,AB,UAC-0277 - CERT-UA UAC-0277 2026-09-30 - VT 5/92 malicious 2026-10-19
+vt-ip-f6ac1becfc,107.175.82.242,IP,high,high,AB,UAC-0277 - CERT-UA UAC-0277 2026-09-30 - VT 18/92 malicious 2026-10-19
+vt-ip-dc94ae47ce,193.178.159.128,IP,high,high,AB,UAC-0277 - CERT-UA UAC-0277 2026-09-30 - VT 14/92 malicious 2026-10-19
+vt-sha256-2601d7eed8,06f434695f93d7fd11eeff71358ff69fed79d310a66d993bbcc4ff979c117c90,SHA256,high,high,AV,UAC-0277 - CERT-UA UAC-0277 2026-09-30 - VT 56/75 malicious 2026-10-19
+vt-domain-0d355f4d44,qt-proxy.org,Domain,high,high,AB,QTFY - FBI-NSA-CNMF JCSA-20260826-01 2026-08-26 - VT 15/92 malicious 2026-10-19
+vt-domain-1604b77c52,qtproxy.xyz,Domain,high,high,AB,QTFY - FBI-NSA-CNMF JCSA-20260826-01 2026-08-26 - VT 16/92 malicious 2026-10-19
+vt-domain-cd6c1208f3,anticonstitutionally.sbs,Domain,high,high,AB,QTFY - FBI-NSA-CNMF JCSA-20260826-01 2026-08-26 - VT 12/92 malicious 2026-10-19
+vt-domain-d7a4e4ca86,fastsecurey.info,Domain,high,high,AB,QTFY - FBI-NSA-CNMF JCSA-20260826-01 2026-08-26 - VT 14/92 malicious 2026-10-19
+vt-ip-4bee752c1c,206.119.167.207,IP,medium,high,AB,QTFY - FBI-NSA-CNMF JCSA-20260826-01 2026-08-26 - VT 7/92 malicious 2026-10-19
+vt-sha256-e7934f2773,7a4c87677d7892b66c30c82ea72893bd29cfe793fade45222b4cf853b877d300,SHA256,high,high,AV,QTFY - FBI-NSA-CNMF JCSA-20260826-01 2026-08-26 - VT 35/75 malicious 2026-10-19
+vt-sha256-f2ae14802b,ba20494fe5a12955a408f076c3677bf8ae600c890554b9906049b8cd07206cfb,SHA256,high,high,AV,QTFY - FBI-NSA-CNMF JCSA-20260826-01 2026-08-26 - VT 32/75 malicious 2026-10-19
+vt-domain-1e5497f519,zmailanalytics.com,Domain,high,high,AB,Laundry Bear - CISA AA26-204A 2026-07-23 - VT 20/92 malicious 2026-10-19
+vt-domain-e668297ee5,zimbra-metadata.com,Domain,high,high,AB,Laundry Bear - CISA AA26-204A 2026-07-23 - VT 19/92 malicious 2026-10-19
+vt-domain-cb837a4d06,analyticemailmeter.com,Domain,high,high,AB,Laundry Bear - CISA AA26-204A 2026-07-23 - VT 20/92 malicious 2026-10-19
+vt-domain-eefea7808c,emailanalytics.com.ua,Domain,high,high,AB,Laundry Bear - CISA AA26-204A 2026-07-23 - VT 20/92 malicious 2026-10-19
+vt-domain-acd06d6f17,mailnalysis.com,Domain,high,high,AB,Laundry Bear - CISA AA26-204A 2026-07-23 - VT 17/92 malicious 2026-10-19
+vt-domain-22f685f01e,zimbrastat.com,Domain,high,high,AB,Laundry Bear - CISA AA26-204A 2026-07-23 - VT 20/92 malicious 2026-10-19
+vt-domain-d04d66f6f4,zimbrasoft.com.ua,Domain,high,high,AB,Laundry Bear - CISA AA26-204A 2026-07-23 - VT 18/92 malicious 2026-10-19
+vt-domain-203599ac0c,synacorzimbra.nl,Domain,high,high,AB,Laundry Bear - CISA AA26-204A 2026-07-23 - VT 21/92 malicious 2026-10-19
+vt-domain-679c305caf,istc-cloud.com,Domain,high,high,AB,Laundry Bear - CISA AA26-204A 2026-07-23 - VT 22/92 malicious 2026-10-19
+vt-domain-1925e14b78,datapub.news,Domain,high,high,AB,Gunra - CISA AA26-222A 2026-08-10 - VT 12/92 malicious 2026-10-19
+vt-sha256-e51dad462d,834efe9b392c6c000877ea5613a079445affc16fe8af5997d68c55cafc95e5d1,SHA256,high,high,AV,Gunra - CISA AA26-222A 2026-08-10 - VT 21/75 malicious 2026-10-19
+vt-sha256-49ae20710a,91f8fc7a3290611e28a35a403fd815554d9d856006cc2ee91ccdb64057ae53b0,SHA256,high,high,AV,Gunra - CISA AA26-222A 2026-08-10 - VT 55/75 malicious 2026-10-19
+vt-sha256-17673c1c53,a82e496b7b5279cb6b93393ec167dd3f50aff1557366784b25f9e51cb23689d9,SHA256,high,high,AV,Gunra - CISA AA26-222A 2026-08-10 - VT 61/75 malicious 2026-10-19
+vt-ip-7757a448f7,83.138.53.139,IP,high,high,AB,Medusa - CISA AA25-071A update 2026-08-18 - VT 11/92 malicious 2026-10-19
+vt-ip-6d8c82fd5e,94.156.67.145,IP,high,high,AB,Medusa - CISA AA25-071A update 2026-08-18 - VT 11/92 malicious 2026-10-19
+vt-domain-a6fa423edd,douncloud.site,Domain,high,high,AB,UAC-0145 (Sandworm) - CERT-UA UAC-0145 2026-08-08 - VT 20/92 malicious 2026-10-19
+vt-domain-55c33e2680,soprasteria-bg.com,Domain,high,high,AB,UAC-0145 (Sandworm) - CERT-UA UAC-0145 2026-08-08 - VT 18/92 malicious 2026-10-19
+vt-domain-6cda49dd09,soprasteriabg.com,Domain,high,high,AB,UAC-0145 (Sandworm) - CERT-UA UAC-0145 2026-08-08 - VT 17/92 malicious 2026-10-19
+vt-domain-366e6bb177,atlasgroup-ua.com,Domain,high,high,AB,UAC-0145 (Sandworm) - CERT-UA UAC-0145 2026-08-08 - VT 16/92 malicious 2026-10-19
+vt-ip-83cb98b7dd,139.28.36.23,IP,high,high,AB,UAC-0145 (Sandworm) - CERT-UA UAC-0145 2026-08-08 - VT 14/92 malicious 2026-10-19
+vt-sha256-f852d554cf,4646ea832a61c9f7bdb11fee64ad82ae6d9856d2f3a4b36a8a4a571145be1260,SHA256,high,high,AV,UAC-0145 (Sandworm) - CERT-UA UAC-0145 2026-08-08 - VT 40/75 malicious 2026-10-19
+vt-sha256-f1b981ddc0,aeb702f65445d12605a84be6fa31545c71be0bf619b1cbedbee5800a43fc6793,SHA256,high,high,AV,UAC-0145 (Sandworm) - CERT-UA UAC-0145 2026-08-08 - VT 37/75 malicious 2026-10-19
+vt-sha256-d398e0cc4b,6a60152f7c83d3416925316b75eb7720953cdd69aae9f0e088c789c25f51437f,SHA256,high,high,AV,UAC-0145 (Sandworm) - CERT-UA UAC-0145 2026-08-08 - VT 38/75 malicious 2026-10-19
+vt-domain-97712eff11,dns.studiocloud.xyz,Domain,medium,high,AB,Flax Typhoon (Integrity Tech) - CISA AA26-281A 2026-10-08 - VT 6/92 malicious 2026-10-19
+vt-domain-91df8ef231,studiocloud.xyz,Domain,medium,high,AB,Flax Typhoon (Integrity Tech) - CISA AA26-281A 2026-10-08 - VT 5/92 malicious 2026-10-19
+vt-domain-08c5fbec21,natcloudservice.com,Domain,medium,high,AB,Flax Typhoon (Integrity Tech) - CISA AA26-281A 2026-10-08 - VT 5/92 malicious 2026-10-19
+vt-sha256-a059c4df5a,804a53be802378a8ec4c94602fd3d6584e0d472d83148e8a42c731950fec415d,SHA256,high,high,AV,Flax Typhoon (Integrity Tech) - CISA AA26-281A 2026-10-08 - VT 49/75 malicious 2026-10-19
+vt-domain-6a94edeb38,kaufen-qpon.icu,Domain,high,high,AB,UAC-0099 - CERT-UA UAC-0099 2026-07-21 - VT 20/92 malicious 2026-10-19
+vt-sha256-5be836c571,c270432a3f16241c24d0b57838b17b2fa438a24eebf29dcbda08622de725fe21,SHA256,high,high,AV,UAC-0099 - CERT-UA UAC-0099 2026-07-21 - VT 53/75 malicious 2026-10-19
+vt-sha256-15ee98280a,838512a8a88f584a5d9a61cff17da0db7fa5886cccce2f84652ccb6e7808b090,SHA256,high,high,AV,UAC-0099 - CERT-UA UAC-0099 2026-07-21 - VT 52/75 malicious 2026-10-19
+vt-sha256-a54eb30291,78cb23c739d24513b25f477183566c9fce0b329696e05482065f1bf01629c606,SHA256,high,high,AV,UAC-0099 - CERT-UA UAC-0099 2026-07-21 - VT 44/75 malicious 2026-10-19
+vt-sha256-6397021acc,d40b83d827f5b749ecec66eee09cd2c455094ad939a83a35c42af3f641871e2c,SHA256,high,high,AV,UAC-0099 - CERT-UA UAC-0099 2026-07-21 - VT 39/75 malicious 2026-10-19
+vt-sha256-5507ee5320,e8b633dcad173eb41ef02686b46779a4a0e53df7f6c63039a798f2db5eb83afc,SHA256,high,high,AV,Iran MOIS (HEAVYGRAM) - FBI FLASH 2026-09-15 - VT 45/75 malicious 2026-10-19
+vt-domain-4c693e18bb,virtualdailyplanner.pro,Domain,high,high,AB,UAC-0099 - ESET 2026-10-08 - VT 16/92 malicious 2026-10-19
+vt-domain-4dc69bd89c,telemetry-conf.com,Domain,high,high,AB,UAC-0099 - ESET 2026-10-08 - VT 17/92 malicious 2026-10-19
+vt-domain-3dbcfa0cd2,flycloud-service.com,Domain,high,high,AB,UAC-0099 - ESET 2026-10-08 - VT 15/92 malicious 2026-10-19
+vt-domain-95cfe0c649,airarticlegenerate.com,Domain,high,high,AB,UAC-0099 - ESET 2026-10-08 - VT 13/92 malicious 2026-10-19
+vt-ip-e6e4ee08a2,64.95.10.223,IP,medium,high,AB,UAC-0099 - ESET 2026-10-08 - VT 6/92 malicious 2026-10-19
+vt-ip-ea194cc5fe,64.95.13.210,IP,medium,high,AB,UAC-0099 - ESET 2026-10-08 - VT 8/92 malicious 2026-10-19
+vt-domain-784c5870de,secure-dns-hub.com,Domain,high,high,AB,Star Blizzard - Microsoft 2026-09-29 - VT 10/92 malicious 2026-10-19
+vt-domain-7f684c7835,cyrna.top,Domain,high,high,AB,Star Blizzard - Microsoft 2026-09-29 - VT 17/92 malicious 2026-10-19
+vt-domain-417bc5adb0,drasw.club,Domain,high,high,AB,Star Blizzard - Microsoft 2026-09-29 - VT 17/92 malicious 2026-10-19
+vt-ip-0bba48de83,5.199.162.157,IP,medium,high,AB,ShinyHunters (UNC6240) - Mandiant 2026-09-25 - VT 8/92 malicious 2026-10-19
+vt-ip-a5c0bad828,104.219.234.138,IP,high,high,AB,ShinyHunters (UNC6240) - Mandiant 2026-09-25 - VT 10/92 malicious 2026-10-19
+vt-domain-b8d642c8c5,winmanage-me.network,Domain,high,high,AB,ShinyHunters (UNC6240) - Mandiant 2026-09-25 - VT 17/92 malicious 2026-10-19
+vt-sha256-69e5624ef3,3ba215692665513abfffd4e815c5c45f2d41e5dcc4283a2a3b740930c5c417c3,SHA256,high,high,AV,ShinyHunters (UNC6240) - Mandiant 2026-09-25 - VT 46/75 malicious 2026-10-19
+vt-domain-db91f383d1,technicais.sytes.net,Domain,high,high,AB,TraderTraitor - SentinelLabs 2026-09-18 - VT 15/92 malicious 2026-10-19
+vt-domain-6e1c3b16ed,storage.hubpage.cloud,Domain,high,high,AB,TraderTraitor - SentinelLabs 2026-09-18 - VT 11/92 malicious 2026-10-19
+vt-domain-5b2b24e1f9,grenight.com,Domain,high,high,AB,TraderTraitor - SentinelLabs 2026-09-18 - VT 15/92 malicious 2026-10-19
+vt-domain-d5f655f0f5,hashicorp-terraform.io,Domain,medium,high,AB,TraderTraitor - SentinelLabs 2026-09-18 - VT 6/92 malicious 2026-10-19
+vt-ip-fb1f001e55,176.97.114.232,IP,medium,high,AB,TraderTraitor - SentinelLabs 2026-09-18 - VT 8/92 malicious 2026-10-19
+vt-ip-04e2bd8b8d,85.137.56.245,IP,medium,high,AB,TraderTraitor - SentinelLabs 2026-09-18 - VT 9/92 malicious 2026-10-19
+vt-ip-4044b3f44f,91.148.134.115,IP,high,high,AB,FamousSparrow - ESET 2026-09-17 - VT 10/92 malicious 2026-10-19
+vt-ip-6d0c8fe5de,77.111.101.40,IP,high,high,AB,FamousSparrow - ESET 2026-09-17 - VT 11/92 malicious 2026-10-19
+vt-ip-987391a32b,38.60.197.55,IP,high,high,AB,FamousSparrow - ESET 2026-09-17 - VT 10/92 malicious 2026-10-19
+vt-ip-7d60de22a0,216.238.121.164,IP,high,high,AB,FamousSparrow - ESET 2026-09-17 - VT 10/92 malicious 2026-10-19
+vt-ip-fed5bd11d2,38.60.241.65,IP,high,high,AB,FamousSparrow - ESET 2026-09-17 - VT 11/92 malicious 2026-10-19
+vt-ip-5a8e87dcf3,38.60.241.127,IP,high,high,AB,FamousSparrow - ESET 2026-09-17 - VT 10/92 malicious 2026-10-19
+vt-domain-edf85e1d71,secboxes.com,Domain,high,high,AB,APT31 (TA412) - Proofpoint 2026-09-09 - VT 20/92 malicious 2026-10-19
+vt-domain-09c25fa897,msbenefit.com,Domain,high,high,AB,APT31 (TA412) - Proofpoint 2026-09-09 - VT 21/92 malicious 2026-10-19
+vt-sha256-5bd9e5c3fa,7d6f6dcb17a423bdd7715f8a4e34f2939501a761bc9bf7aa005f805ef1f82288,SHA256,high,high,AV,APT31 (TA412) - Proofpoint 2026-09-09 - VT 47/75 malicious 2026-10-19
+vt-domain-cdf1210ee1,gitprogram.com,Domain,high,high,AB,APT31 (JungleBamboo) - Volexity 2026-09-09 - VT 17/92 malicious 2026-10-19
+vt-domain-1cd1f47386,team-hw.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - Check Point 2026-09-02 - VT 15/92 malicious 2026-10-19
+vt-domain-9eeccf1f5d,br.team-c2.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - Check Point 2026-09-02 - VT 16/92 malicious 2026-10-19
+vt-domain-153281fa53,kerneltty.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - Check Point 2026-09-02 - VT 16/92 malicious 2026-10-19
+vt-domain-ca37997ea3,data.windows-update-cdn.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - Check Point 2026-09-02 - VT 14/92 malicious 2026-10-19
+vt-domain-f2c31c893c,js.ai-jquery.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - Check Point 2026-09-02 - VT 17/92 malicious 2026-10-19
+vt-domain-30066104d3,gestionadocs.me,Domain,high,high,AB,Dark Caracal - Arctic Wolf 2026-08-26 - VT 16/92 malicious 2026-10-19
+vt-domain-150d600bb7,getpdfdigital.cloud,Domain,high,high,AB,Dark Caracal - Arctic Wolf 2026-08-26 - VT 14/92 malicious 2026-10-19
+vt-domain-0a40322710,visualizarpdf.online,Domain,high,high,AB,Dark Caracal - Arctic Wolf 2026-08-26 - VT 16/92 malicious 2026-10-19
+vt-domain-a1ac2969f2,documentodigital.cloud,Domain,high,high,AB,Dark Caracal - Arctic Wolf 2026-08-26 - VT 17/92 malicious 2026-10-19
+vt-domain-2ed67cd15e,cloudtroe.giize.com,Domain,high,high,AB,HoneyMyte - Kaspersky 2026-08-14 - VT 15/92 malicious 2026-10-19
+vt-domain-4ac7720a7b,news.dursamjbataar.org,Domain,high,high,AB,HoneyMyte - Kaspersky 2026-08-14 - VT 17/92 malicious 2026-10-19
+vt-domain-973974a4b6,video.dursamjbataar.org,Domain,high,high,AB,HoneyMyte - Kaspersky 2026-08-14 - VT 17/92 malicious 2026-10-19
+vt-domain-37144c49ce,black-popular.com,Domain,high,high,AB,HoneyMyte - Kaspersky 2026-08-14 - VT 17/92 malicious 2026-10-19
+vt-domain-a37b6cb3de,whatismybestthing.com,Domain,high,high,AB,HoneyMyte - Kaspersky 2026-08-14 - VT 14/92 malicious 2026-10-19
+vt-domain-763029a950,envell.xyz,Domain,high,high,AB,Lazarus - Check Point 2026-08-11 - VT 21/92 malicious 2026-10-19
+vt-domain-5a16680c88,enveil.online,Domain,high,high,AB,Lazarus - Check Point 2026-08-11 - VT 20/92 malicious 2026-10-19
+vt-domain-683afac294,uxtramine.org,Domain,high,high,AB,Lazarus - Check Point 2026-08-11 - VT 20/92 malicious 2026-10-19
+vt-ip-82b95cbe8a,135.181.67.203,IP,high,high,AB,Lazarus - Check Point 2026-08-11 - VT 18/92 malicious 2026-10-19
+vt-ip-46713394f7,135.181.185.158,IP,high,high,AB,Lazarus - Check Point 2026-08-11 - VT 16/92 malicious 2026-10-19
+vt-sha256-448dd84c37,458a1927d2c36a9cc8990ffc34a7969d0165d364f30204645d5c522d65fc1d88,SHA256,high,high,AV,UAC-0099 - ESET GitHub 2026-10-10 - VT 45/75 malicious 2026-10-19
+vt-ip-fa64407260,38.60.224.51,IP,high,high,AB,FamousSparrow - ESET GitHub 2026-09-17 - VT 10/92 malicious 2026-10-19
+vt-ip-ccbf11623d,149.104.90.203,IP,medium,high,AB,FamousSparrow - ESET GitHub 2026-09-17 - VT 9/92 malicious 2026-10-19
+vt-ip-8e2fcaa587,216.238.110.120,IP,high,high,AB,FamousSparrow - ESET GitHub 2026-09-17 - VT 11/92 malicious 2026-10-19
+vt-domain-0b29672bcf,windows-update-catalog.serveftp.com,Domain,high,high,AB,UAT-6275 (Silent Lynx) - Cisco Talos GitHub 2026-10-14 - VT 11/92 malicious 2026-10-19
+vt-domain-dd063830ec,microsoft-secure-login.servehttp.com,Domain,medium,high,AB,UAT-6275 (Silent Lynx) - Cisco Talos GitHub 2026-10-14 - VT 5/92 malicious 2026-10-19
+vt-domain-64cf6a88ad,updates-check-microsoft.ddns.net,Domain,high,high,AB,UAT-6275 (Silent Lynx) - Cisco Talos GitHub 2026-10-14 - VT 18/92 malicious 2026-10-19
+vt-domain-4400df0854,ctldl-windowsupdate.ddns.net,Domain,medium,high,AB,UAT-6275 (Silent Lynx) - Cisco Talos GitHub 2026-10-14 - VT 5/92 malicious 2026-10-19
+vt-ip-ab4e56e288,62.113.66.137,IP,high,high,AB,UAT-6275 (Silent Lynx) - Cisco Talos GitHub 2026-10-14 - VT 17/92 malicious 2026-10-19
+vt-ip-78e40e6aaa,154.205.145.179,IP,medium,high,AB,UAT-6275 (Silent Lynx) - Cisco Talos GitHub 2026-10-14 - VT 5/92 malicious 2026-10-19
+vt-domain-897b6bedc4,osc-cdn.com,Domain,high,high,AB,UAT-11587 - Cisco Talos GitHub 2026-09-30 - VT 14/92 malicious 2026-10-19
+vt-domain-5aa277a127,wps-cn.com,Domain,high,high,AB,UAT-11587 - Cisco Talos GitHub 2026-09-30 - VT 19/92 malicious 2026-10-19
+vt-ip-b24821471e,103.27.110.220,IP,high,high,AB,UAT-11587 - Cisco Talos GitHub 2026-09-30 - VT 10/92 malicious 2026-10-19
+vt-sha256-ad4c9a1fd5,e809da86bd81463347fa7f922d3e088755a94a331889d32acb55aa8f57778a34,SHA256,high,high,AV,UAT-11587 - Cisco Talos GitHub 2026-09-30 - VT 29/75 malicious 2026-10-19
+vt-domain-9dcc8260f8,vip8888vn.xyz,Domain,high,high,AB,UAT-10147 - Cisco Talos GitHub 2026-08-20 - VT 18/92 malicious 2026-10-19
+vt-domain-6e763bd225,udvyiwvfs.cyou,Domain,high,high,AB,UAT-10147 - Cisco Talos GitHub 2026-08-20 - VT 19/92 malicious 2026-10-19
+vt-domain-ee8e4aa4ca,kl21177.com,Domain,high,high,AB,UAT-10147 - Cisco Talos GitHub 2026-08-20 - VT 14/92 malicious 2026-10-19
+vt-ip-dd78cd38ae,27.124.2.46,IP,high,high,AB,UAT-10147 - Cisco Talos GitHub 2026-08-20 - VT 15/92 malicious 2026-10-19
+vt-ip-7133bdf30c,139.180.197.150,IP,high,high,AB,UAT-10147 - Cisco Talos GitHub 2026-08-20 - VT 10/92 malicious 2026-10-19
+vt-sha256-54a668e6c8,008f28989917a9712657de5675fc024b65cb27536734e9b54ea6c3af00ea70f2,SHA256,high,high,AV,UAT-10147 - Cisco Talos GitHub 2026-08-20 - VT 40/75 malicious 2026-10-19
+vt-ip-0a8822a8b3,172.86.126.18,IP,high,high,AB,Chaos ransomware - Cisco Talos GitHub 2026-07-23 - VT 15/92 malicious 2026-10-19
+vt-ip-2230946484,94.140.114.192,IP,high,high,AB,Chaos ransomware (STAC4749) - Sophos GitHub 2026-07-28 - VT 15/92 malicious 2026-10-19
+vt-domain-dac031f9de,de3.filedwnld.top,Domain,high,high,AB,Chaos ransomware (STAC4749) - Sophos GitHub 2026-07-28 - VT 15/92 malicious 2026-10-19
+vt-domain-c551ef30df,fa5.flsdwnld.online,Domain,high,high,AB,Chaos ransomware (STAC4749) - Sophos GitHub 2026-07-28 - VT 13/92 malicious 2026-10-19
+vt-domain-da48badebf,add-mfa.com,Domain,high,high,AB,The Com - Unit 42 GitHub 2026-09-23 - VT 12/92 malicious 2026-10-19
+vt-domain-58a0a9cfc7,myaccountapps.com,Domain,high,high,AB,The Com - Unit 42 GitHub 2026-09-23 - VT 13/92 malicious 2026-10-19
+vt-domain-11e34c50e1,registermymfa.com,Domain,high,high,AB,The Com - Unit 42 GitHub 2026-09-09 - VT 15/92 malicious 2026-10-19
+vt-domain-104eb3da03,mfa-settings.com,Domain,low,high,AB,The Com - Unit 42 GitHub 2026-09-09 - VT 3/92 malicious 2026-10-19
+vt-domain-e5864e7ded,sso-passkey.com,Domain,medium,high,AB,The Com - Unit 42 GitHub 2026-09-09 - VT 6/92 malicious 2026-10-19
+vt-sha256-97bbf68bc1,55a1eb4c2d3da04376df39d7ba832569c6af1a37a0cf2b95f754ac898023a30c,SHA256,low,high,AV,Hazy Scorpius (CLOP) - Unit 42 GitHub 2026-08-06 - VT 4/75 malicious 2026-10-19
+vt-sha256-9b09c36d3c,321e1fb01eb3462b48ff6ccdef132acc1182e3f7456548439f0d4ead12fd98bf,SHA256,high,high,AV,Hazy Scorpius (CLOP) - Unit 42 GitHub 2026-08-06 - VT 24/75 malicious 2026-10-19
+vt-domain-159775de9d,opusaccel.top,Domain,medium,high,AB,UTA0560 - Volexity GitHub 2026-09-09 - VT 7/92 malicious 2026-10-19
+vt-domain-56cabb1b63,shinewrist.net,Domain,high,high,AB,UTA0560 - Volexity GitHub 2026-09-09 - VT 11/92 malicious 2026-10-19
+vt-ip-99b4b6dc04,206.166.251.164,IP,medium,high,AB,UTA0560 - Volexity GitHub 2026-09-09 - VT 9/92 malicious 2026-10-19
+vt-domain-90e38771c2,thecovnresation.com,Domain,high,high,AB,UTA0565 - Volexity GitHub 2026-09-21 - VT 16/92 malicious 2026-10-19
+vt-domain-36fa70117b,chinadigitaltimes.top,Domain,high,high,AB,UTA0565 - Volexity GitHub 2026-09-21 - VT 16/92 malicious 2026-10-19
+vt-domain-d4075bcf7b,borneobulletins.top,Domain,high,high,AB,UTA0565 - Volexity GitHub 2026-09-21 - VT 15/92 malicious 2026-10-19
+vt-domain-cabfb1085e,evo.hoster-kg.com,Domain,high,high,AB,SilkParasite - Bitdefender GitHub 2026-08-18 - VT 12/92 malicious 2026-10-19
+vt-domain-e67a759694,manager.skycom.support,Domain,high,high,AB,SilkParasite - Bitdefender GitHub 2026-08-18 - VT 14/92 malicious 2026-10-19
+vt-domain-214fab8050,it.hpsupporter.com,Domain,medium,high,AB,SilkParasite - Bitdefender GitHub 2026-08-18 - VT 8/92 malicious 2026-10-19
+vt-ip-40d2ac568b,193.29.56.216,IP,medium,high,AB,SilkParasite - Bitdefender GitHub 2026-08-18 - VT 7/92 malicious 2026-10-19
+vt-ip-0db02e1073,45.153.125.200,IP,medium,high,AB,SilkParasite - Bitdefender GitHub 2026-08-18 - VT 9/92 malicious 2026-10-19
+vt-ip-8ddb35f300,2.58.15.14,IP,medium,high,AB,SilkParasite - Bitdefender GitHub 2026-08-18 - VT 6/92 malicious 2026-10-19
+vt-domain-9f03bfd2fd,onepoagiint.vu,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 12/92 malicious 2026-10-19
+vt-domain-a661f0fcaa,saanaconzdcsultingltd.vu,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 11/92 malicious 2026-10-19
+vt-domain-8d0af89ee5,cloudvitasoyaustraliaproductsptyltd.onepoagiint.vu,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 14/92 malicious 2026-10-19
+vt-domain-e006e07dc3,kalpcorp.in,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 9/92 malicious 2026-10-19
+vt-domain-bee3b2469b,faiscacultural.org.br,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 7/92 malicious 2026-10-19
+vt-domain-59ca7d8bfb,doblealtura.com.pe,Domain,low,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 4/92 malicious 2026-10-19
+vt-domain-a6e36aea33,eduardoyokoyama.adv.br,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 12/92 malicious 2026-10-19
+vt-domain-d7b0c69f16,chrono24.mk,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 11/92 malicious 2026-10-19
+vt-domain-d6afae55d0,dukanmart.pk,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 11/92 malicious 2026-10-19
+vt-domain-9771770b52,hhlifestyle.com.pk,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 12/92 malicious 2026-10-19
+vt-domain-79a3a2bd82,invast.com.pe,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 7/92 malicious 2026-10-19
+vt-domain-7232089f79,amelson.com,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 5/92 malicious 2026-10-19
+vt-domain-e68188b63b,zeymart.lk,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 8/92 malicious 2026-10-19
+vt-domain-5451d1382c,shiwani-impex.com,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 8/92 malicious 2026-10-19
+vt-domain-1115144849,gliste.ba,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 12/92 malicious 2026-10-19
+vt-domain-2be8984638,hotelrekic.ba,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 11/92 malicious 2026-10-19
+vt-domain-54094c469e,yumateamwears.com,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 6/92 malicious 2026-10-19
+vt-domain-1613029341,ibuild-corp.com,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 5/92 malicious 2026-10-19
+vt-domain-c3e910535c,moveline-solutions.de,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 11/92 malicious 2026-10-19
+vt-domain-4a108afeaa,rl.xnhckn.net,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 8/92 malicious 2026-10-19
+vt-domain-05abe18441,mapholoba.co.za,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 9/92 malicious 2026-10-19
+vt-domain-b00e6f019d,clinicabless.com.br,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 10/92 malicious 2026-10-19
+vt-domain-c303839f0a,paicacampinas.org,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 11/92 malicious 2026-10-19
+vt-domain-af61934bdb,zmcdesign.ro,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 5/92 malicious 2026-10-19
+vt-domain-f3e5bb42ac,cardialtreinamentos.com.br,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 7/92 malicious 2026-10-19
+vt-domain-c28238569b,lavanderia24-7.cl,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 6/92 malicious 2026-10-19
+vt-domain-ba9be62982,nwcadvocates.com,Domain,high,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 10/92 malicious 2026-10-19
+vt-domain-070b7a03ae,aridosrucapillan.cl,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 8/92 malicious 2026-10-19
+vt-domain-79f20cd94a,faraasanat.com,Domain,medium,high,AB,INCD alert 2011C phishing - 2026-10-01 - VT 5/92 malicious 2026-10-19
+vt-sha256-39778ef00b,4c79e92a674e70389112822f522265873579dfae987a3f33eb710463f3b7e85c,SHA256,medium,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 8/75 malicious 2026-10-19
+vt-sha256-1f5ea67b2f,2bf4d107363e4410af74ccc672204df60e831dc6093cf8dee8c1a9e514580517,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 11/75 malicious 2026-10-19
+vt-sha256-921436e289,75fe9bb3d9e3d8f00dbfbbce25bdb6f217d636f88bf481db763c88b5a4edb74e,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-ad83dba51d,f9022c021c1570c622e7b9882d85e10e14e8c1859a7855fabfaf32b46e4d5692,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-f546cb4ad3,c21075e76e0e8c7ff702bc34f52256a7fd2aa5bac331725bb3a518e46c51a303,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 13/75 malicious 2026-10-19
+vt-sha256-d67fac41ee,4a8356084df24e28e3783e40e52c706571bdd1de6fe095399e7b9fbc4f727897,SHA256,medium,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 9/75 malicious 2026-10-19
+vt-sha256-3495bbac0e,7692c9289ae6665415b02fd8c1a9ca0007a091b12ad060fe75b1b451e769e845,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 11/75 malicious 2026-10-19
+vt-sha256-1d5a3e2184,debb3f619b76d6cc8d93c277271f1cc8f724b8075eaf1ede792ff76e6e3f7151,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 15/75 malicious 2026-10-19
+vt-sha256-f963a37c0d,ec1e51551f160989f43129b9569ba9eb904163fc13ba24ee3397d43303cb49a7,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-83975e84ba,f2e406e606ac477887aa0c86944d0512a07e9edf7ef6e1264dc692cd5c6a40be,SHA256,medium,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 8/75 malicious 2026-10-19
+vt-sha256-18b5eff0f9,6a905086b4b225720fc039180ebcd500bac83fcd05dc871958d94c69c0b00719,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/73 malicious 2026-10-19
+vt-sha256-dd1a84df70,a9d4a6c8fe09d9fd7184acd86aca3a8a1fd8f0d929f4662e8e7d5b92ad5789d5,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 23/75 malicious 2026-10-19
+vt-sha256-d2fd715bbd,a180721b6f407748b4b42b81f687d34df289dcd34455055d1dd3fb74efb56711,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 20/75 malicious 2026-10-19
+vt-sha256-21362d5371,0127e1bb6fc9ded61e0aa2418994fe6a51f949db9dceae64f8801a498495f5b4,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-42ef165582,43117d6f1c4cb4412929f476f0b86780a98a607c15ee32faae0c0bd5be963b5a,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 21/75 malicious 2026-10-19
+vt-sha256-fa046128f9,686b74a88408b8d6953a00965fe44396e7d1c8bee0c1e266ceeb44346742b71b,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 21/75 malicious 2026-10-19
+vt-sha256-b3e05393df,72aa2d15c0ee360e844daac042d69136eb1687645f919d9648672f4257de46b0,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-7c19c08e48,28e27ee080564c78c2c2d55ae96f0c12b1171d7e5a43f5f9267d8997dadc0ca6,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 20/75 malicious 2026-10-19
+vt-sha256-f5d1a3aa8b,35e59b0ad8fadff14fb22dea7356b1df945b82d9f6df816bee3504b530c0a9a8,SHA256,medium,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 9/75 malicious 2026-10-19
+vt-sha256-9381c1a229,a0841dc8dbf1327b3506eb1a820805dc249d9ccf94b8c68ca42d92474b6fa0a2,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 21/75 malicious 2026-10-19
+vt-sha256-6b8fb1161b,2cb585786ba9e00538ab812733b63ccb0617d8f3458348ec58070cbb1ea1e5af,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 19/75 malicious 2026-10-19
+vt-sha256-6b7837629a,399f90d30256c9a35074db67002ecbf6c4b7f5ac6566bbd1da8e93cd38ce7ed5,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-a8eda72c8b,94f5b2e62162a8f01757adbea1f2f06822f7e1d6c4fcb4cfedb3c4ed5433878e,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-8b5e25f4c5,95272f4958906a15a1171f748314fc4f7f643e0ff4197d95c6e961eb379e3438,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 15/75 malicious 2026-10-19
+vt-sha256-b88e8405fa,5e0142096656b5a5e0b6513e316f579d33183cfef760552239ef3efb85548354,SHA256,medium,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 9/75 malicious 2026-10-19
+vt-sha256-c036a6fb33,349f56ab4aecacc374d3b86e28de5c3a0246d7b2475d60d52c4e9360cc87a628,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 20/74 malicious 2026-10-19
+vt-sha256-ab68628ffc,55999c5ee901ee510641049e8f564341768cf75bf21c0f9ccff8308436a1a95f,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-837805f8bd,c1298d281fc9a5a4a11b73d76ebadcc6b1a7a3384e0e470baaa0df27e03dfe74,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 23/75 malicious 2026-10-19
+vt-sha256-745dc10c19,6b07956b3707b1623323ed81761d4dc1995a4b8b9e14e8211059bb6dd3d9dabb,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 21/75 malicious 2026-10-19
+vt-sha256-aadadd90fc,722156a60193431299159fc4ba6255dacbf394b2ac57420f68cce7c3f80f469e,SHA256,medium,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 9/75 malicious 2026-10-19
+vt-sha256-9e6caa315b,0e1bfa342e01190b3d1530bf71c1ced814850cf774a266cde1687c0150974807,SHA256,medium,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 6/75 malicious 2026-10-19
+vt-sha256-030893107a,8ba415250932f13c85a6417edef0530042b06f50e76c275ceb65a453cdc3ce9c,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 15/75 malicious 2026-10-19
+vt-sha256-745f7e6d5f,c1c87f81c3e1ad3aaaf1d3235e9166a475380808ac8916da5ec16c2d011506c3,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 23/75 malicious 2026-10-19
+vt-sha256-203d3b7a07,6791964c53973a50d903bf9e57d006666f39d6607cbcea9389e5c9eb8afa3022,SHA256,medium,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 5/75 malicious 2026-10-19
+vt-sha256-89bb824bc7,888acf804d4ddd4e39a1f2491124fe30c08d27fbc32984a8ce5ea3de4ef3da83,SHA256,low,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 3/75 malicious 2026-10-19
+vt-sha256-4f86f13260,15d672b102ec4918bae268c889cd23089727a5a996f98b2c3a02e0d2f144aaac,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 23/75 malicious 2026-10-19
+vt-sha256-b359549c0f,9471ac20807dec2a44bd65af8fd71207937ad616c3c69d7792c08485c18bb2bc,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-f396b03996,52c12107dc367a33153590a4a87cfa2212010206382f23250abdb8836a121d80,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 17/75 malicious 2026-10-19
+vt-sha256-02eb349b82,6bf3310735d7dd8efc026d16d91223bc7b9d0dbd738864b51dcbe6bb74ef94d3,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 23/75 malicious 2026-10-19
+vt-sha256-80ddbbfc7d,fdcd03a4f386402019151d422c216200399fd689b3c2291681e55035ae2d9e57,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-47daa4e53e,3c11f90ec98500b2f4c221de80b937369e1ce7fa27366ac27e8c0ad915d5a4e3,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-2e9d9dc428,95e42368aae4009bce1a7ef9cdc6509aa12b81d777c615757af178427b19f21f,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 23/75 malicious 2026-10-19
+vt-sha256-fcdee6619a,4c3f3214b273402b345427aba5f8bf9be385fb26fd6bec1148000cf820a2d01a,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-bff86d86d6,ab32dc7588e758bf54ba53d149dd7215960c5fdbf2bbc4b5a97bf7e31e97be24,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 23/75 malicious 2026-10-19
+vt-sha256-c8f502f1e0,a98ad44afe7d3755971fc8daeed1f5a71fe4bea64b2c52252a530aa2e6724af4,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 23/75 malicious 2026-10-19
+vt-sha256-97d6e5d414,10d36ef89bc024332cc956a702c3367a86cdcf1f6cd10cc4f8355f7f24435096,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 21/75 malicious 2026-10-19
+vt-sha256-170dd2aa77,0544e78cc5231c3c275bf78c1aad348749fb9a4ff76282891dbdf3e8e36509bd,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 20/69 malicious 2026-10-19
+vt-sha256-647c875df8,714fe2c5b70947e257564831b800bba758f439211d371c282eb757ea24b42c1d,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 21/75 malicious 2026-10-19
+vt-sha256-4b135fbbe0,fe394f53e324d90d077e2c9efd2c7696ef46ba40dc11424cd6c99769be0f5990,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 22/75 malicious 2026-10-19
+vt-sha256-59b93e8914,99941fb10683e330797a4181776c4e2af878ad156381ebc408177cfb8aed1467,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 17/75 malicious 2026-10-19
+vt-sha256-43fd6f8517,de253d5ca343db594b2da8919247cb377bd7c1557dc14d4f8ca14f50e07efb32,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 16/75 malicious 2026-10-19
+vt-sha256-1c47fea19e,05c4cd485e202976f4af6f5bfb8991934b2e94ca289268398c1f1a08841c3f16,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 24/75 malicious 2026-10-19
+vt-sha256-39c3991f15,ed7b76f4da47e5c98333477d6d06c4f22670c592bd30c9728ffde67c396e19d7,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 24/75 malicious 2026-10-19
+scanner-colocationx-203,109.205.211.203,IP,high,medium,AB,Colocatel scanner host observed in Spark logs
+scanner-colocationx-205,109.205.211.205,IP,high,medium,AB,Colocatel scanner host observed in Spark logs
+scanner-modat-25,212.73.148.25,IP,high,medium,AB,Modat scanner host observed in Spark logs
+scanner-modat-26,212.73.148.26,IP,high,medium,AB,Modat scanner host observed in Spark logs
+scanner-modat-27,212.73.148.27,IP,high,medium,AB,Modat scanner host observed in Spark logs
+vt-ip-a0d45bc2e6,45.79.109.193,IP,medium,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 8/92 malicious 2026-10-20
+vt-ip-9720b66d05,69.5.169.103,IP,high,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 11/92 malicious 2026-10-20
+vt-ip-c6d30c1a97,66.132.172.241,IP,medium,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 5/92 malicious 2026-10-20
+vt-ip-0b06a3df43,194.88.98.112,IP,medium,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 8/92 malicious 2026-10-20
+vt-ip-588d0465fa,91.92.242.71,IP,medium,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 9/92 malicious 2026-10-20
+vt-ip-aac6169ec0,141.98.10.198,IP,high,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 10/92 malicious 2026-10-20

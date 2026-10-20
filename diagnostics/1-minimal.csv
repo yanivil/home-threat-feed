@@ -1,0 +1,3 @@
+# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT
+test-domain-01,example.com,Domain,high,high,AB,TEST ENTRY
+test-hash-eicar,44d88612fea8a8f36de82e1278abb02f,MD5,high,high,AV,EICAR test file MD5

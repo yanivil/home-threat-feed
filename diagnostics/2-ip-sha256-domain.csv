@@ -1,0 +1,4 @@
+# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT
+diag-ip,141.98.10.198,IP,high,high,AB,diag IP row
+diag-sha256,a82e496b7b5279cb6b93393ec167dd3f50aff1557366784b25f9e51cb23689d9,SHA256,high,high,AV,diag SHA256 row
+diag-domain,uasputnik.com,Domain,high,high,AB,diag Domain row
