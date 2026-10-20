@@ -1,4 +1,5 @@
 # UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT
+test-domain-01,example.com,Domain,high,high,AB,TEST ENTRY - verify the feed blocks https://example.com then remove this line
 test-hash-eicar,44d88612fea8a8f36de82e1278abb02f,MD5,high,high,AV,EICAR test file MD5 - safe to keep
 vt-domain-381783eca4,cloud.g-drive.cam,Domain,high,high,AB,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 13/92 malicious 2026-10-19
 vt-domain-e96d10b853,googeldrive.cam,Domain,high,high,AB,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 13/92 malicious 2026-10-19
