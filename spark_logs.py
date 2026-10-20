@@ -36,6 +36,32 @@ NAME_KEYS = ("resource", "destination_domain_name", "tls_server_host_name", "sni
 RATIO_RE = re.compile(r"(\d+)/(\d+) malicious")
 
 
+class FeedMembers:
+    """What the feed already blocks: its values, plus any address inside its IP Range rows."""
+
+    def __init__(self, text):
+        self.values = vt_check.feed_values(text)
+        self.ranges = []
+        for line in text.splitlines():
+            fields = line.split(",")
+            if len(fields) == 7 and fields[2].strip() == "IP Range" and "-" in fields[1]:
+                start, _, end = fields[1].partition("-")
+                try:
+                    self.ranges.append((ipaddress.ip_address(start.strip()), ipaddress.ip_address(end.strip())))
+                except ValueError:
+                    continue
+
+    def __contains__(self, indicator):
+        if indicator.lower() in self.values:
+            return True
+        ip = _ip(indicator)
+        return ip is not None and any(start <= ip <= end for start, end in self.ranges if ip.version == start.version)
+
+
+def feed_members(text):
+    return FeedMembers(text)
+
+
 def parse_entry(line):
     """The entry's key="value" pairs, plus "received" from the receiver's prefix."""
     received, _, rest = line.partition(" ")
@@ -146,7 +172,7 @@ def check(found, feed_path, cache_path, fetch, *, today=None, max_lookups=None, 
     """Look the selected indicators up: add flagged inbound sources, report flagged outbound ones."""
     today = today or date.today().isoformat()
     cache = load_cache(cache_path)
-    in_feed = vt_check.feed_values(Path(feed_path).read_text())
+    in_feed = feed_members(Path(feed_path).read_text())
     inbound, outbound = select(found, in_feed, cache, today, recheck_days)
     if max_lookups is not None:
         budget = max(0, max_lookups)
@@ -203,7 +229,7 @@ def main(argv=None):
     today = args.today or date.today().isoformat()
     found = collect(args.dir, days=args.days, today=today, wan_ip=args.wan_ip)
     cache = load_cache(args.dir / CACHE_NAME)
-    in_feed = vt_check.feed_values(args.feed.read_text()) if args.feed.exists() else set()
+    in_feed = feed_members(args.feed.read_text()) if args.feed.exists() else set()
     inbound, outbound = select(found, in_feed, cache, today, args.recheck_days)
     say = lambda *a: print(*a, flush=True)
     say(f"{len(found['inbound'])} inbound sources and {len(found['outbound'])} outbound destinations in the last "

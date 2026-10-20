@@ -121,6 +121,15 @@ class SelectTest(unittest.TestCase):
         self.assertEqual(inbound, ["31.14.32.6", "203.0.113.5"])
         self.assertEqual(outbound, ["evil.example"])  # checked 111 days ago: due again
 
+    def test_skips_addresses_inside_a_feed_ip_range(self):
+        found = {"inbound": {"212.73.148.42": 3, "212.73.149.1": 1}, "outbound": {}}
+        feed_text = (HEADER + "scanner-modat-net,212.73.148.0-212.73.148.255,IP Range,high,medium,AB,Modat\n"
+                     + "x,1.2.3.4,IP,high,high,AB,c\n")
+
+        inbound, _ = spark_logs.select(found, spark_logs.feed_members(feed_text), {}, today=TODAY)
+
+        self.assertEqual(inbound, ["212.73.149.1"])
+
 
 class CheckTest(unittest.TestCase):
     def setUp(self):
