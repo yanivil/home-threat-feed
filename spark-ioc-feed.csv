@@ -1,5 +1,4 @@
 # UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT
-test-domain-01,example.com,Domain,high,high,AB,TEST ENTRY - verify the feed works by browsing to example.com then remove this line
 test-hash-eicar,44d88612fea8a8f36de82e1278abb02f,MD5,high,high,AV,EICAR test file MD5 - safe to keep
 vt-domain-381783eca4,cloud.g-drive.cam,Domain,high,high,AB,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 13/92 malicious 2026-10-19
 vt-domain-e96d10b853,googeldrive.cam,Domain,high,high,AB,CL-STA-1178 (Iranian-nexus) - Unit 42 2026-10-06 - VT 13/92 malicious 2026-10-19
@@ -336,3 +335,87 @@ vt-ip-c6d30c1a97,66.132.172.241,IP,medium,high,AB,Inbound port scan of WAN - Spa
 vt-ip-0b06a3df43,194.88.98.112,IP,medium,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 8/92 malicious 2026-10-20
 vt-ip-588d0465fa,91.92.242.71,IP,medium,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 9/92 malicious 2026-10-20
 vt-ip-aac6169ec0,141.98.10.198,IP,high,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 10/92 malicious 2026-10-20
+vt-sha1-2ba8aedb05,366e435a1ea0f597deb6ebe7c0c5acdb6e8b33eb,SHA1,high,high,AV,CyberAv3ngers IOCONTROL - Trend Micro 2026-07-23 - VT 31/75 malicious 2026-10-20
+vt-ip-152b96795f,185.82.73.162,IP,high,high,AB,CyberAv3ngers - CISA AA26-097A 2026-04-07 - VT 15/92 malicious 2026-10-20
+vt-ip-8fc2f1b8c3,185.82.73.164,IP,high,high,AB,CyberAv3ngers - CISA AA26-097A 2026-04-07 - VT 14/92 malicious 2026-10-20
+vt-ip-838a6fb335,185.82.73.165,IP,high,high,AB,CyberAv3ngers - CISA AA26-097A 2026-04-07 - VT 14/92 malicious 2026-10-20
+vt-ip-f539c11c0b,185.82.73.167,IP,high,high,AB,CyberAv3ngers - CISA AA26-097A 2026-04-07 - VT 14/92 malicious 2026-10-20
+vt-ip-4dfaea3e0c,185.82.73.168,IP,high,high,AB,CyberAv3ngers - CISA AA26-097A 2026-04-07 - VT 14/92 malicious 2026-10-20
+vt-ip-620e53a1cc,185.82.73.170,IP,high,high,AB,CyberAv3ngers - CISA AA26-097A 2026-04-07 - VT 15/92 malicious 2026-10-20
+vt-ip-c2ff4f36ad,185.82.73.171,IP,high,high,AB,CyberAv3ngers - CISA AA26-097A 2026-04-07 - VT 11/92 malicious 2026-10-20
+vt-ip-baa3ce939a,135.136.1.133,IP,high,high,AB,CyberAv3ngers - CISA AA26-097A 2026-04-07 - VT 14/92 malicious 2026-10-20
+vt-sha256-2d7e0d346a,099cc81f8608def0d8e8843a46a76441598171dfe0a2066e09e85c32b4199256,SHA256,low,high,AV,Pay2Key NoDefender wsc.dll - Beazley Security 2026-03-24 - VT 3/74 malicious 2026-10-20
+vt-domain-e8b7ba0e76,justicehomeland.org,Domain,high,high,AB,Handala (DOJ-seized Mar 2026) - Deepwatch 2026-03-23 - VT 12/92 malicious 2026-10-20
+vt-domain-dffd536188,handala-hack.to,Domain,high,high,AB,Handala (DOJ-seized Mar 2026) - Deepwatch 2026-03-23 - VT 16/92 malicious 2026-10-20
+vt-domain-1b8a84f23c,karmabelow80.org,Domain,high,high,AB,Handala (DOJ-seized Mar 2026) - Deepwatch 2026-03-23 - VT 11/92 malicious 2026-10-20
+vt-domain-1c336bb1ec,handala-redwanted.to,Domain,high,high,AB,Handala (DOJ-seized Mar 2026) - Deepwatch 2026-03-23 - VT 13/92 malicious 2026-10-20
+vt-ip-4ec842633c,82.25.35.25,IP,medium,high,AB,Handala VPS - Check Point Research 2026-03-12 - VT 6/92 malicious 2026-10-20
+vt-ip-586a86d8dd,31.57.35.223,IP,medium,high,AB,Handala VPS - Check Point Research 2026-03-12 - VT 8/92 malicious 2026-10-20
+vt-ip-57c299ef77,107.189.19.52,IP,high,high,AB,Handala C2 VPS - Check Point Research 2026-03-12 - VT 11/92 malicious 2026-10-20
+vt-domain-89b9f75200,gos-usa.xyz,Domain,high,high,AB,Pay2Key - Morphisec 2025-07-08 - VT 15/92 malicious 2026-10-20
+vt-sha256-e79d2dcb0e,242fa471582c2f37c17717dc260cb108584c44e86b8831382f7b2f5fc63aeb6b,SHA256,high,high,AV,Pay2Key SFX payload - Morphisec 2025-07-08 - VT 47/75 malicious 2026-10-20
+vt-sha256-ffc9be9944,7336b865f232f7fccb9b85524d5ebdc444344de363f77e1b1c3eaeeb3428e1a5,SHA256,low,high,AV,Pay2Key SFX payload - Morphisec 2025-07-08 - VT 4/75 malicious 2026-10-20
+vt-sha256-9a393853d3,1d0ec8e34703a7589533462be62c020004cfe0f7b20204f9e6c79b84cbfafc9b,SHA256,high,high,AV,Pay2Key SFX payload - Morphisec 2025-07-08 - VT 27/75 malicious 2026-10-20
+vt-sha256-008bfee493,d61a55d368a1dcf570f633c7a23ae12361749c2d7000178dd9e353528c325907,SHA256,high,high,AV,Pay2Key SFX payload - Morphisec 2025-07-08 - VT 26/75 malicious 2026-10-20
+vt-sha256-9c93e5d521,17fc4df8ef9a92c972684cba707c3976b91bcd7f0251f42f1b63e4de0e688d6c,SHA256,high,high,AV,Pay2Key SFX payload - Morphisec 2025-07-08 - VT 34/75 malicious 2026-10-20
+vt-sha256-89345e08c1,b64305852ddb317b7839b39db602fcdda60e7658f391ff4ba52fce4dbca89089,SHA256,high,high,AV,Pay2Key SFX payload - Morphisec 2025-07-08 - VT 46/75 malicious 2026-10-20
+vt-sha256-b04bd71064,1c70d4280835f18654422cec1b209eec856f90344b8f02afca82716555346a55,SHA256,high,high,AV,Pay2Key NoDefender - Morphisec 2025-07-08 - VT 49/75 malicious 2026-10-20
+vt-sha256-5e91fce18c,a8bfa1389c49836264cfa31fc4410b88897a78d9c2152729d28eca8c12171b9e,SHA256,high,high,AV,Pay2Key NoDefender - Morphisec 2025-07-08 - VT 50/75 malicious 2026-10-20
+vt-sha256-5050c97468,39d3ba87a27eae69a01666b0ecbb8c60259be4b3decf4cdd1d950c98c6c0b08c,SHA256,high,high,AV,Pay2Key HTA dropper - Morphisec 2025-07-08 - VT 34/75 malicious 2026-10-20
+vt-sha256-7ad08e1e57,60ec008c8515934c3c8d89f84bbcc8fac9144e642c0143d8230f465f4e66f62c,SHA256,high,high,AV,Pay2Key loader.bat - Morphisec 2025-07-08 - VT 22/75 malicious 2026-10-20
+vt-sha256-2acf01af8a,a05c18e81911608cf2edb19907092d542548abb695e48e3217dfbec2f3dfcd04,SHA256,high,high,AV,Pay2Key APack.bat - Morphisec 2025-07-08 - VT 33/75 malicious 2026-10-20
+vt-sha256-3506502c1a,d8e423c8644b686ad3376f38f3e4df55a152ee4cac2af3079651263f002d8c26,SHA256,high,high,AV,Pay2Key Launch.ps1 - Morphisec 2025-07-08 - VT 24/75 malicious 2026-10-20
+vt-sha256-a19c0e5bf6,9c06ea83553c6dab3d831e1046cee237a9c1b1ed79b3b2e37ed9f3c8a38643eb,SHA256,high,high,AV,Pay2Key payload_1.ps1 - Morphisec 2025-07-08 - VT 33/75 malicious 2026-10-20
+vt-domain-a9fa27f017,tylarion867mino.com,Domain,high,high,AB,CyberAv3ngers IOCONTROL - Claroty Team82 2024-12-10 - VT 16/92 malicious 2026-10-20
+vt-domain-c05a4bec8e,uuokhhfsdlk.tylarion867mino.com,Domain,high,high,AB,CyberAv3ngers IOCONTROL - Claroty Team82 2024-12-10 - VT 16/92 malicious 2026-10-20
+vt-domain-05313ab813,ocferda.com,Domain,high,high,AB,CyberAv3ngers IOCONTROL - Claroty Team82 2024-12-10 - VT 15/92 malicious 2026-10-20
+vt-sha256-4533ee9c59,1b39f9b2b96a6586c4a11ab2fdbff8fdf16ba5a0ac7603149023d73f33b84498,SHA256,high,high,AV,CyberAv3ngers IOCONTROL sample - Claroty Team82 2024-12-10 - VT 31/75 malicious 2026-10-20
+vt-sha256-dada241e62,96dec6e07229201a02f538310815c695cf6147c548ff1c6a0def2fe38f3dcbc8,SHA256,high,high,AV,Handala wiper update.zip - Splunk 2024-09-06 - VT 40/75 malicious 2026-10-20
+vt-sha256-aa9f8ee23d,19001dd441e50233d7f0addb4fcd405a70ac3d5e310ff20b331d6f1a29c634f0,SHA256,high,high,AV,Handala phishing PDF - Splunk 2024-09-06 - VT 37/74 malicious 2026-10-20
+vt-sha256-221e405130,85fa58cc8c4560adb955ba0ae9b9d6cab2c381d10dbd42a0bceb8b62a92b7636,SHA256,high,high,AV,Handala / Void Manticore - Check Point Research 2024-05-20 - VT 30/75 malicious 2026-10-20
+vt-sha256-bde835a106,74d8d60e900f931526a911b7157511377c0a298af986d42d373f51aac4f362f6,SHA256,high,high,AV,Handala / Void Manticore - Check Point Research 2024-05-20 - VT 48/75 malicious 2026-10-20
+vt-domain-57ea0f5863,api.ra-backup.com,Domain,high,high,AB,Fake RedAlert spyware (unattributed Iran-aligned) - CYFIRMA 2026-03-09 - VT 18/92 malicious 2026-10-20
+vt-url-e1a52e37f8,https://api.ra-backup.com/analytics/submit.php,URL,high,high,AB,Fake RedAlert spyware (unattributed Iran-aligned) - CYFIRMA 2026-03-09 - VT 17/91 malicious 2026-10-20
+vt-sha256-a39e532cd8,83651b0589665b112687f0858bfe2832ca317ba75e700c91ac34025ee6578b72,SHA256,high,high,AV,Fake RedAlert spyware (unattributed Iran-aligned) - CYFIRMA 2026-03-09 - VT 31/75 malicious 2026-10-20
+vt-sha256-1d8abe2c07,0cba66e78ddaeecfdd462c8cb39e443d083dc58c609b0edc73e8101e59ca91e8,SHA256,high,high,AV,Fake RedAlert spyware (unattributed Iran-aligned) - CYFIRMA 2026-03-09 - VT 31/75 malicious 2026-10-20
+vt-ip-a77ac3ae8f,92.113.146.56,IP,high,high,AB,BQTLock Liwaa Mohammed - SOCRadar 2025-09-12 - VT 12/92 malicious 2026-10-20
+vt-ip-b7c8ea3e9c,208.99.44.55,IP,medium,high,AB,BQTLock Liwaa Mohammed - SOCRadar 2025-09-12 - VT 9/92 malicious 2026-10-20
+vt-domain-3aa0d452af,bcoins.online,Domain,medium,high,AB,BQTLock Liwaa Mohammed - SOCRadar 2025-09-12 - VT 8/92 malicious 2026-10-20
+vt-sha256-7cbf7a1cca,324eabc27a25f524c94bb62573986b3335ab5181ddc6825d959d16aaaccdc7aa,SHA256,high,high,AV,BQTLock Liwaa Mohammed - SOCRadar 2025-09-12 - VT 51/75 malicious 2026-10-20
+vt-sha256-2342fcf7c3,425b2f283b71237276f84d941d9c2982c7f61a9aff12ece10e15065b73b7165e,SHA256,high,high,AV,BQTLock Liwaa Mohammed - SOCRadar 2025-09-12 - VT 32/75 malicious 2026-10-20
+vt-sha256-2017cf91e9,b211537ea626fae4ad2ef5ee2652633dc68aaf20da6eb953a44f266c4106b367,SHA256,high,high,AV,BQTLock Liwaa Mohammed - SOCRadar 2025-09-12 - VT 50/75 malicious 2026-10-20
+vt-domain-7ba1630de8,saudiday.org,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 12/92 malicious 2026-10-20
+vt-domain-6b1283a977,jordansons.com,Domain,medium,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 9/92 malicious 2026-10-20
+vt-domain-04a9f8dd10,egyptican.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 12/92 malicious 2026-10-20
+vt-domain-bdfdffd5e9,healthcarb.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 15/92 malicious 2026-10-20
+vt-domain-ab0ef6a0a0,inclusive-economy.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 11/92 malicious 2026-10-20
+vt-domain-24486f77e5,king-pharmacy.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 10/92 malicious 2026-10-20
+vt-domain-53e0be0b80,microsoftwindowshelp.com,Domain,medium,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 8/92 malicious 2026-10-20
+vt-domain-ab32bfca57,economystocking.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 13/92 malicious 2026-10-20
+vt-domain-5ddece45b9,wellhealthtech.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 13/92 malicious 2026-10-20
+vt-domain-cb370dc5d6,microsoftliveforums.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 11/92 malicious 2026-10-20
+vt-domain-9924de5470,master-dental.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 13/92 malicious 2026-10-20
+vt-domain-a3fbace1eb,dentalaccord.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 11/92 malicious 2026-10-20
+vt-domain-0169dc4a60,economymentor.com,Domain,medium,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 8/92 malicious 2026-10-20
+vt-domain-b79ba4e78c,bankjordan.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 13/92 malicious 2026-10-20
+vt-domain-eec67c0355,egyptskytours.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 12/92 malicious 2026-10-20
+vt-domain-f14ef62bb0,microsoftteams365.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 10/92 malicious 2026-10-20
+vt-domain-be691600d4,finance-analyst.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 15/92 malicious 2026-10-20
+vt-domain-c460600173,trendingcharts.finance-analyst.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 15/92 malicious 2026-10-20
+vt-domain-4ac19228d0,finances-news.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 13/92 malicious 2026-10-20
+vt-domain-31d90dff01,support-api.financecovers.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 13/92 malicious 2026-10-20
+vt-domain-c52a8534aa,jordanrefugees.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 17/92 malicious 2026-10-20
+vt-domain-7f4e1a87f6,egypttourism-online.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 10/92 malicious 2026-10-20
+vt-domain-5ace375830,healthoptionstoday.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 14/92 malicious 2026-10-20
+vt-domain-677f172515,ellemedic.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 10/92 malicious 2026-10-20
+vt-domain-40413cef43,easybackupcloud.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 13/92 malicious 2026-10-20
+vt-domain-ef2b8c1846,financeinfoguide.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 12/92 malicious 2026-10-20
+vt-domain-7e75d15020,healthscratches.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 10/92 malicious 2026-10-20
+vt-domain-033565853b,printspoolerupdates.com,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 13/92 malicious 2026-10-20
+vt-domain-e6e08dd586,saudiarabianow.org,Domain,high,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 12/92 malicious 2026-10-20
+vt-domain-225a69873b,suppertools.com,Domain,low,high,AB,WIRTE Hamas-affiliated SameCoin - Check Point Research 2024-11-12 - VT 3/92 malicious 2026-10-20
+vt-sha256-b201234558,5d773e734290b93649a41ccda63772560b4fa25ba715b17df7b9f18883679160,SHA256,high,high,AV,WIRTE Hamas-affiliated PE sample - Check Point Research 2024-11-12 - VT 49/75 malicious 2026-10-20
+vt-sha256-a36514f1ce,a1b468e9550f9960c5e60f7c52ca3c058de19d42eafa760b9d5282eb24b7c55f,SHA256,high,high,AV,GhostSec GhostLocker 2.0 - Cisco Talos 2024-03-05 - VT 57/75 malicious 2026-10-20
+vt-sha256-b7f2ae1a73,8b758ccdfbfa5ff3a0b67b2063c2397531cf0f7b3d278298da76528f443779e9,SHA256,high,high,AV,GhostSec GhostLocker 2.0 - Cisco Talos 2024-03-05 - VT 57/75 malicious 2026-10-20
+vt-sha256-85164ea0db,0e484560a909fc06b9987db73346efa0ca6750d523f2334913c23e061695f5cc,SHA256,high,high,AV,GhostSec GhostLocker 1.x - Uptycs 2023-11-03 - VT 56/75 malicious 2026-10-20
+vt-sha256-1a70aa3c49,4844f44c9de364377f574e4d6a8a77dc0b4d6a67f21ccbf693ac366e52eaa8cb,SHA256,high,high,AV,GhostSec GhostLocker 1.x - Uptycs 2023-11-03 - VT 54/75 malicious 2026-10-20
