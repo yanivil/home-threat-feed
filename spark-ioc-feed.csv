@@ -349,3 +349,10 @@ vt-sha256-59b93e8914,99941fb10683e330797a4181776c4e2af878ad156381ebc408177cfb8ae
 vt-sha256-43fd6f8517,de253d5ca343db594b2da8919247cb377bd7c1557dc14d4f8ca14f50e07efb32,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 16/75 malicious 2026-10-19
 vt-sha256-1c47fea19e,05c4cd485e202976f4af6f5bfb8991934b2e94ca289268398c1f1a08841c3f16,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 24/75 malicious 2026-10-19
 vt-sha256-39c3991f15,ed7b76f4da47e5c98333477d6d06c4f22670c592bd30c9728ffde67c396e19d7,SHA256,high,high,AV,INCD alert 2011C phishing - 2026-10-01 - VT 24/75 malicious 2026-10-19
+scanner-colocationx-net,109.205.211.0-109.205.211.255,IP Range,high,medium,AB,Colocatel ColocationX NL - continuous port sweeps of WAN IP seen 2026-10-19/20
+scanner-colocationx-203,109.205.211.203,IP,high,medium,AB,Colocatel scanner host observed in Spark logs
+scanner-colocationx-205,109.205.211.205,IP,high,medium,AB,Colocatel scanner host observed in Spark logs
+scanner-modat-net,212.73.148.0-212.73.148.255,IP Range,high,medium,AB,Modat B.V. internet-wide scanner NL - port sweeps of WAN IP seen 2026-10-19/20
+scanner-modat-25,212.73.148.25,IP,high,medium,AB,Modat scanner host observed in Spark logs
+scanner-modat-26,212.73.148.26,IP,high,medium,AB,Modat scanner host observed in Spark logs
+scanner-modat-27,212.73.148.27,IP,high,medium,AB,Modat scanner host observed in Spark logs
