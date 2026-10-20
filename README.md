@@ -9,6 +9,31 @@ Custom Indicators of Compromise (IoC) feed for a Check Point Quantum Spark gatew
 https://raw.githubusercontent.com/yanivil/spark-ioc-feed/main/spark-ioc-feed.csv
 ```
 
+## Gateway setup (Quantum Spark 1595, R82.00.11, locally managed)
+
+Threat Prevention → IoC Feeds → New: Resource = the feed URL above, Action = Prevent.
+
+- **The "Test" button fails ("URL test failed") even though the feed loads.** The WebUI test
+  uses the gateway's own curl, whose CA bundle trusts neither GitHub's nor jsDelivr's
+  certificate chain; the feeder daemon validates through Check Point's store and fetches the
+  file fine. Proof is in `/opt/fw1/log/ioc_feeder.elg` (`github-custom: success`), reachable
+  over SSH (`ssh admin@<LAN IP>`, then `expert`). A feed that is active cannot be deleted;
+  deactivate it first.
+- **What each indicator type enforces without SSL inspection:** IPs and IP ranges block in
+  both directions (Anti-Bot logs them as "Prevent" on the WAN). Domains and URLs block the
+  HTTP Host header and **DNS lookups that cross the gateway**; the TLS SNI is not used for
+  blocking. Hashes are enforced by Anti-Virus on HTTP downloads.
+- **For domains to work over HTTPS, client DNS must pass through the gateway**, not end at
+  the gateway's own resolver: Device → Network → each LAN → DHCPv4 Settings → DNS → "Use the
+  following IP addresses" with an external resolver (e.g. 9.9.9.9 / 149.112.112.112). Then
+  the Anti-Bot DNS trap answers feed domains with `62.0.58.94` and nothing connects.
+- **Close the bypasses** with outgoing firewall rules above the cleanup rule: block service
+  QUIC (UDP 443, otherwise HTTP/3 skips inspection); block DoH and DoT (the `DoH` application,
+  a custom TCP 853 service, and URL entries for `dns.google`, `cloudflare-dns.com`,
+  `one.one.one.one`, `mozilla.cloudflare-dns.com`, `dns.quad9.net`, `doh.opendns.com`,
+  `dns.nextdns.io`, `dns.adguard.com`).
+- **Verify from a LAN device:** `dig +short <a domain from the feed>` must return `62.0.58.94`.
+
 ## Format
 
 Check Point indicator CSV. Header line must stay exactly as is:
