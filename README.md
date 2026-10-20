@@ -54,7 +54,9 @@ a label (group, source) that goes into COMMENT; tab-separated label fields are j
 ` - `. Blank lines and `#` lines are skipped, and defanged input (`evil[.]com`, `hxxps://`)
 is accepted.
 
-- **Added** when at least `--min-malicious` engines (default 3) flag it.
+- **Added** when enough VirusTotal engines flag it: 3 for domains, URLs and hashes, 5 for
+  IPs (hosting addresses pick up a few blocklist hits just for being on a busy provider).
+  `--min-malicious N` applies N to every type instead.
 - **CONFIDENCE** follows the detection count: 10+ high, 5–9 medium, below 5 low. Whether
   low/medium-confidence indicators are blocked or only logged depends on the gateway's
   Threat Prevention policy. SEVERITY is always high.
@@ -83,8 +85,9 @@ git commit -am "Re-verify stale indicators" && git push
   drop and get re-registered on a scale of months), hashes never (a malicious file stays
   malicious, so a hash can never block something legitimate). `--max-age DAYS` applies DAYS
   to every type, hashes included. Hand-written rows are never touched.
-- Rows still flagged by at least `--min-malicious` engines get a fresh ratio, date and
-  CONFIDENCE in place; rows that fell below are removed.
+- Rows still flagged by enough engines (3, or 5 for IPs, unless `--min-malicious` says
+  otherwise) get a fresh ratio, date and CONFIDENCE in place; rows that fell below are
+  removed.
 - The header line, the order of the rows and every other row stay exactly as they are.
 - The file is rewritten after every change, so if the daily quota runs out (or you press
   Ctrl-C) it is left consistent. Refreshed rows carry today's date and are skipped next time,

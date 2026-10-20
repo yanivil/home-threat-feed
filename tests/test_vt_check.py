@@ -179,7 +179,7 @@ class RunTest(unittest.TestCase):
         sha256 = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
         fake = FakeVT({
             f"/files/{sha256}": vt_object("file", sha256, malicious=60, undetected=5, harmless=0),
-            "/ip_addresses/8.8.4.4": vt_object("ip_address", "8.8.4.4", malicious=4),
+            "/ip_addresses/8.8.4.4": vt_object("ip_address", "8.8.4.4", malicious=5),
         })
 
         self.run_check([sha256, "8.8.4.4"], fake)
@@ -187,8 +187,29 @@ class RunTest(unittest.TestCase):
         added = self.feed.read_text().splitlines()[2:]
         self.assertEqual(added, [
             f"vt-sha256-9634a68018,{sha256},SHA256,high,high,AV,VT 60/65 malicious 2026-10-19",
-            "vt-ip-2d2878d281,8.8.4.4,IP,low,high,AB,VT 4/84 malicious 2026-10-19",
+            "vt-ip-2d2878d281,8.8.4.4,IP,medium,high,AB,VT 5/85 malicious 2026-10-19",
         ])
+
+    def test_ips_need_five_engines_and_other_types_three(self):
+        fake = FakeVT({
+            "/ip_addresses/8.8.4.4": vt_object("ip_address", "8.8.4.4", malicious=4),
+            "/ip_addresses/9.9.9.9": vt_object("ip_address", "9.9.9.9", malicious=5),
+            "/domains/evil.com": vt_object("domain", "evil.com", malicious=3),
+        })
+
+        results = self.run_check(["8.8.4.4", "9.9.9.9", "evil.com"], fake)
+
+        self.assertEqual(
+            self.statuses(results),
+            {"8.8.4.4": "clean", "9.9.9.9": "added", "evil.com": "added"},
+        )
+
+    def test_min_malicious_overrides_the_per_type_defaults(self):
+        fake = FakeVT({"/ip_addresses/8.8.4.4": vt_object("ip_address", "8.8.4.4", malicious=4)})
+
+        results = self.run_check(["8.8.4.4"], fake, min_malicious=4)
+
+        self.assertEqual(self.statuses(results), {"8.8.4.4": "added"})
 
     def test_confidence_follows_detection_count(self):
         cases = [(3, "low"), (4, "low"), (5, "medium"), (9, "medium"), (10, "high")]
@@ -360,6 +381,15 @@ class RecheckTest(unittest.TestCase):
 
         self.assertEqual(self.statuses(results)["evil.com"], "removed")
         self.assertEqual(self.feed.read_text(), HEADER + EXISTING)
+
+    def test_old_ip_row_below_five_engines_is_removed(self):
+        self.feed.write_text(HEADER + OLD_IP)
+        fake = FakeVT({"/ip_addresses/203.0.113.7": vt_object("ip_address", "203.0.113.7", malicious=4)})
+
+        results = self.recheck(fake)
+
+        self.assertEqual(self.statuses(results)["203.0.113.7"], "removed")
+        self.assertEqual(self.feed.read_text(), HEADER)
 
     def test_recent_and_hand_written_rows_are_kept_without_a_lookup(self):
         self.feed.write_text(HEADER + EXISTING + RECENT + OLD)

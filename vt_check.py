@@ -52,6 +52,11 @@ VT_NOTE_RE = re.compile(r"VT (\d+)/(\d+) malicious (\d{4}-\d{2}-\d{2})$")
 # malicious file stays malicious: hashes are rechecked only when --max-age says so.
 MAX_AGE = {"IP": 60, "Domain": 180, "URL": 180}
 RECHECK_TYPES = ("IP", "Domain", "URL", "MD5", "SHA1", "SHA256")
+# Engines that must flag an indicator before it is added or kept, per TYPE. IPs
+# get a higher bar: hosting addresses collect a few blocklist hits just for being
+# on a busy provider, and a wrongly blocked IP breaks more than a wrong domain.
+MIN_MALICIOUS = {"IP": 5}
+DEFAULT_MIN_MALICIOUS = 3
 
 Result = namedtuple("Result", "indicator status detail")
 
@@ -98,6 +103,13 @@ def api_path(ioc_type, value):
     if ioc_type == "URL":
         return "/urls/" + base64.urlsafe_b64encode(value.encode()).decode().rstrip("=")
     return f"/files/{value}"
+
+
+def min_for(ioc_type, override=None):
+    """Engines needed for `ioc_type`: `override` for every type when given."""
+    if override is not None:
+        return override
+    return MIN_MALICIOUS.get(ioc_type, DEFAULT_MIN_MALICIOUS)
 
 
 def confidence(malicious):
@@ -147,12 +159,14 @@ def lookup(fetch, ioc_type, value):
     return None, "", body["data"]["attributes"].get("last_analysis_stats", {})
 
 
-def run(indicators, feed_path, fetch, *, min_malicious=3, dry_run=False,
+def run(indicators, feed_path, fetch, *, min_malicious=None, dry_run=False,
         delay=FREE_API_DELAY, sleep=time.sleep, today=None, out=print):
     """Look up each indicator and append rows for the malicious ones to the feed.
 
     `indicators` holds strings or (indicator, label) pairs. `fetch(path)` returns
-    (HTTP status, parsed JSON) for a VirusTotal API v3 path.
+    (HTTP status, parsed JSON) for a VirusTotal API v3 path. An indicator is added
+    when MIN_MALICIOUS engines for its type flag it (DEFAULT_MIN_MALICIOUS
+    otherwise), or `min_malicious` engines for every type when given.
     """
     today = today or date.today().isoformat()
     feed_path = Path(feed_path)
@@ -194,7 +208,7 @@ def run(indicators, feed_path, fetch, *, min_malicious=3, dry_run=False,
             continue
         malicious = stats.get("malicious", 0)
         ratio = f"{ioc_type} {malicious}/{sum(stats.values())} malicious"
-        if malicious < min_malicious:
+        if malicious < min_for(ioc_type, min_malicious):
             record(raw, "clean", ratio)
             continue
         row = feed_row(ioc_type, value, stats, label, today)
@@ -210,14 +224,14 @@ def run(indicators, feed_path, fetch, *, min_malicious=3, dry_run=False,
     return results
 
 
-def recheck(feed_path, fetch, *, max_age=None, min_malicious=3, dry_run=False,
+def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False,
             delay=FREE_API_DELAY, sleep=time.sleep, today=None, out=print):
     """Look up again the feed rows whose VirusTotal check is old enough for their type.
 
     "Old enough" is MAX_AGE days for the row's TYPE (never for hashes), or
-    `max_age` days for every type when given. Rows that `min_malicious` engines
-    still flag get a fresh ratio, date and confidence; rows that fell below are
-    removed. Every other row, the header and the row order stay exactly as they
+    `max_age` days for every type when given. Rows that enough engines still
+    flag (MIN_MALICIOUS for the type, or `min_malicious` for every type) get a
+    fresh ratio, date and confidence; rows that fell below are removed. Every other row, the header and the row order stay exactly as they
     were. The file is rewritten after each change, so a run that stops early
     (quota, Ctrl-C) leaves it consistent.
     """
@@ -274,7 +288,7 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=3, dry_run=False,
         malicious = stats.get("malicious", 0)
         total = sum(stats.values())
         change = f"{ioc_type} {note.group(1)}/{note.group(2)} -> {malicious}/{total} malicious"
-        if malicious < min_malicious:
+        if malicious < min_for(ioc_type, min_malicious):
             record(value, "would-remove" if dry_run else "removed", change)
             if not dry_run:
                 lines[i] = None
@@ -333,8 +347,9 @@ def main(argv=None):
                         help="file with one indicator per line, optionally followed by a label (- for stdin)")
     parser.add_argument("-l", "--label", default="",
                         help="COMMENT text for indicators without a label of their own")
-    parser.add_argument("--min-malicious", type=int, default=3,
-                        help="engines that must flag an indicator before it is added (default 3)")
+    parser.add_argument("--min-malicious", type=int, default=None, metavar="N",
+                        help="engines that must flag an indicator before it is added or kept, for every "
+                             f"type (default per type: IPs {MIN_MALICIOUS['IP']}, others {DEFAULT_MIN_MALICIOUS})")
     parser.add_argument("--feed", type=Path, default=FEED, help="feed CSV to append to (with --recheck: to rewrite)")
     parser.add_argument("--delay", type=float, default=FREE_API_DELAY,
                         help=f"seconds between lookups (default {FREE_API_DELAY}, the free-key rate)")
@@ -357,7 +372,9 @@ def main(argv=None):
         parser.error("no indicators given")
 
     say = lambda *a: print(*a, flush=True)
-    mode = f"min {args.min_malicious} malicious detections{', dry run' if args.dry_run else ''}"
+    threshold = (f"min {args.min_malicious} malicious detections" if args.min_malicious is not None
+                 else f"min {DEFAULT_MIN_MALICIOUS} malicious detections, IPs {MIN_MALICIOUS['IP']}")
+    mode = threshold + (", dry run" if args.dry_run else "")
     try:
         if args.recheck:
             ages = (f"{args.max_age}+ days ago, every type" if args.max_age is not None
