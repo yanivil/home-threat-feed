@@ -31,7 +31,9 @@ Threat Prevention → IoC Feeds → New: Resource = the feed URL above, Action =
   QUIC (UDP 443, otherwise HTTP/3 skips inspection); block DoH and DoT (the `DoH` application,
   a custom TCP 853 service, and URL entries for `dns.google`, `cloudflare-dns.com`,
   `one.one.one.one`, `mozilla.cloudflare-dns.com`, `dns.quad9.net`, `doh.opendns.com`,
-  `dns.nextdns.io`, `dns.adguard.com`).
+  `dns.nextdns.io`, `dns.adguard.com`); block NetBIOS and SMB to the Internet (the `NetBios`
+  service group, `microsoft-ds-udp`, and a custom TCP 445 service), which Windows otherwise
+  leaks outward.
 - **Verify from a LAN device:** `dig +short <a domain from the feed>` must return `62.0.58.94`.
 
 ## Format
