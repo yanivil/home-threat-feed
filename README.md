@@ -93,6 +93,36 @@ is accepted.
   between lookups (`--delay`). If the daily quota runs out it stops, keeps what it already
   added, and lists the indicators still to check.
 
+## Mining the gateway's own logs
+
+The Spark cannot export its security logs, but it can send them as syslog. Two scripts turn
+that stream into checked indicators:
+
+1. **`syslog_receiver.py`** listens on UDP 5514 and writes one entry per line to
+   `syslog/spark-YYYY-MM-DD.log` (git-ignored), re-joining the entries the gateway splits over
+   several datagrams. On the Spark: Logs & Monitoring → External Log Servers → Syslog
+   Servers → Configure: UDP, the Mac's LAN address, port 5514, Security logs. Give that Mac a
+   DHCP reservation (Users and Objects → Network Objects → Single IP → "Reserve IP address in
+   DHCP service for MAC"). `launchd/com.spark-ioc-feed.syslog.plist` keeps the receiver
+   running across reboots; the install steps are in its comment.
+2. **`spark_logs.py`** reads the capture and sorts what it finds into two kinds:
+   - **inbound**: public addresses that probed the WAN. With `--check`, those VirusTotal
+     flags (5+ engines) are added to the feed, labelled `Inbound probe of WAN - Spark syslog`.
+   - **outbound**: names (or addresses) that LAN devices connected to. Hits are **reported,
+     never added**, with the devices that reached them, because an outbound hit means a
+     device needs looking at.
+
+```
+python3 spark_logs.py                       # list the candidates from today's capture
+python3 spark_logs.py --days 3              # ... from the last three days
+python3 spark_logs.py --check               # look them up (VT_API_KEY in the environment)
+python3 spark_logs.py --check --max-lookups 100
+```
+
+Indicators already in the feed, or looked up within `--recheck-days` (30; `syslog/checked.json`
+remembers them), are skipped, and `--max-lookups` (default 200) keeps a run inside the free
+API's 500-a-day quota, inbound first. Run it daily and `git push` after a run that added rows.
+
 ## Keeping the feed fresh
 
 Attacker infrastructure rotates: command-and-control servers are re-leased within weeks,

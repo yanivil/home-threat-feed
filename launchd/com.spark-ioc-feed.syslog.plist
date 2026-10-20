@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Keeps syslog_receiver.py running on the Mac the Spark sends its logs to.
+         Install: edit the two paths below, then
+           cp launchd/com.spark-ioc-feed.syslog.plist ~/Library/LaunchAgents/
+           launchctl load ~/Library/LaunchAgents/com.spark-ioc-feed.syslog.plist
+         Stop:  launchctl unload ~/Library/LaunchAgents/com.spark-ioc-feed.syslog.plist -->
+    <key>Label</key>
+    <string>com.spark-ioc-feed.syslog</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Volumes/eDisk_2TB/Claude/github-custom/spark-ioc-feed/syslog_receiver.py</string>
+        <string>--port</string>
+        <string>5514</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Volumes/eDisk_2TB/Claude/github-custom/spark-ioc-feed</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/spark-syslog-receiver.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/spark-syslog-receiver.log</string>
+</dict>
+</plist>
