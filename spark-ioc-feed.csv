@@ -356,3 +356,9 @@ scanner-modat-net,212.73.148.0-212.73.148.255,IP Range,high,medium,AB,Modat B.V.
 scanner-modat-25,212.73.148.25,IP,high,medium,AB,Modat scanner host observed in Spark logs
 scanner-modat-26,212.73.148.26,IP,high,medium,AB,Modat scanner host observed in Spark logs
 scanner-modat-27,212.73.148.27,IP,high,medium,AB,Modat scanner host observed in Spark logs
+vt-ip-a0d45bc2e6,45.79.109.193,IP,medium,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 8/92 malicious 2026-10-20
+vt-ip-9720b66d05,69.5.169.103,IP,high,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 11/92 malicious 2026-10-20
+vt-ip-c6d30c1a97,66.132.172.241,IP,medium,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 5/92 malicious 2026-10-20
+vt-ip-0b06a3df43,194.88.98.112,IP,medium,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 8/92 malicious 2026-10-20
+vt-ip-588d0465fa,91.92.242.71,IP,medium,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 9/92 malicious 2026-10-20
+vt-ip-aac6169ec0,141.98.10.198,IP,high,high,AB,Inbound port scan of WAN - Spark logs 2026-10-20 - VT 10/92 malicious 2026-10-20
