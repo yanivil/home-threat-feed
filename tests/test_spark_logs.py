@@ -5,9 +5,11 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import spark_logs
-from tests.test_vt_check import HEADER, FakeVT, vt_object
+import vt_check
+from tests.test_vt_check import HEADER, FakeVT, cli_env, keychain_with, vt_object
 
 REPO = Path(__file__).resolve().parent.parent
 TODAY = "2026-10-20"
@@ -187,11 +189,8 @@ class CheckTest(unittest.TestCase):
 
 class CommandLineTest(unittest.TestCase):
     def run_cli(self, *args, env_key=None):
-        env = {k: v for k, v in os.environ.items() if k != "VT_API_KEY"}
-        if env_key:
-            env["VT_API_KEY"] = env_key
         return subprocess.run([sys.executable, str(REPO / "spark_logs.py"), *args],
-                              capture_output=True, text=True, env=env, cwd=REPO)
+                              capture_output=True, text=True, env=cli_env(env_key), cwd=REPO)
 
     def test_listing_needs_no_key_and_shows_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -210,6 +209,23 @@ class CommandLineTest(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 2)
         self.assertIn("VT_API_KEY", proc.stderr)
+        self.assertIn("security add-generic-password -s spark-ioc-feed -a VT_API_KEY", proc.stderr)
+
+    def test_check_takes_the_key_from_the_keychain_when_the_environment_has_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "spark-2026-10-20.log").write_text(INBOUND_DROP + "\n")
+            feed = Path(tmp, "feed.csv")
+            feed.write_text(HEADER)
+            fake = FakeVT({"/ip_addresses/109.205.211.205": vt_object("ip_address", "109.205.211.205", malicious=0)})
+
+            with patch.object(vt_check, "make_fetch", return_value=fake) as make_fetch, \
+                    patch.object(vt_check.subprocess, "run", keychain_with("from-keychain")), \
+                    patch.dict(os.environ, cli_env(), clear=True), \
+                    patch("builtins.print"):
+                code = spark_logs.main(["--dir", tmp, "--check", "--today", TODAY, "--feed", str(feed)])
+
+        self.assertEqual(code, 0)
+        make_fetch.assert_called_once_with("from-keychain")
 
 
 if __name__ == "__main__":

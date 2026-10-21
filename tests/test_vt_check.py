@@ -7,15 +7,37 @@ import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import vt_check
 
 REPO = Path(__file__).resolve().parent.parent
+STUBS = REPO / "tests" / "stubs"
+KEYCHAIN_LOOKUP = ["security", "find-generic-password", "-s", "spark-ioc-feed", "-a", "VT_API_KEY", "-w"]
 HEADER = "# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT\n"
 EXISTING = "test-domain-01,example.com,Domain,high,high,AB,TEST ENTRY\n"
 TODAY = "2026-10-19"
 SHA256 = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
+
+
+def cli_env(env_key=None):
+    """A subprocess environment with no VT_API_KEY and a `security` that finds no Keychain item."""
+    env = {k: v for k, v in os.environ.items() if k != "VT_API_KEY"}
+    env["PATH"] = f"{STUBS}{os.pathsep}{env.get('PATH', '')}"
+    if env_key:
+        env["VT_API_KEY"] = env_key
+    return env
+
+
+def keychain_with(key):
+    """A subprocess.run stand-in whose Keychain holds `key` (None: no item)."""
+    def run(cmd, **kwargs):
+        run.calls.append(cmd)
+        if key is None:
+            return subprocess.CompletedProcess(cmd, 44, stdout="", stderr="The specified item could not be found in the keychain.\n")
+        return subprocess.CompletedProcess(cmd, 0, stdout=key + "\n", stderr="")
+    run.calls = []
+    return run
 
 
 def aged(days):
@@ -542,21 +564,60 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(self.feed.read_text(), HEADER + EXISTING + OLD)
 
 
+class ApiKeyTest(unittest.TestCase):
+    def test_environment_variable_wins_without_touching_the_keychain(self):
+        run = Mock()
+
+        self.assertEqual(vt_check.api_key({"VT_API_KEY": " abc "}, run=run), "abc")
+        run.assert_not_called()
+
+    def test_falls_back_to_the_keychain_item(self):
+        run = keychain_with("from-keychain")
+
+        self.assertEqual(vt_check.api_key({}, run=run), "from-keychain")
+        self.assertEqual(run.calls, [KEYCHAIN_LOOKUP])
+
+    def test_blank_environment_variable_counts_as_unset(self):
+        self.assertEqual(vt_check.api_key({"VT_API_KEY": "  "}, run=keychain_with("from-keychain")), "from-keychain")
+
+    def test_missing_keychain_item_yields_nothing(self):
+        self.assertEqual(vt_check.api_key({}, run=keychain_with(None)), "")
+
+    def test_missing_security_tool_yields_nothing(self):
+        def run(cmd, **kwargs):
+            raise FileNotFoundError(cmd[0])
+
+        self.assertEqual(vt_check.api_key({}, run=run), "")
+
+
 class CommandLineTest(unittest.TestCase):
     def run_cli(self, *args, stdin="", env_key=None):
-        env = {k: v for k, v in os.environ.items() if k != "VT_API_KEY"}
-        if env_key is not None:
-            env["VT_API_KEY"] = env_key
         return subprocess.run(
             [sys.executable, str(REPO / "vt_check.py"), *args],
-            input=stdin, capture_output=True, text=True, env=env, cwd=REPO,
+            input=stdin, capture_output=True, text=True, env=cli_env(env_key), cwd=REPO,
         )
 
-    def test_missing_api_key_exits_with_error(self):
+    def test_missing_api_key_exits_with_error_that_names_both_places_to_put_it(self):
         proc = self.run_cli("evil.com")
 
         self.assertEqual(proc.returncode, 2)
         self.assertIn("VT_API_KEY", proc.stderr)
+        self.assertIn("security add-generic-password -s spark-ioc-feed -a VT_API_KEY", proc.stderr)
+
+    def test_key_comes_from_the_keychain_when_the_environment_has_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            feed = Path(tmp) / "feed.csv"
+            feed.write_text(HEADER + EXISTING + OLD)
+            fake = FakeVT({"/domains/evil.com": vt_object("domain", "evil.com", malicious=12)})
+
+            with patch.object(vt_check, "make_fetch", return_value=fake) as make_fetch, \
+                    patch.object(vt_check.subprocess, "run", keychain_with("from-keychain")), \
+                    patch.dict(os.environ, cli_env(), clear=True), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                code = vt_check.main(["--recheck", "--feed", str(feed)])
+
+            self.assertEqual(code, 0)
+            make_fetch.assert_called_once_with("from-keychain")
 
     def test_no_indicators_exits_with_error(self):
         proc = self.run_cli(env_key="dummy")

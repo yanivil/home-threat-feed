@@ -65,8 +65,9 @@ No spaces around commas. Do not put commas inside the COMMENT field.
 
 `vt_check.py` looks up each indicator on VirusTotal and appends the ones that enough
 engines flag as malicious to `spark-ioc-feed.csv`. It needs Python 3 only (no packages)
-and a VirusTotal API key in the `VT_API_KEY` environment variable. Never commit the key —
-this repository is public.
+and a VirusTotal API key, read from the `VT_API_KEY` environment variable or, when that is
+not set, from the login Keychain item described under "Daily check on this Mac" below.
+Never commit the key — this repository is public.
 
 ```
 export VT_API_KEY=your-key
@@ -121,7 +122,41 @@ python3 spark_logs.py --check --max-lookups 100
 
 Indicators already in the feed, or looked up within `--recheck-days` (30; `syslog/checked.json`
 remembers them), are skipped, and `--max-lookups` (default 200) keeps a run inside the free
-API's 500-a-day quota, inbound first. Run it daily and `git push` after a run that added rows.
+API's 500-a-day quota, inbound first. The daily check below runs it for you and pushes what it adds.
+
+### Daily check on this Mac
+
+`daily_check.sh` does the whole round once: `git pull`, then
+`spark_logs.py --days 2 --check --max-lookups 150`, then a commit of `spark-ioc-feed.csv` (and
+nothing else) and a push when rows were added. `launchd/com.spark-ioc-feed.daily.plist` runs it
+every morning at 07:30 local time.
+
+1. Store the key once in the login Keychain. Both scripts fall back to it when `VT_API_KEY`
+   is not set, and the LaunchAgent has no other way to get it:
+   ```
+   security add-generic-password -s spark-ioc-feed -a VT_API_KEY -w 'your-key' -U
+   ```
+2. Install the agent (edit the two paths in the plist first if the repository lives elsewhere):
+   ```
+   cp launchd/com.spark-ioc-feed.daily.plist ~/Library/LaunchAgents/
+   launchctl load ~/Library/LaunchAgents/com.spark-ioc-feed.daily.plist
+   launchctl start com.spark-ioc-feed.daily      # run it now instead of waiting for 07:30
+   ```
+
+- Everything a run prints goes to `/tmp/spark-daily-check.log`, with a timestamped line for
+  each step. **Outbound hits are only reported there**, as
+  `OUTBOUND HIT <destination> (<ratio>) reached by <devices>`, and raise a macOS notification
+  titled "Spark IoC feed" (allow notifications from Script Editor if macOS asks the first time).
+  Nothing else records them, so glance at the log now and then.
+- Two days of capture are read because at 07:30 today's file holds only a few hours;
+  `syslog/checked.json` keeps yesterday's indicators from being looked up twice. 150 lookups
+  take under 40 minutes and leave most of the free key's 500 a day for manual runs.
+- The pull first brings in rows committed elsewhere (the GitHub web editor, the monthly
+  re-check on Actions). A pull or push that fails is logged as `ERROR` with a notification,
+  the run exits non-zero, and a commit that could not be pushed stays local until the next run
+  pushes it. A run missed while the Mac slept happens on wake; one missed while it was off is
+  skipped.
+- By hand with other settings: `DAYS=3 MAX_LOOKUPS=50 bash daily_check.sh`.
 
 ## Keeping the feed fresh
 

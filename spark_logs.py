@@ -2,7 +2,7 @@
 """Mine the Spark's syslog capture for indicators and check them on VirusTotal.
 
     python3 spark_logs.py                 # list what the last day's logs would check
-    python3 spark_logs.py --check         # look them up (needs VT_API_KEY)
+    python3 spark_logs.py --check         # look them up (VT_API_KEY, or the Keychain item)
     python3 spark_logs.py --days 3 --check --max-lookups 300
 
 Reads syslog/spark-YYYY-MM-DD.log (written by syslog_receiver.py) and pulls out:
@@ -18,7 +18,6 @@ are skipped, and --max-lookups caps a run so it fits the free API's daily quota.
 import argparse
 import ipaddress
 import json
-import os
 import re
 import sys
 import time
@@ -217,7 +216,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Mine the Spark's syslog capture for indicators to check.")
     parser.add_argument("--dir", type=Path, default=DEFAULT_DIR, help="syslog capture directory")
     parser.add_argument("--days", type=int, default=1, help="how many daily files to read, ending today (default 1)")
-    parser.add_argument("--check", action="store_true", help="look the candidates up on VirusTotal (needs VT_API_KEY)")
+    parser.add_argument("--check", action="store_true",
+                        help="look the candidates up on VirusTotal (key from VT_API_KEY or the Keychain)")
     parser.add_argument("--max-lookups", type=int, default=200, help="lookups per run, inbound first (default 200)")
     parser.add_argument("--recheck-days", type=int, default=30, help="days before an indicator is looked up again")
     parser.add_argument("--feed", type=Path, default=vt_check.FEED, help="feed CSV to append confirmed inbound sources to")
@@ -243,10 +243,10 @@ def main(argv=None):
             say(f"  outbound  {i:40} x{item['count']}  from {', '.join(item['devices'])}")
         return 0
 
-    api_key = os.environ.get("VT_API_KEY", "").strip()
-    if not api_key:
-        parser.error("set the VT_API_KEY environment variable to your VirusTotal API key")
-    report = check(found, args.feed, args.dir / CACHE_NAME, vt_check.make_fetch(api_key), today=today,
+    key = vt_check.api_key()
+    if not key:
+        parser.error(vt_check.NO_KEY_HELP)
+    report = check(found, args.feed, args.dir / CACHE_NAME, vt_check.make_fetch(key), today=today,
                    max_lookups=args.max_lookups, recheck_days=args.recheck_days, delay=args.delay, out=say)
     say(f"Added to the feed: {len(report['added'])}  clean: {report['clean']}  unknown to VirusTotal: {report['not_found']}"
         f"  left for another day: {len(report['skipped'])}")

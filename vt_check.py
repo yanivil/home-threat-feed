@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Check indicators against VirusTotal and add the malicious ones to the Spark IoC feed.
 
-    export VT_API_KEY=...        # your VirusTotal API key (never commit it)
+    export VT_API_KEY=...        # your VirusTotal API key (never commit it), or store it
+                                 # once in the macOS Keychain (see api_key) and skip this
     python3 vt_check.py evil.com 203.0.113.7 https://bad.example/x <sha256>
     python3 vt_check.py -f iocs.txt --dry-run
     python3 vt_check.py --recheck [--max-age 60] [--dry-run]   # re-verify old feed rows
@@ -25,6 +26,7 @@ import ipaddress
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import urllib.error
@@ -44,6 +46,12 @@ DOMAIN_RE = re.compile(
     r"(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)+"
     r"(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})"
 )
+
+# Where the VirusTotal key lives when VT_API_KEY is not in the environment:
+#   security add-generic-password -s spark-ioc-feed -a VT_API_KEY -w '<key>' -U
+KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT = "spark-ioc-feed", "VT_API_KEY"
+NO_KEY_HELP = (f"set the VT_API_KEY environment variable to your VirusTotal API key, or store it in the "
+               f"Keychain: security add-generic-password -s {KEYCHAIN_SERVICE} -a {KEYCHAIN_ACCOUNT} -w '<key>' -U")
 
 # The note feed_row() puts at the end of COMMENT; --recheck finds rows by it.
 VT_NOTE_RE = re.compile(r"VT (\d+)/(\d+) malicious (\d{4}-\d{2}-\d{2})$")
@@ -304,6 +312,23 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False
     return results
 
 
+def api_key(environ=None, run=None):
+    """The VirusTotal key: VT_API_KEY from `environ` (default os.environ), else the macOS
+    Keychain item (service KEYCHAIN_SERVICE, account KEYCHAIN_ACCOUNT) read with `run`
+    (default subprocess.run); "" when neither has one."""
+    environ = os.environ if environ is None else environ
+    run = subprocess.run if run is None else run
+    key = environ.get("VT_API_KEY", "").strip()
+    if key:
+        return key
+    try:
+        proc = run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w"],
+                   capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return proc.stdout.strip() if proc.returncode == 0 else ""
+
+
 def make_fetch(api_key):
     def fetch(path):
         request = urllib.request.Request(
@@ -362,9 +387,9 @@ def main(argv=None):
                              "(0 = every row); default per type: IPs 60, domains and URLs 180, hashes never")
     args = parser.parse_args(argv)
 
-    api_key = os.environ.get("VT_API_KEY", "").strip()
-    if not api_key:
-        parser.error("set the VT_API_KEY environment variable to your VirusTotal API key")
+    key = api_key()
+    if not key:
+        parser.error(NO_KEY_HELP)
     entries = read_indicators(args.file, args.indicators, args.label)
     if args.recheck and entries:
         parser.error("--recheck re-verifies the rows already in the feed; do not pass indicators")
@@ -380,12 +405,12 @@ def main(argv=None):
             ages = (f"{args.max_age}+ days ago, every type" if args.max_age is not None
                     else ", ".join(f"{t} {d}+" for t, d in MAX_AGE.items()) + " days ago, hashes never")
             say(f"Re-checking {args.feed.name} rows last verified {ages} on VirusTotal ({mode})")
-            results = recheck(args.feed, make_fetch(api_key), max_age=args.max_age,
+            results = recheck(args.feed, make_fetch(key), max_age=args.max_age,
                               min_malicious=args.min_malicious, dry_run=args.dry_run,
                               delay=args.delay, out=say)
         else:
             say(f"Checking {len(entries)} indicators against VirusTotal ({mode})")
-            results = run(entries, args.feed, make_fetch(api_key), min_malicious=args.min_malicious,
+            results = run(entries, args.feed, make_fetch(key), min_malicious=args.min_malicious,
                           dry_run=args.dry_run, delay=args.delay, out=say)
     except VTError as e:
         print(f"error: {e}", file=sys.stderr)

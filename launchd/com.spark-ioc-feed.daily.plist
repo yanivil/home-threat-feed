@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Runs daily_check.sh every morning at 07:30 local time: mines the syslog capture, looks
+         new indicators up on VirusTotal, commits and pushes spark-ioc-feed.csv when rows were
+         added. The VirusTotal key must be in the login Keychain first (README, "Daily check").
+         A run missed while the Mac slept happens on wake; one missed while it was off is skipped.
+         Install: edit the two paths below if the repository lives elsewhere, then
+           cp launchd/com.spark-ioc-feed.daily.plist ~/Library/LaunchAgents/
+           launchctl load ~/Library/LaunchAgents/com.spark-ioc-feed.daily.plist
+         Run now: launchctl start com.spark-ioc-feed.daily
+         Log:     /tmp/spark-daily-check.log
+         Stop:    launchctl unload ~/Library/LaunchAgents/com.spark-ioc-feed.daily.plist -->
+    <key>Label</key>
+    <string>com.spark-ioc-feed.daily</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Volumes/eDisk_2TB/Claude/github-custom/spark-ioc-feed/daily_check.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Volumes/eDisk_2TB/Claude/github-custom/spark-ioc-feed</string>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/tmp/spark-daily-check.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/spark-daily-check.log</string>
+</dict>
+</plist>

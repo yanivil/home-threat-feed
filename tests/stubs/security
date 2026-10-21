@@ -1,0 +1,5 @@
+#!/bin/sh
+# Stands in for macOS `security` in the command-line tests: no Keychain item exists,
+# whatever the real login Keychain holds. Exit 44 = errSecItemNotFound.
+echo "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain." >&2
+exit 44
