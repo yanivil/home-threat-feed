@@ -86,6 +86,8 @@ class DropReasonTest(unittest.TestCase):
             ("https://fex.net", "shared platform"),
             ("https://www.sendspace.com", "shared platform"),
             ("https://www.premiumize.com", "shared platform"),
+            ("cyberfear.com", "shared platform"),  # encrypted e-mail provider named as a contact channel
+            ("tutanota.com", "shared platform"),
             ("https://master-repogen.vercel.app/file/server.scr", None),  # an attacker's own sub-host
             ("tezwsse5czllksjb7cwp65rvnk4oobmzti2znn42i43bjdfd2prqqkad.onion", "Tor address"),
             ("184.168.123.0/24", "not an IP, domain, URL, MD5, SHA1 or SHA256"),

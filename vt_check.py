@@ -92,7 +92,7 @@ def classify(raw):
     except ValueError:
         pass
     else:
-        if not ip.is_global:
+        if not ip.is_global or ip.is_multicast or ip.is_reserved or ip.is_link_local:
             raise ValueError("not a public IP address")
         return "IP", str(ip)
     lowered = value.lower().rstrip(".")

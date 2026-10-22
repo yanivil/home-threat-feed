@@ -40,6 +40,9 @@ SHARED_PLATFORMS = {
     "somee.com", "sendit.sh", "firebaseio.com", "storyblok.com", "onehub.com",
     "transfer.sh", "fex.net", "sendspace.com", "premiumize.com", "gofile.io", "file.io", "anonfiles.com",
     "mediafire.com", "pixeldrain.com", "catbox.moe", "ufile.io", "filetransfer.io", "temp.sh",
+    # e-mail providers that ransomware notes name as contact channels
+    "cyberfear.com", "tutanota.com", "tuta.io", "tuta.com", "onionmail.org", "mailfence.com", "cock.li",
+    "skiff.com", "outlook.com", "yahoo.com", "mail.ru", "yandex.ru", "zoho.com",
 }
 # Services whose sub-hosts are shared infrastructure too (relays, API endpoints, raw file hosts),
 # not attacker tenants: a URL row matched by host would block the whole service.

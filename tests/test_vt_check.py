@@ -127,6 +127,9 @@ class ClassifyTest(unittest.TestCase):
         for raw in [
             "10.0.0.1",  # private address
             "127.0.0.1",
+            "224.0.0.252",  # multicast (LLMNR), a vendor list artefact
+            "255.255.255.255",  # broadcast
+            "169.254.1.1",  # link-local
             "1.2.3.4-1.2.3.9",  # range
             "not an indicator",
             "localhost",  # no dot
