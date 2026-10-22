@@ -34,6 +34,11 @@ Threat Prevention → IoC Feeds → New: Resource = the feed URL above, Action =
   `dns.nextdns.io`, `dns.adguard.com`); block NetBIOS and SMB to the Internet (the `NetBios`
   service group, `microsoft-ds-udp`, and a custom TCP 445 service), which Windows otherwise
   leaks outward.
+- **IoT policy vs. external DNS:** the Spark's IoT protection in *Prevent* mode only allows what
+  Check Point's per-device profile lists. After the DNS change, the Roomba's lookups to 9.9.9.9 and
+  its AWS IoT session (`*.iot.us-east-1.amazonaws.com`) fell outside its profile and were dropped
+  silently for 36 hours. Keep IoT assets on *Monitor* (or add their real endpoints), and reboot a
+  device that has gone quiet; its boot shows in syslog as an NTP burst.
 - **Verify from a LAN device:** `dig +short <a domain from the feed>` must return `62.0.58.94`.
 
 ## Format
