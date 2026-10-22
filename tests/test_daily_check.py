@@ -92,11 +92,19 @@ class DailyCheckTest(unittest.TestCase):
         hook.chmod(0o755)
         return hook
 
-    def test_runs_the_check_over_two_days_with_the_daily_lookup_budget(self):
+    def test_runs_the_check_over_two_days_with_the_scripts_own_lookup_budget(self):
         proc = self.run_script()
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertEqual((self.repo / "argv.txt").read_text(), "--days 2 --check --max-lookups 150")
+        self.assertEqual((self.repo / "argv.txt").read_text(), "--days 2 --check")
+        self.assertNotIn("lookups", proc.stdout)
+
+    def test_days_and_max_lookups_in_the_environment_override_the_defaults(self):
+        proc = self.run_script(DAYS=3, MAX_LOOKUPS=50)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual((self.repo / "argv.txt").read_text(), "--days 3 --check --max-lookups 50")
+        self.assertIn("last 3 day(s), up to 50 lookups", proc.stdout)
 
     def test_added_rows_are_committed_alone_and_pushed(self):
         (self.repo / "other.txt").write_text("edited but not mine to commit\n")

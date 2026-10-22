@@ -2,6 +2,8 @@
 # The once-a-day syslog check for the Spark IoC feed, run by launchd/com.spark-ioc-feed.daily.plist:
 #   1. git pull            bring in rows committed elsewhere (GitHub web edits, the monthly re-check)
 #   2. spark_logs.py       mine the last two daily captures, look new indicators up on VirusTotal
+#                          (outbound names first, then recurring outbound addresses, then persistent
+#                          inbound sources; see its --help for the thresholds)
 #   3. git commit + push   spark-ioc-feed.csv only, when the check added rows
 # The VirusTotal key comes from VT_API_KEY or the login Keychain (see vt_check.api_key). Everything
 # is printed with a timestamp; the LaunchAgent sends it to /tmp/spark-daily-check.log. Outbound hits
@@ -19,20 +21,22 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"   # launchd's PATH has no H
 FEED=spark-ioc-feed.csv
 LOG_FILE=/tmp/spark-daily-check.log
 # At 07:30 today's capture holds a few hours; yesterday's completes the day. syslog/checked.json
-# keeps indicators seen in both from being looked up twice.
+# keeps indicators seen in both from being looked up twice. The lookup budget is the script's
+# default (400, outbound names first: under two hours at 15 s each, inside the free key's 500 a
+# day) unless MAX_LOOKUPS says otherwise.
 DAYS=${DAYS:-2}
-MAX_LOOKUPS=${MAX_LOOKUPS:-150}   # 15 s each: under 40 minutes, well inside the free key's 500 a day
+MAX_LOOKUPS=${MAX_LOOKUPS:-}
 
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
 notify() { osascript -e "display notification \"$1\" with title \"Spark IoC feed\"" >/dev/null 2>&1 || true; }
 fail() { log "ERROR: $1"; notify "$1"; exit 1; }
 
-log "Daily check starting: last $DAYS day(s), up to $MAX_LOOKUPS lookups"
+log "Daily check starting: last $DAYS day(s)${MAX_LOOKUPS:+, up to $MAX_LOOKUPS lookups}"
 git pull --rebase --autostash --quiet || fail "git pull failed; the feed was not checked (see $LOG_FILE)"
 
 run_log=$(mktemp -t spark-daily-check) || exit 1
 trap 'rm -f "$run_log"' EXIT
-python3 spark_logs.py --days "$DAYS" --check --max-lookups "$MAX_LOOKUPS" 2>&1 | tee "$run_log"
+python3 spark_logs.py --days "$DAYS" --check ${MAX_LOOKUPS:+--max-lookups "$MAX_LOOKUPS"} 2>&1 | tee "$run_log"
 check_status=${PIPESTATUS[0]}
 hits=$(grep -c '^OUTBOUND HIT' "$run_log")
 

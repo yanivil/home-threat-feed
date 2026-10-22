@@ -107,29 +107,47 @@ that stream into checked indicators:
    DHCP service for MAC"). `launchd/com.spark-ioc-feed.syslog.plist` keeps the receiver
    running across reboots; the install steps are in its comment.
 2. **`spark_logs.py`** reads the capture and sorts what it finds into two kinds:
-   - **inbound**: public addresses that probed the WAN. With `--check`, those VirusTotal
-     flags (5+ engines) are added to the feed, labelled `Inbound probe of WAN - Spark syslog`.
    - **outbound**: names (or addresses) that LAN devices connected to. Hits are **reported,
      never added**, with the devices that reached them, because an outbound hit means a
      device needs looking at.
+   - **inbound**: public addresses that probed the WAN. With `--check`, those VirusTotal
+     flags (5+ engines) are added to the feed, labelled `Inbound probe of WAN - Spark syslog`.
 
 ```
-python3 spark_logs.py                       # list the candidates from today's capture
+python3 spark_logs.py                       # list what a run would check, from today's capture
 python3 spark_logs.py --days 3              # ... from the last three days
 python3 spark_logs.py --check               # look them up (VT_API_KEY in the environment)
 python3 spark_logs.py --check --max-lookups 100
 ```
 
+Lookups are the scarce resource (the free key allows 500 a day), so a run spends them where
+an infected device would show, in this order:
+
+- **Outbound names first.** Every host name a LAN device reached, busiest first, except
+  hosts under the well-known vendor domains listed in `ALLOWED_SUFFIXES` at the top of the
+  script (`apple.com`, `googleapis.com`, `office.com`, `akamaiedge.net`, `whatsapp.net`, ...),
+  matched by suffix. `syslog/allow.txt` (one suffix per line, `#` comments, git-ignored like
+  the rest of that folder) extends the list for the vendors your own devices talk to.
+- **Then outbound addresses** that carried no name and were reached at least `--min-ip-hits`
+  times (3). A command-and-control server reached by address recurs; a CDN edge is seen once
+  and never again.
+- **Then inbound sources**, but only those that probed at least `--min-inbound-hits` times
+  (5: persistent probing, not one-off background noise), at most `--max-inbound` (20) a run.
+  Adding every scanner that knocked once would grow the feed by a hundred rows a day of no
+  value, while the outbound names that matter waited.
+
 Indicators already in the feed, or looked up within `--recheck-days` (30; `syslog/checked.json`
-remembers them), are skipped, and `--max-lookups` (default 200) keeps a run inside the free
-API's 500-a-day quota, inbound first. The daily check below runs it for you and pushes what it adds.
+remembers them), are skipped, and `--max-lookups` (default 400, under two hours at 15 s each)
+caps a run; what does not fit is left for another day. Without `--check` the script lists the
+three groups in that order, with counts, so you can see what a run will do before it spends
+anything. The daily check below runs it for you and pushes what it adds.
 
 ### Daily check on this Mac
 
-`daily_check.sh` does the whole round once: `git pull`, then
-`spark_logs.py --days 2 --check --max-lookups 150`, then a commit of `spark-ioc-feed.csv` (and
-nothing else) and a push when rows were added. `launchd/com.spark-ioc-feed.daily.plist` runs it
-every morning at 07:30 local time.
+`daily_check.sh` does the whole round once: `git pull`, then `spark_logs.py --days 2 --check`
+with the script's own defaults, then a commit of `spark-ioc-feed.csv` (and nothing else) and a
+push when rows were added. `launchd/com.spark-ioc-feed.daily.plist` runs it every morning at
+07:30 local time.
 
 1. Store the key once in the login Keychain. Both scripts fall back to it when `VT_API_KEY`
    is not set, and the LaunchAgent has no other way to get it:
@@ -149,8 +167,9 @@ every morning at 07:30 local time.
   titled "Spark IoC feed" (allow notifications from Script Editor if macOS asks the first time).
   Nothing else records them, so glance at the log now and then.
 - Two days of capture are read because at 07:30 today's file holds only a few hours;
-  `syslog/checked.json` keeps yesterday's indicators from being looked up twice. 150 lookups
-  take under 40 minutes and leave most of the free key's 500 a day for manual runs.
+  `syslog/checked.json` keeps yesterday's indicators from being looked up twice. The default
+  400 lookups take under two hours, fine for a morning job, and leave 100 of the free key's
+  500 a day for manual runs.
 - The pull first brings in rows committed elsewhere (the GitHub web editor, the monthly
   re-check on Actions). A pull or push that fails is logged as `ERROR` with a notification,
   the run exits non-zero, and a commit that could not be pushed stays local until the next run

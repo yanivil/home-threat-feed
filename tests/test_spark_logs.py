@@ -109,28 +109,97 @@ class CollectTest(unittest.TestCase):
         self.assertEqual(set(found["inbound"]), {"109.205.211.205", "31.14.32.6"})
 
 
+class AllowlistTest(unittest.TestCase):
+    def test_the_built_in_list_holds_the_vendor_apex_domains(self):
+        self.assertLessEqual(
+            {"apple.com", "icloud.com", "apple-dns.net", "aaplimg.com", "google.com", "googleapis.com", "gstatic.com",
+             "youtube.com", "microsoft.com", "office.com", "office.net", "live.com", "windows.com", "msidentity.com",
+             "akamai.net", "akamaiedge.net", "amazonaws.com", "cloudfront.net", "amazon.com", "whatsapp.net",
+             "facebook.com", "fbcdn.net", "cloudflare.com", "digicert.com", "ntp.org", "quad9.net", "one.one.one.one",
+             "samsungcloudsolution.net", "anthropic.com", "openai.com", "chatgpt.com"},
+            spark_logs.ALLOWED_SUFFIXES,
+        )
+
+    def test_allowed_matches_an_apex_domain_and_every_host_under_it(self):
+        for name in ("apple.com", "gsp-ssl.ls.apple.com", "ab.chatgpt.com", "one.one.one.one", "0.pool.ntp.org", "Time.Apple.COM."):
+            with self.subTest(name=name):
+                self.assertTrue(spark_logs.allowed(name))
+
+    def test_allowed_rejects_look_alikes_other_names_and_addresses(self):
+        for name in ("notapple.com", "apple.com.evil.example", "evil.example", "185.1.2.7"):
+            with self.subTest(name=name):
+                self.assertFalse(spark_logs.allowed(name))
+
+    def test_allow_file_extends_the_built_in_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "allow.txt")
+            path.write_text("# my own vendors\n\n.Example.ORG\nvendor.example.net   # the TV\n")
+
+            suffixes = spark_logs.load_allow(path)
+
+        self.assertEqual(suffixes, spark_logs.ALLOWED_SUFFIXES | {"example.org", "vendor.example.net"})
+        self.assertTrue(spark_logs.allowed("cdn.example.org", suffixes))
+        self.assertFalse(spark_logs.allowed("cdn.example.org"))
+
+    def test_a_missing_allow_file_leaves_the_built_in_list(self):
+        self.assertEqual(spark_logs.load_allow(Path("/nonexistent/allow.txt")), spark_logs.ALLOWED_SUFFIXES)
+
+
 class SelectTest(unittest.TestCase):
+    FOUND = {
+        "inbound": {"109.205.211.205": 9, "31.14.32.6": 5, "203.0.113.5": 4, "198.51.100.9": 1},
+        "outbound": {
+            "evil.example": {"count": 1, "devices": ["10.45.60.101"]},
+            "c2.example.net": {"count": 7, "devices": ["10.45.60.100"]},
+            "ab.chatgpt.com": {"count": 40, "devices": ["10.68.144.121"]},  # under an allowed vendor domain
+            "185.1.2.7": {"count": 3, "devices": ["10.45.60.100"]},
+            "185.1.2.8": {"count": 2, "devices": ["10.45.60.100"]},  # a CDN edge, seen twice
+            "185.1.2.9": {"count": 12, "devices": ["10.45.60.100"]},
+        },
+    }
+
+    def test_groups_candidates_in_check_order_busiest_first(self):
+        groups = spark_logs.select(self.FOUND, set(), {}, today=TODAY)
+
+        self.assertEqual(list(groups), ["names", "ips", "inbound"])
+        self.assertEqual(groups["names"], ["c2.example.net", "evil.example"])  # every name, vendor ones excepted
+        self.assertEqual(groups["ips"], ["185.1.2.9", "185.1.2.7"])  # addresses seen 3+ times
+        self.assertEqual(groups["inbound"], ["109.205.211.205", "31.14.32.6"])  # sources seen 5+ times
+
+    def test_allow_decides_which_names_are_skipped(self):
+        groups = spark_logs.select(self.FOUND, set(), {}, today=TODAY, allow={"example.net"})
+
+        self.assertEqual(groups["names"], ["ab.chatgpt.com", "evil.example"])
+
+    def test_hit_thresholds_and_the_inbound_cap_are_adjustable(self):
+        groups = spark_logs.select(self.FOUND, set(), {}, today=TODAY, min_ip_hits=1, min_inbound_hits=1, max_inbound=3)
+
+        self.assertEqual(groups["ips"], ["185.1.2.9", "185.1.2.7", "185.1.2.8"])
+        self.assertEqual(groups["inbound"], ["109.205.211.205", "31.14.32.6", "203.0.113.5"])
+
+    def test_the_inbound_cap_applies_after_feed_members_and_recent_checks_are_dropped(self):
+        groups = spark_logs.select(self.FOUND, {"109.205.211.205"}, {}, today=TODAY, min_inbound_hits=1, max_inbound=2)
+
+        self.assertEqual(groups["inbound"], ["31.14.32.6", "203.0.113.5"])
+
     def test_skips_feed_members_and_recently_checked_indicators(self):
-        found = {"inbound": {"109.205.211.205": 2, "31.14.32.6": 1, "203.0.113.5": 1},
-                 "outbound": {"ab.chatgpt.com": {"count": 2, "devices": ["10.68.144.121"]},
-                              "evil.example": {"count": 1, "devices": ["10.45.60.101"]}}}
         in_feed = {"109.205.211.205"}
-        cache = {"ab.chatgpt.com": {"checked": "2026-10-01", "malicious": 0, "total": 92},
+        cache = {"c2.example.net": {"checked": "2026-10-01", "malicious": 0, "total": 92},
                  "evil.example": {"checked": "2026-07-01", "malicious": 9, "total": 92}}
 
-        inbound, outbound = spark_logs.select(found, in_feed, cache, today=TODAY, recheck_days=30)
+        groups = spark_logs.select(self.FOUND, in_feed, cache, today=TODAY, recheck_days=30)
 
-        self.assertEqual(inbound, ["31.14.32.6", "203.0.113.5"])
-        self.assertEqual(outbound, ["evil.example"])  # checked 111 days ago: due again
+        self.assertEqual(groups["names"], ["evil.example"])  # checked 111 days ago: due again
+        self.assertEqual(groups["inbound"], ["31.14.32.6"])
 
     def test_skips_addresses_inside_a_feed_ip_range(self):
-        found = {"inbound": {"212.73.148.42": 3, "212.73.149.1": 1}, "outbound": {}}
+        found = {"inbound": {"212.73.148.42": 6, "212.73.149.1": 5}, "outbound": {}}
         feed_text = (HEADER + "scanner-modat-net,212.73.148.0-212.73.148.255,IP Range,high,medium,AB,Modat\n"
                      + "x,1.2.3.4,IP,high,high,AB,c\n")
 
-        inbound, _ = spark_logs.select(found, spark_logs.feed_members(feed_text), {}, today=TODAY)
+        groups = spark_logs.select(found, spark_logs.feed_members(feed_text), {}, today=TODAY)
 
-        self.assertEqual(inbound, ["212.73.149.1"])
+        self.assertEqual(groups["inbound"], ["212.73.149.1"])
 
 
 class CheckTest(unittest.TestCase):
@@ -142,19 +211,22 @@ class CheckTest(unittest.TestCase):
         self.feed.write_text(HEADER)
         self.cache = self.dir / "checked.json"
 
+    def check(self, found, **kwargs):
+        return spark_logs.check(found, self.feed, self.cache, kwargs.pop("fake"), today=TODAY,
+                                sleep=lambda s: None, out=lambda *a: None, **kwargs)
+
     def test_inbound_hits_are_added_and_outbound_hits_only_reported(self):
         fake = FakeVT({
             "/ip_addresses/31.14.32.6": vt_object("ip_address", "31.14.32.6", malicious=10),
             "/ip_addresses/185.1.2.9": vt_object("ip_address", "185.1.2.9", malicious=1),
             "/domains/evil.example": vt_object("domain", "evil.example", malicious=9),
-            "/domains/ab.chatgpt.com": vt_object("domain", "ab.chatgpt.com", malicious=0),
+            "/domains/c2.example.net": vt_object("domain", "c2.example.net", malicious=0),
         })
-        found = {"inbound": {"31.14.32.6": 3, "185.1.2.9": 1},
+        found = {"inbound": {"31.14.32.6": 6, "185.1.2.9": 5},
                  "outbound": {"evil.example": {"count": 1, "devices": ["10.45.60.101"]},
-                              "ab.chatgpt.com": {"count": 2, "devices": ["10.68.144.121"]}}}
+                              "c2.example.net": {"count": 2, "devices": ["10.68.144.121"]}}}
 
-        report = spark_logs.check(found, self.feed, self.cache, fake, today=TODAY, sleep=lambda s: None,
-                                  out=lambda *a: None)
+        report = self.check(found, fake=fake)
 
         rows = self.feed.read_text().splitlines()[1:]
         self.assertEqual(len(rows), 1)
@@ -167,41 +239,125 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(cache["evil.example"]["malicious"], 9)
         self.assertNotIn("evil.example", self.feed.read_text())
 
-    def test_lookup_budget_takes_inbound_first_by_count(self):
+    def test_lookups_go_to_outbound_names_then_recurring_addresses_then_inbound(self):
         fake = FakeVT({})
-        found = {"inbound": {"185.1.2.1": 1, "185.1.2.2": 5},
-                 "outbound": {"a.example": {"count": 9, "devices": ["10.0.0.1"]}}}
+        found = {"inbound": {"185.1.2.1": 5, "185.1.2.2": 50},
+                 "outbound": {"a.example": {"count": 1, "devices": ["10.0.0.1"]},
+                              "185.1.2.3": {"count": 3, "devices": ["10.0.0.1"]},
+                              "185.1.2.4": {"count": 1, "devices": ["10.0.0.1"]}}}
 
-        report = spark_logs.check(found, self.feed, self.cache, fake, today=TODAY, max_lookups=2,
-                                  sleep=lambda s: None, out=lambda *a: None)
+        report = self.check(found, fake=fake, max_lookups=3)
 
-        self.assertEqual(fake.calls, ["/ip_addresses/185.1.2.2", "/ip_addresses/185.1.2.1"])
-        self.assertEqual(report["skipped"], ["a.example"])
+        self.assertEqual(fake.calls, ["/domains/a.example", "/ip_addresses/185.1.2.3", "/ip_addresses/185.1.2.2"])
+        self.assertEqual(report["skipped"], ["185.1.2.1"])
+
+    def test_one_off_inbound_sources_and_single_contact_addresses_are_never_looked_up(self):
+        fake = FakeVT({})
+        found = {"inbound": {"185.1.2.1": 4}, "outbound": {"185.1.2.4": {"count": 2, "devices": ["10.0.0.1"]}}}
+
+        report = self.check(found, fake=fake)
+
+        self.assertEqual(fake.calls, [])
+        self.assertEqual(report["skipped"], [])
+
+    def test_at_most_max_inbound_sources_are_added_per_run(self):
+        fake = FakeVT({f"/ip_addresses/185.1.2.{i}": vt_object("ip_address", f"185.1.2.{i}", malicious=10) for i in range(9)})
+        found = {"inbound": {f"185.1.2.{i}": 5 + i for i in range(9)}, "outbound": {}}
+
+        report = self.check(found, fake=fake, max_inbound=2)
+
+        self.assertEqual(report["added"], ["185.1.2.8", "185.1.2.7"])
+        self.assertEqual(len(self.feed.read_text().splitlines()), 3)
 
     def test_quota_stop_keeps_the_cache_consistent(self):
         fake = FakeVT({"/ip_addresses/185.1.2.1": (429, {"error": {"code": "QuotaExceededError"}})})
-        found = {"inbound": {"185.1.2.1": 1, "185.1.2.2": 1}, "outbound": {}}
+        found = {"inbound": {"185.1.2.1": 5, "185.1.2.2": 5}, "outbound": {}}
 
-        spark_logs.check(found, self.feed, self.cache, fake, today=TODAY, sleep=lambda s: None, out=lambda *a: None)
+        self.check(found, fake=fake)
 
         self.assertEqual(json.loads(self.cache.read_text()), {})
 
+    def test_quota_stop_during_outbound_leaves_inbound_for_another_day(self):
+        fake = FakeVT({"/domains/a.example": (429, {"error": {"code": "QuotaExceededError"}})})
+        found = {"inbound": {"185.1.2.1": 5}, "outbound": {"a.example": {"count": 1, "devices": ["10.0.0.1"]}}}
+
+        report = self.check(found, fake=fake)
+
+        self.assertEqual(fake.calls, ["/domains/a.example"])
+        self.assertTrue(report["quota"])
+        self.assertEqual(report["added"], [])
+
 
 class CommandLineTest(unittest.TestCase):
+    # One day's capture: a name seen once, a vendor host, an address reached three times and one reached
+    # once, a source that probed five times and one that probed once.
+    CAPTURE = "\n".join([OUTBOUND_URL, OUTBOUND_DOMAIN, *[OUTBOUND_IP_ONLY] * 3, OUTBOUND_WILDCARD_ONLY,
+                         *[INBOUND_DROP] * 5, INBOUND_PREVENT]) + "\n"
+
     def run_cli(self, *args, env_key=None):
         return subprocess.run([sys.executable, str(REPO / "spark_logs.py"), *args],
                               capture_output=True, text=True, env=cli_env(env_key), cwd=REPO)
 
-    def test_listing_needs_no_key_and_shows_candidates(self):
+    def listing(self, *args, allow=None):
         with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, "spark-2026-10-20.log").write_text(INBOUND_DROP + "\n" + OUTBOUND_DOMAIN + "\n")
+            Path(tmp, "spark-2026-10-20.log").write_text(self.CAPTURE)
             Path(tmp, "feed.csv").write_text(HEADER)
-
-            proc = self.run_cli("--dir", tmp, "--today", TODAY, "--feed", str(Path(tmp, "feed.csv")))
-
+            if allow is not None:
+                Path(tmp, "allow.txt").write_text(allow)
+            proc = self.run_cli("--dir", tmp, "--today", TODAY, "--feed", str(Path(tmp, "feed.csv")), *args)
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("109.205.211.205", proc.stdout)
-        self.assertIn("ab.chatgpt.com", proc.stdout)
+        return proc.stdout
+
+    def test_listing_needs_no_key_and_shows_the_groups_in_check_order_with_counts(self):
+        out = self.listing()
+
+        self.assertIn("2 inbound sources and 4 outbound destinations in the last 1 day(s); "
+                      "to check: 1 outbound names, 1 outbound addresses, 1 inbound sources", out)
+        names, ips, inbound = (out.index(h) for h in ("outbound names:", "outbound addresses:", "inbound sources:"))
+        self.assertLess(names, ips)
+        self.assertLess(ips, inbound)
+        self.assertLess(names, out.index("evil.example"))
+        self.assertLess(out.index("evil.example"), ips)
+        self.assertLess(ips, out.index("185.1.2.7"))
+        self.assertLess(out.index("185.1.2.7"), inbound)
+        self.assertLess(inbound, out.index("109.205.211.205"))
+        self.assertIn("1 under allowed vendor domains", out)
+        self.assertIn("seen 3+ times", out)
+        self.assertIn("seen 5+ times", out)
+        self.assertIn("at most 20 a run", out)
+        for skipped in ("ab.chatgpt.com", "185.1.2.8", "31.14.32.6"):
+            self.assertNotIn(skipped, out)
+
+    def test_allow_file_in_the_capture_directory_extends_the_vendor_list(self):
+        out = self.listing(allow="evil.example\n")
+
+        self.assertIn("to check: 0 outbound names", out)
+        self.assertIn("2 under allowed vendor domains", out)
+        self.assertNotIn("evil.example", out)
+
+    def test_thresholds_and_the_inbound_cap_are_flags(self):
+        out = self.listing("--min-ip-hits", "1", "--min-inbound-hits", "1", "--max-inbound", "1")
+
+        self.assertIn("to check: 1 outbound names, 2 outbound addresses, 1 inbound sources", out)
+        self.assertIn("185.1.2.8", out)
+        self.assertIn("109.205.211.205", out)
+        self.assertNotIn("31.14.32.6", out)
+        self.assertIn("at most 1 a run", out)
+
+    def test_check_passes_the_defaults_on(self):
+        done = {"added": [], "outbound_hits": [], "clean": 0, "not_found": 0, "skipped": [], "quota": False}
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(spark_logs, "check", return_value=done) as check, \
+                patch.dict(os.environ, cli_env("k"), clear=True), patch("builtins.print"):
+            Path(tmp, "allow.txt").write_text("mine.example\n")
+            Path(tmp, "feed.csv").write_text(HEADER)
+            code = spark_logs.main(["--dir", tmp, "--check", "--today", TODAY, "--feed", str(Path(tmp, "feed.csv"))])
+
+        self.assertEqual(code, 0)
+        kwargs = check.call_args.kwargs
+        self.assertEqual(kwargs["max_lookups"], 400)
+        self.assertEqual((kwargs["min_ip_hits"], kwargs["min_inbound_hits"], kwargs["max_inbound"]), (3, 5, 20))
+        self.assertEqual(kwargs["allow"], spark_logs.ALLOWED_SUFFIXES | {"mine.example"})
 
     def test_check_needs_the_api_key(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -213,7 +369,7 @@ class CommandLineTest(unittest.TestCase):
 
     def test_check_takes_the_key_from_the_keychain_when_the_environment_has_none(self):
         with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, "spark-2026-10-20.log").write_text(INBOUND_DROP + "\n")
+            Path(tmp, "spark-2026-10-20.log").write_text(self.CAPTURE)
             feed = Path(tmp, "feed.csv")
             feed.write_text(HEADER)
             fake = FakeVT({"/ip_addresses/109.205.211.205": vt_object("ip_address", "109.205.211.205", malicious=0)})
@@ -222,10 +378,11 @@ class CommandLineTest(unittest.TestCase):
                     patch.object(vt_check.subprocess, "run", keychain_with("from-keychain")), \
                     patch.dict(os.environ, cli_env(), clear=True), \
                     patch("builtins.print"):
-                code = spark_logs.main(["--dir", tmp, "--check", "--today", TODAY, "--feed", str(feed)])
+                code = spark_logs.main(["--dir", tmp, "--check", "--today", TODAY, "--feed", str(feed), "--delay", "0"])
 
         self.assertEqual(code, 0)
         make_fetch.assert_called_once_with("from-keychain")
+        self.assertEqual(fake.calls, ["/domains/evil.example", "/ip_addresses/185.1.2.7", "/ip_addresses/109.205.211.205"])
 
 
 if __name__ == "__main__":
