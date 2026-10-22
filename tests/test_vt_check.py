@@ -670,5 +670,51 @@ class CommandLineTest(unittest.TestCase):
             self.assertIn("1 kept, 1 removed", output.getvalue())
 
 
+class TrustedTest(unittest.TestCase):
+    """--trusted adds indicators the user vouches for, with no VirusTotal lookup."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.feed = Path(tmp.name) / "feed.csv"
+        self.feed.write_text(HEADER + EXISTING)
+
+    def test_adds_rows_without_any_lookup(self):
+        results = vt_check.add_trusted(
+            [("evil.com", "APT29 - Cyberint export 2026-10-22"), (SHA256, "APT29 - Cyberint export 2026-10-22")],
+            self.feed, today=TODAY, out=lambda *a: None,
+        )
+
+        self.assertEqual([r.status for r in results], ["added", "added"])
+        self.assertEqual(
+            self.feed.read_text(),
+            HEADER + EXISTING
+            + "trusted-domain-e3daa29865,evil.com,Domain,high,high,AB,"
+              "APT29 - Cyberint export 2026-10-22 - added without VirusTotal check 2026-10-19\n"
+            + f"trusted-sha256-9634a68018,{SHA256},SHA256,high,high,AV,"
+              "APT29 - Cyberint export 2026-10-22 - added without VirusTotal check 2026-10-19\n",
+        )
+
+    def test_skips_feed_members_duplicates_and_invalid_values(self):
+        results = vt_check.add_trusted(
+            [("example.com", "x"), ("evil.com", "x"), ("EVIL.com", "x"), ("10.0.0.1", "x")],
+            self.feed, today=TODAY, out=lambda *a: None,
+        )
+
+        self.assertEqual([r.status for r in results], ["in-feed", "added", "duplicate", "invalid"])
+        self.assertEqual(self.feed.read_text().count("evil.com"), 1)
+
+    def test_command_line_needs_no_api_key(self):
+        env = {k: v for k, v in os.environ.items() if k != "VT_API_KEY"}
+        proc = subprocess.run(
+            [sys.executable, str(REPO / "vt_check.py"), "--trusted", "--feed", str(self.feed), "evil.com"],
+            capture_output=True, text=True, env=env, cwd=REPO,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("evil.com: added", proc.stdout)
+        self.assertIn(",evil.com,Domain,high,high,AB,added without VirusTotal check", self.feed.read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

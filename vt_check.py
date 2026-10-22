@@ -232,6 +232,49 @@ def run(indicators, feed_path, fetch, *, min_malicious=None, dry_run=False,
     return results
 
 
+def add_trusted(indicators, feed_path, *, today=None, out=print):
+    """Append rows for indicators the user vouches for, with no VirusTotal lookup.
+
+    Same input as run(); rows get CONFIDENCE high and a COMMENT that says the
+    indicator was added without a check, so --recheck never touches them.
+    """
+    today = today or date.today().isoformat()
+    feed_path = Path(feed_path)
+    text = feed_path.read_text()
+    in_feed = feed_values(text)
+    needs_newline = bool(text) and not text.endswith("\n")
+    added_now = set()
+    results = []
+    for item in indicators:
+        raw, label = (item, "") if isinstance(item, str) else item
+        try:
+            ioc_type, value = classify(raw)
+        except ValueError as e:
+            status, detail = "invalid", str(e)
+        else:
+            key = value.lower()
+            if key in added_now:
+                status, detail = "duplicate", ""
+            elif key in in_feed:
+                status, detail = "in-feed", ""
+            else:
+                name = f"trusted-{ioc_type.lower()}-{hashlib.sha1(value.encode()).hexdigest()[:10]}"
+                product = "AV" if ioc_type in HASH_TYPES.values() else "AB"
+                comment = f"added without VirusTotal check {today}"
+                label = " ".join(label.replace(",", " ").split())
+                if label:
+                    comment = f"{label} - {comment}"
+                row = ",".join([name, value, ioc_type, "high", "high", product, comment])
+                with feed_path.open("a", newline="\n") as f:
+                    f.write(("\n" if needs_newline else "") + row + "\n")
+                needs_newline = False
+                added_now.add(key)
+                status, detail = "added", ioc_type
+        results.append(Result(raw, status, detail))
+        out(f"{raw}: {status}" + (f" ({detail})" if detail else ""))
+    return results
+
+
 def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False,
             delay=FREE_API_DELAY, sleep=time.sleep, today=None, out=print):
     """Look up again the feed rows whose VirusTotal check is old enough for their type.
@@ -385,18 +428,30 @@ def main(argv=None):
     parser.add_argument("--max-age", type=int, default=None, metavar="DAYS",
                         help="with --recheck, re-verify rows of every type checked DAYS or more days ago "
                              "(0 = every row); default per type: IPs 60, domains and URLs 180, hashes never")
+    parser.add_argument("--trusted", action="store_true",
+                        help="add the indicators without looking them up (a source you vouch for); "
+                             "needs no API key, rows are never re-checked")
     args = parser.parse_args(argv)
 
-    key = api_key()
-    if not key:
-        parser.error(NO_KEY_HELP)
     entries = read_indicators(args.file, args.indicators, args.label)
     if args.recheck and entries:
         parser.error("--recheck re-verifies the rows already in the feed; do not pass indicators")
     if not args.recheck and not entries:
         parser.error("no indicators given")
-
     say = lambda *a: print(*a, flush=True)
+
+    if args.trusted:
+        if args.recheck or args.dry_run:
+            parser.error("--trusted cannot be combined with --recheck or --dry-run")
+        say(f"Adding {len(entries)} indicators without a VirusTotal check")
+        results = add_trusted(entries, args.feed, out=say)
+        counts = Counter(r.status for r in results)
+        say("Summary: " + ", ".join(f"{n} {status}" for status, n in counts.most_common()))
+        return 0
+
+    key = api_key()
+    if not key:
+        parser.error(NO_KEY_HELP)
     threshold = (f"min {args.min_malicious} malicious detections" if args.min_malicious is not None
                  else f"min {DEFAULT_MIN_MALICIOUS} malicious detections, IPs {MIN_MALICIOUS['IP']}")
     mode = threshold + (", dry run" if args.dry_run else "")

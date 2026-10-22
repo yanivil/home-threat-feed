@@ -99,6 +99,31 @@ is accepted.
   between lookups (`--delay`). If the daily quota runs out it stops, keeps what it already
   added, and lists the indicators still to check.
 
+## Adding indicators from a source you trust (no VirusTotal)
+
+`--trusted` appends indicators without looking them up, for feeds whose publisher you vouch
+for. Rows get CONFIDENCE high and a COMMENT ending in `added without VirusTotal check <date>`;
+`--recheck` never touches them, so prune them by hand when the source retires them.
+
+```
+python3 vt_check.py --trusted -f iocs.tsv
+```
+
+For **Cyberint IOC exports** (`Cyberint_<Group>_IOCs_<date>.xlsx`), `cyberint_xlsx.py` turns the
+spreadsheets into that list, labelling each row with the group and export date, and drops what a
+blocking feed must not contain: shared platforms (an apex like `somee.com`, relays like
+`smp10.simplex.im`; an attacker's own sub-host such as `x.netlify.app` is kept), CDN front-end
+addresses (Cloudflare, Google, Akamai, Fastly, CloudFront), Tor addresses, placeholders like
+`{REDACTED}`, CIDRs and anything else the format can't hold. It needs no spreadsheet package.
+
+```
+python3 cyberint_xlsx.py ~/Downloads/Cyberint_*_IOCs_2026-10-22.xlsx > iocs.tsv   # dropped values go to stderr
+python3 vt_check.py --trusted -f iocs.tsv
+```
+
+Even with a trusted source, read the domain list once before adding: vendor exports sometimes
+include a victim's or a legitimate company's domain, which VirusTotal would have caught.
+
 ## Mining the gateway's own logs
 
 The Spark cannot export its security logs, but it can send them as syslog. Two scripts turn
