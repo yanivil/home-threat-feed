@@ -52,6 +52,10 @@ class ReadTest(unittest.TestCase):
 
     def test_group_and_date_come_from_the_file_name(self):
         self.assertEqual(cyberint_xlsx.group_and_date(self.path), ("APT29", "2026-10-22"))
+        self.assertEqual(cyberint_xlsx.group_and_date("Cyberint_Anonymous_Sudan_IOCs_2026-10-22.xlsx"),
+                         ("Anonymous Sudan", "2026-10-22"))
+        self.assertEqual(cyberint_xlsx.group_and_date("Cyberint_NoName057(16)_IOCs_2026-10-22.xlsx"),
+                         ("NoName057(16)", "2026-10-22"))
 
     def test_refuses_a_workbook_part_that_declares_entities(self):
         """A downloaded file is untrusted: a DTD in any XML part (XXE, billion laughs) is rejected unread."""
@@ -77,11 +81,18 @@ class DropReasonTest(unittest.TestCase):
             ("somee.com", "shared platform"),  # free web hosting apex
             ("sendit.sh", "shared platform"),
             ("api.telegram.org", "shared platform"),
+            ("https://raw.githubusercontent.com/x/y/main/builder.exe", "shared platform"),  # host-level match would hit all of GitHub
+            ("https://transfer.sh", "shared platform"),  # public file-transfer services
+            ("https://fex.net", "shared platform"),
+            ("https://www.sendspace.com", "shared platform"),
+            ("https://www.premiumize.com", "shared platform"),
+            ("https://master-repogen.vercel.app/file/server.scr", None),  # an attacker's own sub-host
             ("tezwsse5czllksjb7cwp65rvnk4oobmzti2znn42i43bjdfd2prqqkad.onion", "Tor address"),
             ("184.168.123.0/24", "not an IP, domain, URL, MD5, SHA1 or SHA256"),
             ("172.67.156.47", "shared CDN address"),  # Cloudflare front-end: blocking it hits thousands of sites
             ("104.86.182.8", "shared CDN address"),  # Akamai
             ("34.117.59.81", "shared CDN address"),  # Google Cloud load-balancer anycast
+            ("15.197.240.20", "shared CDN address"),  # AWS Global Accelerator anycast
             ("35.204.181.10", None),  # a Google Cloud VM: one tenant's address
             ("fileportalshare.netlify.app", None),  # an attacker's own sub-host on a platform
             ("elvenforest.s3.us-east-005.backblazeb2.com", None),

@@ -38,10 +38,14 @@ SHARED_PLATFORMS = {
     "twitter.com", "x.com", "youtube.com", "linkedin.com", "reddit.com", "medium.com", "wordpress.com",
     "blogspot.com", "weebly.com", "wixsite.com", "simplex.im", "proton.me", "protonmail.com", "gmail.com",
     "somee.com", "sendit.sh", "firebaseio.com", "storyblok.com", "onehub.com",
+    "transfer.sh", "fex.net", "sendspace.com", "premiumize.com", "gofile.io", "file.io", "anonfiles.com",
+    "mediafire.com", "pixeldrain.com", "catbox.moe", "ufile.io", "filetransfer.io", "temp.sh",
 }
-# Services whose sub-hosts are shared infrastructure too (relays, API endpoints), not attacker tenants.
+# Services whose sub-hosts are shared infrastructure too (relays, API endpoints, raw file hosts),
+# not attacker tenants: a URL row matched by host would block the whole service.
 SHARED_SUFFIXES = ("simplex.im", "telegram.org", "discord.com", "discordapp.com", "google.com", "microsoft.com",
-                   "apple.com", "icloud.com", "whatsapp.com", "whatsapp.net", "signal.org", "proton.me", "t.me")
+                   "apple.com", "icloud.com", "whatsapp.com", "whatsapp.net", "signal.org", "proton.me", "t.me",
+                   "githubusercontent.com", "github.com", "gitlab.com")
 # Anycast / shared front-end ranges: an address here fronts thousands of unrelated sites.
 SHARED_RANGES = [ipaddress.ip_network(n) for n in (
     "104.16.0.0/12", "172.64.0.0/13", "162.158.0.0/15", "188.114.96.0/20", "198.41.128.0/17",  # Cloudflare
@@ -54,6 +58,7 @@ SHARED_RANGES = [ipaddress.ip_network(n) for n in (
     "13.107.0.0/16", "52.96.0.0/12", "40.96.0.0/13", "20.190.128.0/18",  # Microsoft 365 front doors
     "13.224.0.0/14", "13.32.0.0/15", "54.230.0.0/16", "54.192.0.0/16", "99.84.0.0/16", "143.204.0.0/16",  # CloudFront
     "205.251.192.0/19", "18.160.0.0/13", "3.160.0.0/14",
+    "15.197.0.0/16", "3.33.0.0/16",  # AWS Global Accelerator anycast
 )]
 
 
@@ -107,13 +112,15 @@ def group_and_date(path):
     m = NAME_RE.search(Path(path).name)
     if not m:
         raise ValueError(f"{Path(path).name}: expected Cyberint_<Group>_IOCs_<YYYY-MM-DD>.xlsx")
-    return m.group("group"), m.group("date")
+    return m.group("group").replace("_", " "), m.group("date")
 
 
 def _host(value):
     if "://" in value:
-        return (urlsplit(value).hostname or "").lower()
-    return value.lower().rstrip(".").split("/")[0].split(":")[0]
+        host = (urlsplit(value).hostname or "").lower()
+    else:
+        host = value.lower().rstrip(".").split("/")[0].split(":")[0]
+    return host[4:] if host.startswith("www.") else host
 
 
 def drop_reason(value):
