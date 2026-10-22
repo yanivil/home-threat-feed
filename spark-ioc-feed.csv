@@ -1764,3 +1764,21 @@ trusted-url-4af90599e5,https://everycarebd.com/imagey973.png,URL,high,high,AB,Pa
 trusted-url-015264967a,https://quaxcheck.com.tr/api/d/chromelevator.exe,URL,high,high,AB,Payload - Cyberint export 2026-10-22 - added without VirusTotal check 2026-10-22
 trusted-url-9a77a4443b,https://estudarebomai.com/MSI_081838.png,URL,high,high,AB,Payload - Cyberint export 2026-10-22 - added without VirusTotal check 2026-10-22
 trusted-url-dacacf5491,http://ursosmart.lol/api/ps,URL,high,high,AB,Payload - Cyberint export 2026-10-22 - added without VirusTotal check 2026-10-22
+vt-ip-71b92bdda3,162.216.150.83,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 9/92 malicious 2026-10-22
+vt-ip-dfe9f8fea3,50.6.241.208,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 8/92 malicious 2026-10-22
+vt-ip-72b39bbea1,211.252.100.132,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 8/92 malicious 2026-10-22
+vt-ip-c4a49f6f26,147.185.133.19,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 9/92 malicious 2026-10-22
+vt-ip-3af4a9742e,119.192.128.163,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 10/92 malicious 2026-10-22
+vt-ip-bed5038749,213.230.93.71,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 8/92 malicious 2026-10-22
+vt-ip-0435af33fc,195.184.76.69,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 9/92 malicious 2026-10-22
+vt-ip-3b933ca4bc,193.176.29.23,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 7/92 malicious 2026-10-22
+vt-ip-721f12d6db,103.146.159.173,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 13/92 malicious 2026-10-22
+vt-ip-9ccdd20cb0,86.38.187.165,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 10/92 malicious 2026-10-22
+vt-ip-137bd6049b,66.132.195.50,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 13/92 malicious 2026-10-22
+vt-ip-a230c85954,66.117.5.228,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 5/92 malicious 2026-10-22
+vt-ip-ee517e5bff,195.178.110.159,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 9/92 malicious 2026-10-22
+vt-ip-8c9052bd1b,162.216.150.244,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 8/92 malicious 2026-10-22
+vt-ip-a03632f2a0,115.190.52.2,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 11/92 malicious 2026-10-22
+vt-ip-90864734cf,85.217.140.46,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 10/92 malicious 2026-10-22
+vt-ip-b8d203b1d8,84.54.73.46,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 6/92 malicious 2026-10-22
+vt-ip-5ec142e840,62.150.237.107,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 8/92 malicious 2026-10-22
