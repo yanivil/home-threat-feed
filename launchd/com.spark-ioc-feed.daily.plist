@@ -10,7 +10,7 @@
            cp launchd/com.spark-ioc-feed.daily.plist ~/Library/LaunchAgents/
            launchctl load ~/Library/LaunchAgents/com.spark-ioc-feed.daily.plist
          Run now: launchctl start com.spark-ioc-feed.daily
-         Log:     /tmp/spark-daily-check.log
+         Log:     /Users/home/Library/Logs/spark-ioc-feed/daily-check.log
          Stop:    launchctl unload ~/Library/LaunchAgents/com.spark-ioc-feed.daily.plist -->
     <key>Label</key>
     <string>com.spark-ioc-feed.daily</string>
@@ -29,8 +29,8 @@
         <integer>30</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>/tmp/spark-daily-check.log</string>
+    <string>/Users/home/Library/Logs/spark-ioc-feed/daily-check.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/spark-daily-check.log</string>
+    <string>/Users/home/Library/Logs/spark-ioc-feed/daily-check.log</string>
 </dict>
 </plist>

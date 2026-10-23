@@ -23,8 +23,8 @@
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/spark-syslog-receiver.log</string>
+    <string>/Users/home/Library/Logs/spark-ioc-feed/syslog-receiver.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/spark-syslog-receiver.log</string>
+    <string>/Users/home/Library/Logs/spark-ioc-feed/syslog-receiver.log</string>
 </dict>
 </plist>

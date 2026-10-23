@@ -6,7 +6,7 @@
 #                          inbound sources; see its --help for the thresholds)
 #   3. git commit + push   spark-ioc-feed.csv only, when the check added rows
 # The VirusTotal key comes from VT_API_KEY or the login Keychain (see vt_check.api_key). Everything
-# is printed with a timestamp; the LaunchAgent sends it to /tmp/spark-daily-check.log. Outbound hits
+# is printed with a timestamp; the LaunchAgent sends it to /Users/home/Library/Logs/spark-ioc-feed/daily-check.log. Outbound hits
 # are only reported there (plus a macOS notification), never added to the feed.
 # Exit status: 0 all good, otherwise something failed and the log says what. A commit that could
 # not be pushed stays local and is pushed by the next run.
@@ -19,7 +19,7 @@ cd "$(dirname "$0")" || exit 1
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"   # launchd's PATH has no Homebrew (python3, gh)
 
 FEED=spark-ioc-feed.csv
-LOG_FILE=/tmp/spark-daily-check.log
+LOG_FILE=/Users/home/Library/Logs/spark-ioc-feed/daily-check.log
 # At 07:30 today's capture holds a few hours; yesterday's completes the day. syslog/checked.json
 # keeps indicators seen in both from being looked up twice. The lookup budget is the script's
 # default (400, outbound names first: under two hours at 15 s each, inside the free key's 500 a

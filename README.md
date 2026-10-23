@@ -191,7 +191,7 @@ push when rows were added. `launchd/com.spark-ioc-feed.daily.plist` runs it ever
    launchctl start com.spark-ioc-feed.daily      # run it now instead of waiting for 07:30
    ```
 
-- Everything a run prints goes to `/tmp/spark-daily-check.log`, with a timestamped line for
+- Everything a run prints goes to `/Users/home/Library/Logs/spark-ioc-feed/daily-check.log`, with a timestamped line for
   each step. **Outbound hits are only reported there**, as
   `OUTBOUND HIT <destination> (<ratio>) reached by <devices>`, and raise a macOS notification
   titled "Spark IoC feed" (allow notifications from Script Editor if macOS asks the first time).
