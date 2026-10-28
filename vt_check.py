@@ -27,7 +27,6 @@ import base64
 import hashlib
 import ipaddress
 import json
-import os
 import re
 import subprocess
 import sys
@@ -37,6 +36,8 @@ import urllib.request
 from collections import Counter, namedtuple
 from datetime import date, timedelta
 from pathlib import Path
+
+import keychain
 
 API_BASE = "https://www.virustotal.com/api/v3"
 FEED = Path(__file__).resolve().parent / "spark-ioc-feed.csv"
@@ -52,7 +53,7 @@ DOMAIN_RE = re.compile(
 
 # Where the VirusTotal key lives when VT_API_KEY is not in the environment:
 #   security add-generic-password -s spark-ioc-feed -a VT_API_KEY -w '<key>' -U
-KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT = "spark-ioc-feed", "VT_API_KEY"
+KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT = keychain.SERVICE, "VT_API_KEY"
 NO_KEY_HELP = (f"set the VT_API_KEY environment variable to your VirusTotal API key, or store it in the "
                f"Keychain: security add-generic-password -s {KEYCHAIN_SERVICE} -a {KEYCHAIN_ACCOUNT} -w '<key>' -U")
 
@@ -446,20 +447,9 @@ def stamp_seen(feed_path, addresses, *, today=None, refresh_after=SEEN_REFRESH_D
 
 
 def api_key(environ=None, run=None):
-    """The VirusTotal key: VT_API_KEY from `environ` (default os.environ), else the macOS
-    Keychain item (service KEYCHAIN_SERVICE, account KEYCHAIN_ACCOUNT) read with `run`
-    (default subprocess.run); "" when neither has one."""
-    environ = os.environ if environ is None else environ
-    run = subprocess.run if run is None else run
-    key = environ.get("VT_API_KEY", "").strip()
-    if key:
-        return key
-    try:
-        proc = run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w"],
-                   capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.SubprocessError):
-        return ""
-    return proc.stdout.strip() if proc.returncode == 0 else ""
+    """The VirusTotal key: VT_API_KEY from `environ` (default os.environ), else the Keychain
+    item KEYCHAIN_ACCOUNT (keychain.item); "" when neither has one."""
+    return keychain.item(KEYCHAIN_ACCOUNT, "VT_API_KEY", environ, run)
 
 
 def make_fetch(api_key):
