@@ -1,3 +1,4 @@
+import gzip
 import json
 import os
 import subprocess
@@ -99,6 +100,15 @@ class CollectTest(unittest.TestCase):
         )
 
     def test_days_reaches_back_into_earlier_files(self):
+        found = spark_logs.collect(self.dir, days=2, today=TODAY, wan_ip="176.230.223.47")
+
+        self.assertIn("evil.example", found["outbound"])
+
+    def test_days_reads_earlier_files_that_retention_has_compressed(self):
+        (self.dir / "spark-2026-10-19.log").unlink()
+        with gzip.open(self.dir / "spark-2026-10-19.log.gz", "wt") as f:
+            f.write(OUTBOUND_URL + "\n")
+
         found = spark_logs.collect(self.dir, days=2, today=TODAY, wan_ip="176.230.223.47")
 
         self.assertIn("evil.example", found["outbound"])

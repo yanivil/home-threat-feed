@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -60,6 +61,7 @@ class DailyCheckTest(unittest.TestCase):
         (self.repo / "other.txt").write_text("unrelated\n")
         (self.repo / "spark_logs.py").write_text(STUB_SPARK_LOGS)
         shutil.copy(SCRIPT, self.repo / "daily_check.sh")
+        shutil.copy(REPO / "syslog_retention.py", self.repo / "syslog_retention.py")  # the real one: no network, no key
         self.git("init", "-q", "-b", "main", cwd=self.repo)
         self.git("add", "-A", cwd=self.repo)
         self.git("commit", "-q", "-m", "seed", cwd=self.repo)
@@ -188,7 +190,20 @@ class DailyCheckTest(unittest.TestCase):
         notified = self.notifications.read_text()
         self.assertIn("display notification", notified)
         self.assertIn("2 outbound", notified)
-        self.assertIn("/tmp/spark-daily-check.log", notified)
+        self.assertIn(os.path.expanduser("~/Library/Logs/spark-ioc-feed/daily-check.log"), notified)
+
+    def test_old_captures_are_compressed_before_anything_else(self):
+        old = self.repo / "syslog" / f"spark-{date.today() - timedelta(days=10):%Y-%m-%d}.log"
+        old.parent.mkdir()
+        old.write_text("an entry from ten days ago\n")
+        self.git("remote", "set-url", "origin", str(Path(self.tmp.name) / "gone.git"), cwd=self.repo)
+
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 1, "a failed pull still fails the run")
+        self.assertFalse(old.exists())
+        self.assertTrue(old.with_suffix(".log.gz").exists())
+        self.assertIn(f"compressed {old.name}", proc.stdout)
 
     def test_a_clean_run_sends_no_notification(self):
         self.run_script(STUB_ADD=1)
@@ -206,16 +221,21 @@ class DailyCheckTest(unittest.TestCase):
 
 
 class DailyPlistTest(unittest.TestCase):
-    def test_runs_the_script_every_morning_at_0730_and_logs_to_tmp(self):
+    def test_runs_the_script_every_morning_at_0730_under_python_app_and_logs_under_library(self):
         plist = plistlib.loads(PLIST.read_bytes())
+        program, flag, command = plist["ProgramArguments"]
 
         self.assertEqual(plist["Label"], "com.spark-ioc-feed.daily")
-        self.assertEqual(plist["ProgramArguments"][0], "/bin/bash")
-        self.assertEqual(Path(plist["ProgramArguments"][1]).name, "daily_check.sh")
-        self.assertEqual(plist["WorkingDirectory"], str(Path(plist["ProgramArguments"][1]).parent))
+        # Python.app is the one program macOS lets read the external disk from launchd; bash
+        # runs under it and inherits the grant (docs/system-design.md, D1).
+        self.assertTrue(program.endswith("/Python.app/Contents/MacOS/Python"), program)
+        self.assertEqual(flag, "-c")
+        self.assertIn("'/bin/bash'", command)
+        self.assertIn(plist["WorkingDirectory"] + "/daily_check.sh", command)
         self.assertEqual(plist["StartCalendarInterval"], {"Hour": 7, "Minute": 30})
-        self.assertEqual(plist["StandardOutPath"], "/tmp/spark-daily-check.log")
-        self.assertEqual(plist["StandardErrorPath"], "/tmp/spark-daily-check.log")
+        log = plist["StandardOutPath"]
+        self.assertTrue(log.endswith("/Library/Logs/spark-ioc-feed/daily-check.log"), log)
+        self.assertEqual(plist["StandardErrorPath"], log)
         self.assertNotIn("RunAtLoad", plist, "a daily job must not fire on every login")
 
 

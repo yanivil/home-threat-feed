@@ -1,13 +1,15 @@
 #!/bin/bash
 # The once-a-day syslog check for the Spark IoC feed, run by launchd/com.spark-ioc-feed.daily.plist:
+#   0. syslog_retention.py gzip captures older than a week, drop those older than 180 days; runs
+#                          first so that a failed pull never skips it, and never fails the run
 #   1. git pull            bring in rows committed elsewhere (GitHub web edits, the monthly re-check)
 #   2. spark_logs.py       mine the last two daily captures, look new indicators up on VirusTotal
 #                          (outbound names first, then recurring outbound addresses, then persistent
 #                          inbound sources; see its --help for the thresholds)
 #   3. git commit + push   spark-ioc-feed.csv only, when the check added rows
 # The VirusTotal key comes from VT_API_KEY or the login Keychain (see vt_check.api_key). Everything
-# is printed with a timestamp; the LaunchAgent sends it to /Users/home/Library/Logs/spark-ioc-feed/daily-check.log. Outbound hits
-# are only reported there (plus a macOS notification), never added to the feed.
+# is printed with a timestamp; the LaunchAgent sends it to ~/Library/Logs/spark-ioc-feed/daily-check.log.
+# Outbound hits are only reported there (plus a macOS notification), never added to the feed.
 # Exit status: 0 all good, otherwise something failed and the log says what. A commit that could
 # not be pushed stays local and is pushed by the next run.
 #
@@ -19,7 +21,7 @@ cd "$(dirname "$0")" || exit 1
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"   # launchd's PATH has no Homebrew (python3, gh)
 
 FEED=spark-ioc-feed.csv
-LOG_FILE=/Users/home/Library/Logs/spark-ioc-feed/daily-check.log
+LOG_FILE=$HOME/Library/Logs/spark-ioc-feed/daily-check.log
 # At 07:30 today's capture holds a few hours; yesterday's completes the day. syslog/checked.json
 # keeps indicators seen in both from being looked up twice. The lookup budget is the script's
 # default (400, outbound names first: under two hours at 15 s each, inside the free key's 500 a
@@ -32,6 +34,7 @@ notify() { osascript -e "display notification \"$1\" with title \"Spark IoC feed
 fail() { log "ERROR: $1"; notify "$1"; exit 1; }
 
 log "Daily check starting: last $DAYS day(s)${MAX_LOOKUPS:+, up to $MAX_LOOKUPS lookups}"
+python3 syslog_retention.py 2>&1 || log "WARNING: capture retention failed (see above); carrying on with the check"
 git pull --rebase --autostash --quiet || fail "git pull failed; the feed was not checked (see $LOG_FILE)"
 
 run_log=$(mktemp -t spark-daily-check) || exit 1

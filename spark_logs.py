@@ -19,6 +19,7 @@ skipped, and --max-lookups caps a run so it fits the free API's daily quota.
 """
 
 import argparse
+import gzip
 import ipaddress
 import json
 import re
@@ -151,14 +152,25 @@ def _learn_wan_ip(entries):
     return nats.most_common(1)[0][0] if nats else None
 
 
+def _open_capture(path):
+    """The day's file as text, plain or as the .gz that syslog_retention.py leaves after a
+    week; None when the day has no file."""
+    if path.exists():
+        return path.open(encoding="utf-8")
+    compressed = path.with_name(path.name + ".gz")
+    if compressed.exists():
+        return gzip.open(compressed, "rt", encoding="utf-8")
+    return None
+
+
 def collect(directory, days=1, today=None, wan_ip=None):
     """Distinct indicators seen in the last `days` daily files, with counts (and devices for outbound)."""
     today = date.fromisoformat(today) if today else date.today()
     entries = []
     for back in range(days):
-        path = Path(directory) / f"spark-{today - timedelta(days=back):%Y-%m-%d}.log"
-        if path.exists():
-            with path.open(encoding="utf-8") as f:
+        f = _open_capture(Path(directory) / f"spark-{today - timedelta(days=back):%Y-%m-%d}.log")
+        if f:
+            with f:
                 entries.extend(parse_entry(line.rstrip("\n")) for line in f if line.strip())
     wan_ip = wan_ip or _learn_wan_ip(entries)
     inbound, outbound = Counter(), {}
