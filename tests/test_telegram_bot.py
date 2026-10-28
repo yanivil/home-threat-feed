@@ -733,6 +733,19 @@ class StatusTest(BotTestCase):
         (self.syslog / "spark-2026-10-28.log").unlink()
         self.assertEqual(self.bot.status().splitlines()[0], "receiver: no capture today")
 
+    def test_status_reads_only_the_end_of_a_long_daily_log(self):
+        self.daily_log.write_text("2026-01-01 07:30:00 Daily check starting: last 2 day(s)\n"
+                                  + "x.example: clean (Domain 0/94 malicious)\n" * 20000 + DAILY_LOG)
+
+        self.assertEqual(self.bot.status().splitlines()[1], "last daily check: 2026-10-28 16:20 done, 45 lookups")
+
+    def test_tail_is_the_last_bytes_of_a_file_decoded(self):
+        path = self.repo / "log.txt"
+        path.write_bytes("é".encode() * 100 + b"end\n")
+
+        self.assertEqual(telegram_bot.tail(path, 5), "\ufffdend\n", "a character cut in two is replaced")
+        self.assertEqual(telegram_bot.tail(path, 10 ** 6), "é" * 100 + "end\n")
+
     def test_a_failed_or_running_or_missing_daily_check(self):
         failed = DAILY_LOG.split("evil.example")[0] + (
             "2026-10-28 16:20:09 ERROR: git pull failed; the feed was not checked (see daily-check.log)\n")
@@ -759,7 +772,7 @@ class WhoTest(BotTestCase):
             self.send("/who 93.152.221.36")
 
         self.assertEqual(self.tg.sent, ["93.152.221.36 is a scanner"])
-        note.assert_called_once_with("93.152.221.36", self.syslog, "2026-10-28")
+        note.assert_called_once_with("93.152.221.36", self.syslog, "2026-10-28", report=telegram_bot.log)
 
     def test_who_while_a_feed_check_runs_asks_virustotal_nothing(self):
         self.lock.mkdir()
@@ -796,7 +809,7 @@ class AlertTest(BotTestCase):
         started, release = threading.Event(), threading.Event()
         self.addCleanup(release.set)
 
-        def slow_note(indicator, *args):
+        def slow_note(indicator, *args, **kwargs):
             started.set()
             release.wait(5)
             return f"note on {indicator}"
@@ -817,7 +830,7 @@ class AlertTest(BotTestCase):
         started, release = threading.Event(), threading.Event()
         self.addCleanup(release.set)
 
-        def slow_note(indicator, *args):
+        def slow_note(indicator, *args, **kwargs):
             started.set()
             release.wait(5)
             return f"note on {indicator}"
@@ -858,7 +871,7 @@ class AlertTest(BotTestCase):
 
         self.assertEqual(self.tg.sent, ["09:15:02 — 10.68.144.121 tried to reach c2.example.net "
                                         "(MuddyWater - VT 9/94 malicious 2026-10-01) — drop; 1× today", "note on c2"])
-        note.assert_called_once_with("c2.example.net", self.syslog, "2026-10-28")
+        note.assert_called_once_with("c2.example.net", self.syslog, "2026-10-28", report=telegram_bot.log)
 
     def test_an_inbound_detection_gets_the_note_on_its_source(self):
         alerts = self.bot.watcher.scan([INBOUND_PREVENTED])
@@ -868,7 +881,7 @@ class AlertTest(BotTestCase):
 
         self.assertEqual(self.tg.sent, ["08:12:40 — Threat Prevention: Anti-Malware Scanner from 185.1.2.66 to "
                                         "203.0.113.47 — prevent", "note"])
-        note.assert_called_once_with("185.1.2.66", self.syslog, "2026-10-28")
+        note.assert_called_once_with("185.1.2.66", self.syslog, "2026-10-28", report=telegram_bot.log)
 
     def test_an_outbound_ips_detection_gets_its_alert_but_no_note(self):
         alerts = self.bot.watcher.scan([OUTBOUND_IPS, OUTBOUND_DETECTED])
@@ -885,7 +898,7 @@ class AlertTest(BotTestCase):
     def test_outbound_anti_bot_virus_and_emulation_detections_get_a_note_on_the_destination(self):
         alerts = self.bot.watcher.scan([OUTBOUND_BOT, OUTBOUND_VIRUS, OUTBOUND_EMULATION])
 
-        with patch("attacker_context.note", side_effect=lambda indicator, *a: f"note on {indicator}") as note:
+        with patch("attacker_context.note", side_effect=lambda indicator, *a, **k: f"note on {indicator}") as note:
             self.deliver(alerts)
 
         self.assertEqual(self.tg.sent[3:], ["note on c2.example.org", "note on 185.1.2.71", "note on 185.1.2.72"],
@@ -897,7 +910,7 @@ class AlertTest(BotTestCase):
     def test_a_burst_sends_every_alert_before_the_first_note(self):
         alerts = self.bot.watcher.scan([OUTBOUND_TO_C2, OUTBOUND_TO_FEED_IP, INBOUND_PREVENTED])
 
-        with patch("attacker_context.note", side_effect=lambda indicator, *a: f"note on {indicator}"):
+        with patch("attacker_context.note", side_effect=lambda indicator, *a, **k: f"note on {indicator}"):
             self.deliver(alerts)
 
         self.assertEqual([text.split(" — ")[1] if " — " in text else text for text in self.tg.sent], [
@@ -905,6 +918,16 @@ class AlertTest(BotTestCase):
             "10.68.144.121 tried to reach 185.1.2.7 (Cyberint - added without VirusTotal check 2026-10-01)",
             "Threat Prevention: Anti-Malware Scanner from 185.1.2.66 to 203.0.113.47",
             "note on c2.example.net", "note on 185.1.2.7", "note on 185.1.2.66"])
+
+    def test_a_watcher_note_logs_its_usage_in_the_bot_log(self):
+        def note(indicator, capture_dir, today, report=None, **kwargs):
+            report("note usage: input=1 output=2 searches=0 seconds=3")
+            return "note"
+
+        with patch("attacker_context.note", note):
+            self.deliver(self.bot.watcher.scan([OUTBOUND_TO_C2]))
+
+        self.assertRegex(self.err.getvalue(), r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} note usage: input=1 output=2")
 
     def test_an_alert_telegram_refuses_is_logged(self):
         alerts = self.bot.watcher.scan([OUTBOUND_TO_C2])
@@ -957,6 +980,66 @@ class RunForeverTest(BotTestCase):
         self.assertEqual(len(calls), 2)
         self.assertRegex(self.err.getvalue(), r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} .*bad line")
         self.assertIn("bad line", self.bot.status().splitlines()[-1], "the watcher thread records it too")
+
+
+class RealGitTest(unittest.TestCase):
+    """Bot.add against real git, the way test_daily_check.py runs the daily check: a clone with a bare
+    origin, another file staged by the owner, a commit made elsewhere to pull in first."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        self.repo, self.origin, self.other = root / "repo", root / "origin.git", root / "other-clone"
+        self.env = {**{k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+                    "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
+                    "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
+                    "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com"}
+        self.repo.mkdir()
+        (self.repo / "spark-ioc-feed.csv").write_text(FEED)
+        (self.repo / "other.txt").write_text("unrelated\n")
+        self.git("init", "-q", "-b", "main", cwd=self.repo)
+        self.git("add", "-A", cwd=self.repo)
+        self.git("commit", "-q", "-m", "seed", cwd=self.repo)
+        self.git("init", "-q", "--bare", "-b", "main", str(self.origin), cwd=root)
+        self.git("remote", "add", "origin", str(self.origin), cwd=self.repo)
+        self.git("push", "-q", "-u", "origin", "main", cwd=self.repo)
+        self.git("clone", "-q", str(self.origin), str(self.other), cwd=root)
+        self.tg = FakeTelegram()
+        quiet(self)
+        run = lambda args, **kwargs: subprocess.run(args, env=self.env, **kwargs)
+        self.bot = telegram_bot.Bot(self.tg, self.repo, git=run, today=lambda: TODAY, sleep=lambda s: None,
+                                    daily_log=self.repo / "daily-check.log")
+
+    def git(self, *args, cwd):
+        return subprocess.run(["git", *args], cwd=cwd, env=self.env, check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+    def test_a_trusted_row_is_committed_alone_on_top_of_what_was_pushed_elsewhere_and_pushed(self):
+        (self.other / "other.txt").write_text("edited on GitHub\n")
+        self.git("commit", "-q", "-am", "Edit other.txt elsewhere", cwd=self.other)
+        self.git("push", "-q", cwd=self.other)
+        (self.repo / "other.txt").write_text("the owner's own edit, staged\n")
+        self.git("add", "other.txt", cwd=self.repo)
+
+        reply = self.bot.add(["185.1.2.10"], "Unit 42", trusted=True)
+
+        self.assertTrue(reply.endswith("Committed and pushed."), reply)
+        self.assertEqual(self.git("log", "--format=%s", cwd=self.repo).splitlines(),
+                         ["Add 1 indicator sent from Telegram: Unit 42", "Edit other.txt elsewhere", "seed"])
+        self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD", cwd=self.repo), "spark-ioc-feed.csv")
+        self.assertEqual(self.git("rev-parse", "main", cwd=self.origin), self.git("rev-parse", "HEAD", cwd=self.repo))
+        self.assertIn(",185.1.2.10,IP,high,high,AB,Unit 42 - sent from Telegram - added without VirusTotal check",
+                      self.git("show", "HEAD:spark-ioc-feed.csv", cwd=self.repo))
+        self.assertIn("other.txt", self.git("status", "--porcelain", cwd=self.repo), "the owner's edit is kept")
+
+    def test_nothing_new_makes_no_commit(self):
+        before = self.git("rev-parse", "HEAD", cwd=self.repo)
+
+        reply = self.bot.add(["93.152.221.36"], "", trusted=True)
+
+        self.assertTrue(reply.endswith("Nothing added, nothing committed."), reply)
+        self.assertEqual(self.git("rev-parse", "HEAD", cwd=self.repo), before)
 
 
 class MainTest(unittest.TestCase):

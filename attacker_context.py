@@ -11,6 +11,9 @@ GREYNOISE_API_KEY.
 """
 
 import json
+import re
+import sys
+import time
 import unicodedata
 import urllib.error
 import urllib.request
@@ -45,10 +48,16 @@ ANTHROPIC_VERSION = "2023-06-01"
 ANTHROPIC_BETA = "server-side-fallback-2026-07-01"
 MODEL = "claude-opus-5-5"
 ASK_TIMEOUT = 300  # up to three web searches, then the note
+# Adaptive thinking, on by default, counts against max_tokens: 1500 could end a note after three
+# searches mid-sentence.
+MAX_TOKENS = 4000
+NOTE_LINES, NOTE_CHARS = 8, 1200  # what the prompt asks for, enforced
+CUT_SHORT = " (note cut short)"
+FACTS_TAG_RE = re.compile(r"</?facts>", re.IGNORECASE)
 
 SYSTEM_PROMPT = """You explain an attacker to the owner of a small network behind a Check Point Spark gateway. \
-You are given facts about one indicator (an IP address, domain, URL or file hash): what it did to this network, \
-taken from the gateway's firewall log, and what public services say about it.
+You are given facts about one indicator (an IP address, domain, URL or file hash), inside <facts></facts>: what \
+it did to this network, taken from the gateway's firewall log, and what public services say about it.
 
 Write at most eight lines of plain text: no markdown, no bullets, no headers, no bold, because Telegram shows \
 plain text. Say, in this order: who the attacker is (owner, network, country, what it is known as); what it did \
@@ -346,36 +355,69 @@ def facts_text(facts):
     return "\n".join(lines)
 
 
-def ask_claude(facts, api_key, http, max_continuations=3):
-    """The model's note on `facts` (the text of facts_text): its text blocks joined and stripped, "" when it
-    refused. `http(url, data, headers, timeout)` returns (status, body_dict). A reply that paused its turn
-    (a long web search) is sent back with the model's own content so it carries on, at most
-    `max_continuations` times. Raises NoteUnavailable for an error status; network errors propagate."""
+def _trimmed(text):
+    """The note cut to NOTE_LINES lines and NOTE_CHARS characters: what the prompt asks for, whatever
+    the facts or a search result made the model write."""
+    return "\n".join(text.splitlines()[:NOTE_LINES])[:NOTE_CHARS].strip()
+
+
+def _count_of(usage, *keys):
+    for key in keys:
+        usage = usage.get(key) if isinstance(usage, dict) else None
+    return _number(usage) or 0
+
+
+def ask_claude(facts, api_key, http, max_continuations=3, report=None, clock=time.monotonic):
+    """The model's note on `facts` (the text of facts_text, sent inside <facts></facts>): its text blocks
+    joined, cut to NOTE_LINES lines and NOTE_CHARS characters, with CUT_SHORT when the reply hit
+    max_tokens; "" when it refused or wrote nothing. `http(url, data, headers, timeout)` returns (status,
+    body_dict). A reply that paused its turn (a long web search) is sent back with the model's own content
+    so it carries on, at most `max_continuations` times. `report(line)` gets one "note usage: ..." line
+    (tokens, searches, seconds of `clock`) once a reply came back. Raises NoteUnavailable for an error
+    status; network errors propagate."""
     headers = {"x-api-key": api_key, "anthropic-version": ANTHROPIC_VERSION, "anthropic-beta": ANTHROPIC_BETA}
-    messages = [{"role": "user", "content": facts}]
-    text = ""
-    for _ in range(max_continuations + 1):
-        body = {
-            "model": MODEL,
-            "max_tokens": 1500,
-            "system": SYSTEM_PROMPT,
-            "output_config": {"effort": "medium"},
-            "fallbacks": "default",
-            "tools": [{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}],
-            "messages": messages,
-        }
-        status, reply = http(ANTHROPIC_URL, body, headers, ASK_TIMEOUT)
-        if status != 200:
-            error = reply.get("error")
-            raise NoteUnavailable((error.get("message") if isinstance(error, dict) else None) or f"HTTP {status}")
-        if reply.get("stop_reason") == "refusal":
-            return ""
-        # a sentence cited from a search arrives as several text blocks
-        text += "".join(block.get("text", "") for block in reply.get("content", []) if block.get("type") == "text")
-        if reply.get("stop_reason") != "pause_turn":
-            break
-        messages = messages + [{"role": "assistant", "content": reply["content"]}]
-    return text.strip()
+    messages = [{"role": "user", "content": f"<facts>\n{FACTS_TAG_RE.sub('', facts)}\n</facts>"}]
+    text, stop = "", None
+    used = {"input": 0, "output": 0, "searches": 0}
+    started, replies = clock(), 0
+    try:
+        for _ in range(max_continuations + 1):
+            body = {
+                "model": MODEL,
+                "max_tokens": MAX_TOKENS,
+                "system": SYSTEM_PROMPT,
+                "output_config": {"effort": "medium"},
+                "fallbacks": "default",
+                "tools": [{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}],
+                "messages": messages,
+            }
+            status, reply = http(ANTHROPIC_URL, body, headers, ASK_TIMEOUT)
+            if status != 200:
+                error = reply.get("error")
+                raise NoteUnavailable((error.get("message") if isinstance(error, dict) else None) or f"HTTP {status}")
+            replies += 1
+            usage = reply.get("usage")
+            used["input"] += _count_of(usage, "input_tokens")
+            used["output"] += _count_of(usage, "output_tokens")
+            used["searches"] += _count_of(usage, "server_tool_use", "web_search_requests")
+            stop = reply.get("stop_reason")
+            if stop == "refusal":
+                return ""
+            # a sentence cited from a search arrives as several text blocks
+            text += "".join(block.get("text", "") for block in reply.get("content", []) if block.get("type") == "text")
+            if stop != "pause_turn":
+                break
+            messages = messages + [{"role": "assistant", "content": reply["content"]}]
+    finally:
+        if replies and report:
+            report(f"note usage: input={used['input']} output={used['output']} searches={used['searches']} "
+                   f"seconds={round(clock() - started)}")
+    note = _trimmed(text)
+    return note + CUT_SHORT if note and stop == "max_tokens" else note
+
+
+def _stderr(line):
+    print(line, file=sys.stderr, flush=True)
 
 
 def _unavailable(reason):
@@ -386,10 +428,11 @@ def _why(error):
     return str(getattr(error, "reason", None) or error) or type(error).__name__
 
 
-def note(indicator, capture_dir, today, *, fetch_json=None, http=None):
+def note(indicator, capture_dir, today, *, fetch_json=None, http=None, report=_stderr):
     """The facts about `indicator` and, after a blank line, the model's note on them; when the note cannot
     be had, the facts and a line saying why (just the line when the facts cannot be had). Never raises for
-    a str indicator, a str or Path capture_dir and a str `today`: a note that fails must not stop the next."""
+    a str indicator, a str or Path capture_dir and a str `today`: a note that fails must not stop the next.
+    The note's usage line goes to `report` (by default stderr: the bot's log, the daily check's log)."""
     fetch_json = fetch_json or default_fetch_json
     http = http or telegram_api.default_http
     try:
@@ -402,7 +445,7 @@ def note(indicator, capture_dir, today, *, fetch_json=None, http=None):
     if not api_key:
         return f"{text}\n\n{_unavailable('no ANTHROPIC_API_KEY in the Keychain')}"
     try:
-        answer = ask_claude(text, api_key, http)
+        answer = ask_claude(text, api_key, http, report=report)
     except Exception as e:
         return f"{text}\n\n{_unavailable(_why(e))}"
     return f"{text}\n\n{answer}" if answer else f"{text}\n\n{_unavailable('the model gave no note')}"

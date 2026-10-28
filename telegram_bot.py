@@ -49,6 +49,7 @@ POLL_TIMEOUT = 50  # seconds a getUpdates long poll waits
 LOCK_WAIT = 60  # the daily check holds the lock for its whole run; the command loop must not stall that long
 BACKOFF = 10  # seconds before Telegram, or a failed watcher, is tried again
 WRITING = 120  # seconds since the capture's last write for the receiver to count as writing
+DAILY_LOG_TAIL = 64 * 1024  # bytes of the daily check's log /status reads: the last run, not the year
 MISSING_WAIT = 300  # without the bot in the Keychain: seconds before exiting (launchd starts the job again)
 GIT_TIMEOUT = 300
 LABEL_LIMIT = 120  # characters of a label: it goes into the CSV row and the commit subject
@@ -112,6 +113,13 @@ def parse_message(text):
             break
     label = "".join(c for c in " ".join(tokens[len(indicators):]) if not _hidden(c))
     return verb, indicators, " ".join(label.replace(",", " ").split())[:LABEL_LIMIT].rstrip()
+
+
+def tail(path, size):
+    """The last `size` bytes of the file at `path`, as text (a character cut in two is replaced)."""
+    with open(path, "rb") as f:
+        f.seek(max(0, os.fstat(f.fileno()).st_size - size))
+        return f.read().decode("utf-8", errors="replace")
 
 
 def summary(statuses, trusted):
@@ -375,7 +383,7 @@ class Bot:
         return proc.returncode, proc.stdout or "", (proc.stderr or proc.stdout or "").strip()
 
     def who(self, indicator):
-        return attacker_context.note(indicator, self.syslog, self.today().isoformat())
+        return attacker_context.note(indicator, self.syslog, self.today().isoformat(), report=log)
 
     def sources(self, day):
         """(file name, contents) of the list of `day`'s inbound sources, busiest first; empty contents
@@ -409,7 +417,7 @@ class Bot:
     def _daily_check(self):
         """How the last run in the daily check's log went (its lines: "YYYY-MM-DD HH:MM:SS <message>")."""
         try:
-            text = self.daily_log.read_text(errors="replace")
+            text = tail(self.daily_log, DAILY_LOG_TAIL)
         except OSError:
             return "last daily check: no log"
         start = text.rfind(RUN_START)
@@ -451,7 +459,7 @@ class Bot:
             try:
                 if indicator is None:
                     return
-                note = attacker_context.note(indicator, self.syslog, self.today().isoformat())
+                note = attacker_context.note(indicator, self.syslog, self.today().isoformat(), report=log)
                 if note:
                     self.send(note)
             except Exception as e:  # one note failing must not stop the next
