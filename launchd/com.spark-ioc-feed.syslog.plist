@@ -3,6 +3,12 @@
 <plist version="1.0">
 <dict>
     <!-- Keeps syslog_receiver.py running on the Mac the Spark sends its logs to.
+         The program is the Python.app binary inside the Command Line Tools framework, not
+         /usr/bin/python3: when the repository is on an external disk, macOS lets a launchd job
+         read it only if the job's own program holds Full Disk Access, and the grant can only be
+         given to Python.app (System Settings → Privacy & Security → Full Disk Access → +, then
+         ⌘⇧G to that path). Started as /usr/bin/python3, an Apple platform binary, the job is
+         denied with "Operation not permitted" and never prompts.
          Install: edit the two paths below, then
            cp launchd/com.spark-ioc-feed.syslog.plist ~/Library/LaunchAgents/
            launchctl load ~/Library/LaunchAgents/com.spark-ioc-feed.syslog.plist
@@ -11,20 +17,20 @@
     <string>com.spark-ioc-feed.syslog</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/python3</string>
-        <string>/Volumes/eDisk_2TB/Claude/github-custom/spark-ioc-feed/syslog_receiver.py</string>
+        <string>/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/Current/Resources/Python.app/Contents/MacOS/Python</string>
+        <string>/Volumes/eDisk_2TB/Projects/Personal Security Agent/spark-ioc-feed/syslog_receiver.py</string>
         <string>--port</string>
         <string>5514</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Volumes/eDisk_2TB/Claude/github-custom/spark-ioc-feed</string>
+    <string>/Volumes/eDisk_2TB/Projects/Personal Security Agent/spark-ioc-feed</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/home/Library/Logs/spark-ioc-feed/syslog-receiver.log</string>
+    <string>/Users/home-server/Library/Logs/spark-ioc-feed/syslog-receiver.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/home/Library/Logs/spark-ioc-feed/syslog-receiver.log</string>
+    <string>/Users/home-server/Library/Logs/spark-ioc-feed/syslog-receiver.log</string>
 </dict>
 </plist>

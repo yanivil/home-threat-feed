@@ -6,21 +6,26 @@
          new indicators up on VirusTotal, commits and pushes spark-ioc-feed.csv when rows were
          added. The VirusTotal key must be in the login Keychain first (README, "Daily check").
          A run missed while the Mac slept happens on wake; one missed while it was off is skipped.
+         The script is started through the Python.app binary rather than /bin/bash directly: with
+         the repository on an external disk, macOS judges every file access of a launchd job by
+         the job's top process, and Python.app is the one program that can hold Full Disk Access
+         (see the syslog plist). bash, git and python3 run under it and need no grant of their own.
          Install: edit the two paths below if the repository lives elsewhere, then
            cp launchd/com.spark-ioc-feed.daily.plist ~/Library/LaunchAgents/
            launchctl load ~/Library/LaunchAgents/com.spark-ioc-feed.daily.plist
          Run now: launchctl start com.spark-ioc-feed.daily
-         Log:     /Users/home/Library/Logs/spark-ioc-feed/daily-check.log
+         Log:     /Users/home-server/Library/Logs/spark-ioc-feed/daily-check.log
          Stop:    launchctl unload ~/Library/LaunchAgents/com.spark-ioc-feed.daily.plist -->
     <key>Label</key>
     <string>com.spark-ioc-feed.daily</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
-        <string>/Volumes/eDisk_2TB/Claude/github-custom/spark-ioc-feed/daily_check.sh</string>
+        <string>/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/Current/Resources/Python.app/Contents/MacOS/Python</string>
+        <string>-c</string>
+        <string>import subprocess, sys; sys.exit(subprocess.call(['/bin/bash', '/Volumes/eDisk_2TB/Projects/Personal Security Agent/spark-ioc-feed/daily_check.sh']))</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Volumes/eDisk_2TB/Claude/github-custom/spark-ioc-feed</string>
+    <string>/Volumes/eDisk_2TB/Projects/Personal Security Agent/spark-ioc-feed</string>
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
@@ -29,8 +34,8 @@
         <integer>30</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>/Users/home/Library/Logs/spark-ioc-feed/daily-check.log</string>
+    <string>/Users/home-server/Library/Logs/spark-ioc-feed/daily-check.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/home/Library/Logs/spark-ioc-feed/daily-check.log</string>
+    <string>/Users/home-server/Library/Logs/spark-ioc-feed/daily-check.log</string>
 </dict>
 </plist>
