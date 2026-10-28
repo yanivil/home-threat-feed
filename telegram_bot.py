@@ -18,6 +18,7 @@ import itertools
 import json
 import math
 import os
+import queue
 import re
 import signal
 import subprocess
@@ -25,7 +26,7 @@ import sys
 import threading
 import time
 import unicodedata
-from collections import Counter, namedtuple
+from collections import Counter, deque, namedtuple
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -53,6 +54,11 @@ BATCH = 1000  # capture lines read per pass
 MISSING_WAIT = 300  # without the bot in the Keychain: seconds before exiting (launchd starts the job again)
 GIT_TIMEOUT = 300
 LABEL_LIMIT = 120  # characters of a label: it goes into the CSV row and the commit subject
+ALERT_LIMIT, ALERT_WINDOW = 10, 600  # alerts sent in any sliding ten minutes
+NOTES_PER_HOUR, NOTES_PER_DAY = 6, 30  # attacker-context notes: each one is a paid model call
+NOTE_REPEAT = 86400  # seconds before the same indicator gets another note
+NOTE_QUEUE = 10  # notes waiting for the note thread; one more is dropped
+CAP_REACHED = "Alert cap reached: further alerts in the next 10 minutes are counted, not sent"
 # What this system talks to: the feed's home (the gateway pulls it from raw.githubusercontent.com),
 # Telegram, the note's model and VirusTotal. With spark_logs' vendor list, never added to the feed.
 NEVER_BLOCK = frozenset({"github.com", "raw.githubusercontent.com", "api.telegram.org", "api.anthropic.com",
@@ -82,6 +88,7 @@ NOTE_BLADES = frozenset({"Anti-Bot", "Anti Virus", "Threat Emulation", "Anti Mal
 
 # `note`: the indicator the alert's attacker-context note is about, None for no note.
 Alert = namedtuple("Alert", "kind device indicator action entry note", defaults=(None,))
+Notice = namedtuple("Notice", "text")  # a message of the watcher's own, sent like an alert (the caps)
 
 
 def log(text, at=None):
@@ -200,6 +207,67 @@ def _note_target(entry, external):
     return None
 
 
+class AlertCap:
+    """At most `limit` alerts in any sliding `window` seconds. The first alert over the limit starts
+    a suppression of `window` seconds: it and the ones after it are counted, not sent, and tick()
+    reports the count once the suppression is over."""
+
+    def __init__(self, limit=ALERT_LIMIT, window=ALERT_WINDOW):
+        self.limit, self.window = limit, window
+        self.sent = deque()  # when the alerts in the window went out
+        self.capped = None  # when the suppression began
+        self.suppressed = 0
+
+    def admit(self, now):
+        """(whether the alert goes out, the message to send in its place or None)."""
+        if self.capped is not None:
+            self.suppressed += 1
+            return False, None
+        while self.sent and now - self.sent[0] >= self.window:
+            self.sent.popleft()
+        if len(self.sent) < self.limit:
+            self.sent.append(now)
+            return True, None
+        self.capped, self.suppressed = now, 1
+        return False, CAP_REACHED
+
+    def tick(self, now):
+        """The message that the suppression is over and how many alerts it held, once; else None."""
+        if self.capped is None or now - self.capped < self.window:
+            return None
+        start, count = self.capped, self.suppressed
+        self.capped, self.suppressed = None, 0
+        self.sent.clear()
+        return (f"{spark_brief._count(count, 'alert')} suppressed between {datetime.fromtimestamp(start):%H:%M} "
+                f"and {datetime.fromtimestamp(now):%H:%M}; the morning brief has the counts")
+
+
+class NoteCap:
+    """At most `per_hour` notes in any sliding hour and `per_day` in a local day, and one per
+    indicator in `repeat` seconds."""
+
+    def __init__(self, per_hour=NOTES_PER_HOUR, per_day=NOTES_PER_DAY, repeat=NOTE_REPEAT):
+        self.per_hour, self.per_day, self.repeat = per_hour, per_day, repeat
+        self.hour = deque()  # when the notes of the last hour were admitted
+        self.day, self.day_count = None, 0
+        self.last = {}  # indicator -> when its last note was admitted
+
+    def admit(self, indicator, now):
+        day = datetime.fromtimestamp(now).date()
+        if day != self.day:
+            self.day, self.day_count = day, 0
+        while self.hour and now - self.hour[0] >= 3600:
+            self.hour.popleft()
+        self.last = {key: at for key, at in self.last.items() if now - at < self.repeat}
+        key = indicator.lower()
+        if key in self.last or len(self.hour) >= self.per_hour or self.day_count >= self.per_day:
+            return False
+        self.hour.append(now)
+        self.day_count += 1
+        self.last[key] = now
+        return True
+
+
 class Watcher:
     """Follows today's capture in `capture_dir` and raises an Alert for a LAN device reaching a member
     of the feed `feed_loader()` returns ("feed") and for a Threat Prevention row whose Action is one of
@@ -207,8 +275,10 @@ class Watcher:
     a blank Action, monitor, accept, anything else and the LAN-only rows are left to the morning
     brief). The same pair is alerted at most once per `cooldown` seconds of `clock`. Each Alert names
     the indicator its note is about: a feed hit's, an inbound detection's source, an outbound
-    Anti-Bot, Anti-Virus or Threat Emulation detection's destination. `alert(alerts)` gets each pass's
-    Alerts in one call, so their texts can all go out before the slower notes."""
+    Anti-Bot, Anti-Virus or Threat Emulation detection's destination. gate() holds the alerts to
+    ALERT_LIMIT in ALERT_WINDOW seconds (a Notice says when the cap is reached and, once the window
+    clears, how many were held) and the notes to NoteCap's limits. `alert(items)` gets each pass's
+    Alerts and Notices in one call, so their texts can all go out before the slower notes."""
 
     def __init__(self, capture_dir, feed_loader, alert, *, today=None, cooldown=COOLDOWN, clock=time.time):
         self.capture_dir = Path(capture_dir)
@@ -221,6 +291,8 @@ class Watcher:
         self.day = None
         self.counts = Counter()  # (device, indicator) -> feed hits seen today
         self.alerted = {}  # (kind, ...pair) -> when it last alerted
+        self.alert_cap = AlertCap()
+        self.note_cap = NoteCap()
         self.pending = ""  # the start of a line the receiver is still writing
 
     def scan(self, lines, catch_up=False):
@@ -268,6 +340,23 @@ class Watcher:
                 return Alert("detection", device, external, action.lower(), entry, note), key
         return None
 
+    def gate(self, alerts):
+        """The pass's `alerts` under the caps, with the Notices they call for: the alerts past the
+        alert cap are counted and dropped, a note past the note cap is taken off its alert."""
+        now = self.clock()
+        cleared = self.alert_cap.tick(now)
+        items = [Notice(cleared)] if cleared else []
+        for alert in alerts:
+            send, notice = self.alert_cap.admit(now)
+            if notice:
+                items.append(Notice(notice))
+            if not send:
+                continue
+            if alert.note and not self.note_cap.admit(alert.note, now):
+                alert = alert._replace(note=None)
+            items.append(alert)
+        return items
+
     def _due(self, key):
         now = self.clock()
         if key in self.alerted and now - self.alerted[key] < self.cooldown:
@@ -302,16 +391,17 @@ class Watcher:
             while not stop_event.is_set():
                 today = self.today()
                 if handle is not None and today != day:
-                    self._deliver(self.scan(self._lines(handle)))  # the old day's last lines
+                    self._deliver(self.gate(self.scan(self._lines(handle))))  # the old day's last lines
                     handle.close()
                     handle = None
                 if handle is None:
                     day, handle, self.pending = today, self._open(today), ""
                 lines = list(itertools.islice(self._lines(handle), BATCH)) if handle else []
                 if lines:
-                    self._deliver(self.scan(lines, catch_up=catching_up))
+                    self._deliver(self.gate(self.scan(lines, catch_up=catching_up)))
                 catching_up = catching_up and len(lines) == BATCH
                 if not lines:
+                    self._deliver(self.gate([]))  # the alert cap's window may clear without a new alert
                     if handle is not None and self._replaced(handle):
                         handle.close()
                         handle = None
@@ -320,9 +410,9 @@ class Watcher:
             if handle is not None:
                 handle.close()
 
-    def _deliver(self, alerts):
-        if alerts:
-            self.alert(alerts)
+    def _deliver(self, items):
+        if items:
+            self.alert(items)
 
     def _open(self, day):
         try:
@@ -369,6 +459,8 @@ class Bot:
         self.ignored = {}  # "<chat type> <chat id>" -> the day it was last logged
         self.offset = self.load_offset()
         self.watcher = Watcher(self.syslog, FeedFile(self.feed), self.on_alerts, today=self.today, clock=clock)
+        self.note_queue = queue.Queue(maxsize=NOTE_QUEUE)  # the notes' indicators, for the note thread
+        self.note_thread = None  # started with the first note
 
     def error(self, text):
         """Log an error and keep it as the last one /status shows; called from both threads."""
@@ -628,16 +720,50 @@ class Bot:
 
     # The watcher's alerts, sent from its thread.
 
-    def on_alerts(self, alerts):
-        """Send every alert of one pass first, then the attacker-context notes (tens of seconds each) on
-        the indicators the alerts name (Alert.note: the cases with an attacker)."""
-        for alert in alerts:
-            self.send(self.watcher.describe(alert))
-        for alert in alerts:
-            if alert.note:
-                note = attacker_context.note(alert.note, self.syslog, self.today().isoformat())
+    def on_alerts(self, items):
+        """Send every alert and notice of one pass, then queue the attacker-context notes (tens of seconds
+        each) on the indicators the alerts name (Alert.note: the cases with an attacker). The note thread
+        works through the queue in order, so a pass's notes follow its alerts and no alert waits."""
+        for item in items:
+            self.send(item.text if isinstance(item, Notice) else self.watcher.describe(item))
+        for item in items:
+            if isinstance(item, Alert) and item.note:
+                self.queue_note(item.note)
+
+    def queue_note(self, indicator):
+        if self.note_thread is None:
+            self.note_thread = threading.Thread(target=self._notes, name="notes", daemon=True)
+            self.note_thread.start()
+        try:
+            self.note_queue.put_nowait(indicator)
+        except queue.Full:
+            log(f"the note on {indicator} was dropped: {NOTE_QUEUE} notes are already waiting")
+
+    def _notes(self):
+        """The note thread: write and send each queued note until a None arrives."""
+        while True:
+            indicator = self.note_queue.get()
+            try:
+                if indicator is None:
+                    return
+                note = attacker_context.note(indicator, self.syslog, self.today().isoformat())
                 if note:
                     self.send(note)
+            except Exception as e:  # one note failing must not stop the next
+                self.error(f"the note on {indicator} failed: {e!r}")
+            finally:
+                self.note_queue.task_done()
+
+    def stop_notes(self, timeout=5):
+        """End the note thread once the notes queued before are done (or `timeout` seconds pass)."""
+        thread, self.note_thread = self.note_thread, None
+        if thread is None:
+            return
+        try:
+            self.note_queue.put(None, timeout=timeout)
+        except queue.Full:
+            return
+        thread.join(timeout)
 
 
 BOTFATHER_HELP = f"""No bot token in the Keychain. To create the bot:

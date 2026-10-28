@@ -279,7 +279,9 @@ class BotTestCase(unittest.TestCase):
     def make_bot(self, **kwargs):
         options = dict(fetch=self.vt, git=self.git, today=lambda: TODAY, clock=self.clock.now,
                        sleep=self.clock.sleep, daily_log=self.daily_log)
-        return telegram_bot.Bot(self.tg, self.repo, **dict(options, **kwargs))
+        bot = telegram_bot.Bot(self.tg, self.repo, **dict(options, **kwargs))
+        self.addCleanup(bot.stop_notes)
+        return bot
 
     def updates(self, batch):
         self.tg.batches.append(batch)
@@ -702,13 +704,76 @@ class WhoTest(BotTestCase):
 
 
 class AlertTest(BotTestCase):
-    """The watcher hands the bot each batch's alerts in one call (on_alerts)."""
+    """The watcher hands the bot each batch's alerts in one call (on_alerts); the notes go to a queue
+    that a thread of their own works through."""
+
+    def deliver(self, items):
+        self.bot.on_alerts(items)
+        self.bot.note_queue.join()
+
+    def test_an_alert_is_sent_while_a_slow_note_is_still_running(self):
+        started, release = threading.Event(), threading.Event()
+        self.addCleanup(release.set)
+
+        def slow_note(indicator, *args):
+            started.set()
+            release.wait(5)
+            return f"note on {indicator}"
+
+        with patch("attacker_context.note", side_effect=slow_note):
+            self.bot.on_alerts(self.bot.watcher.scan([OUTBOUND_TO_C2]))
+            self.assertTrue(started.wait(5))
+            self.bot.on_alerts(self.bot.watcher.scan([INBOUND_PREVENTED]))
+
+            self.assertEqual(len(self.tg.sent), 2, "the second alert did not wait for the first note")
+            self.assertIn("Threat Prevention: Anti-Malware Scanner", self.tg.sent[1])
+            release.set()
+            self.bot.note_queue.join()
+
+        self.assertEqual(self.tg.sent[2:], ["note on c2.example.net", "note on 185.1.2.66"])
+
+    def test_a_note_that_does_not_fit_the_queue_is_dropped_and_logged(self):
+        started, release = threading.Event(), threading.Event()
+        self.addCleanup(release.set)
+
+        def slow_note(indicator, *args):
+            started.set()
+            release.wait(5)
+            return f"note on {indicator}"
+
+        probes = [INBOUND_PREVENTED.replace('src="185.1.2.66"', f'src="185.1.3.{i}"') for i in range(11)]
+        with patch("attacker_context.note", side_effect=slow_note):
+            self.bot.on_alerts(self.bot.watcher.scan([OUTBOUND_TO_C2]))
+            self.assertTrue(started.wait(5))
+            self.bot.on_alerts(self.bot.watcher.scan(probes))
+            release.set()
+            self.bot.note_queue.join()
+
+        self.assertEqual(len([text for text in self.tg.sent if text.startswith("note on")]), 11)
+        self.assertNotIn("note on 185.1.3.10", self.tg.sent)
+        self.assertIn("the note on 185.1.3.10 was dropped: 10 notes are already waiting", self.err.getvalue())
+
+    def test_the_cap_messages_go_out_like_alerts(self):
+        notice = telegram_bot.Notice(telegram_bot.CAP_REACHED)
+
+        with patch("attacker_context.note") as note:
+            self.deliver([notice])
+
+        self.assertEqual(self.tg.sent, ["Alert cap reached: further alerts in the next 10 minutes are counted, not sent"])
+        note.assert_not_called()
+
+    def test_a_note_that_fails_is_logged_and_the_next_one_still_runs(self):
+        with patch("attacker_context.note", side_effect=[RuntimeError("odd"), "note two"]):
+            self.deliver(self.bot.watcher.scan([OUTBOUND_TO_C2, INBOUND_PREVENTED]))
+
+        self.assertEqual(self.tg.sent[-1], "note two")
+        self.assertIn("the note on c2.example.net failed: RuntimeError('odd')", self.bot.status().splitlines()[-1])
 
     def test_an_alert_goes_out_then_the_context_note_on_the_indicator(self):
         alerts = self.bot.watcher.scan([OUTBOUND_TO_C2])
 
         with patch("attacker_context.note", return_value="note on c2") as note:
-            self.bot.on_alerts(alerts)
+            self.deliver(alerts)
 
         self.assertEqual(self.tg.sent, ["09:15:02 — 10.68.144.121 tried to reach c2.example.net "
                                         "(MuddyWater - VT 9/94 malicious 2026-10-01) — drop; 1× today", "note on c2"])
@@ -718,7 +783,7 @@ class AlertTest(BotTestCase):
         alerts = self.bot.watcher.scan([INBOUND_PREVENTED])
 
         with patch("attacker_context.note", return_value="note") as note:
-            self.bot.on_alerts(alerts)
+            self.deliver(alerts)
 
         self.assertEqual(self.tg.sent, ["08:12:40 — Threat Prevention: Anti-Malware Scanner from 185.1.2.66 to "
                                         "203.0.113.47 — prevent", "note"])
@@ -728,7 +793,7 @@ class AlertTest(BotTestCase):
         alerts = self.bot.watcher.scan([OUTBOUND_IPS, OUTBOUND_DETECTED])
 
         with patch("attacker_context.note", return_value="note") as note:
-            self.bot.on_alerts(alerts)
+            self.deliver(alerts)
 
         self.assertEqual(len(self.tg.sent), 2)
         self.assertEqual(self.tg.sent[0], "10:23:00 — Threat Prevention: IPS Header Spoofing from 192.168.50.20 to "
@@ -740,7 +805,7 @@ class AlertTest(BotTestCase):
         alerts = self.bot.watcher.scan([OUTBOUND_BOT, OUTBOUND_VIRUS, OUTBOUND_EMULATION])
 
         with patch("attacker_context.note", side_effect=lambda indicator, *a: f"note on {indicator}") as note:
-            self.bot.on_alerts(alerts)
+            self.deliver(alerts)
 
         self.assertEqual(self.tg.sent[3:], ["note on c2.example.org", "note on 185.1.2.71", "note on 185.1.2.72"],
                          "the host name the row names, else the address")
@@ -752,7 +817,7 @@ class AlertTest(BotTestCase):
         alerts = self.bot.watcher.scan([OUTBOUND_TO_C2, OUTBOUND_TO_FEED_IP, INBOUND_PREVENTED])
 
         with patch("attacker_context.note", side_effect=lambda indicator, *a: f"note on {indicator}"):
-            self.bot.on_alerts(alerts)
+            self.deliver(alerts)
 
         self.assertEqual([text.split(" — ")[1] if " — " in text else text for text in self.tg.sent], [
             "10.68.144.121 tried to reach c2.example.net (MuddyWater - VT 9/94 malicious 2026-10-01)",
@@ -765,7 +830,7 @@ class AlertTest(BotTestCase):
         self.tg.send_message = lambda text: (_ for _ in ()).throw(telegram_api.TelegramError("Too Many Requests"))
 
         with patch("attacker_context.note", return_value="note"):
-            self.bot.on_alerts(alerts)
+            self.deliver(alerts)
 
         self.assertIn("Too Many Requests", self.err.getvalue())
         self.assertIn("Too Many Requests", self.bot.status().splitlines()[-1])
@@ -950,6 +1015,70 @@ class WatcherTest(unittest.TestCase):
         alerts = self.watcher.scan(SYSTEM_LINES + [OUTBOUND_TO_C2] + SYSTEM_LINES)
 
         self.assertEqual([(a.kind, a.indicator) for a in alerts], [("feed", "c2.example.net")])
+
+    def probes(self, first, count):
+        """`count` inbound detections from distinct sources: distinct pairs, each past the cooldown."""
+        return [INBOUND_PREVENTED.replace('src="185.1.2.66"', f'src="185.1.3.{i}"') for i in range(first, first + count)]
+
+    def test_at_most_ten_alerts_in_ten_minutes_then_one_message_then_the_count(self):
+        self.clock.time = datetime(2026, 10, 28, 9, 0).timestamp()
+
+        items = self.watcher.gate(self.watcher.scan(self.probes(0, 12)))
+
+        self.assertEqual([type(item).__name__ for item in items], ["Alert"] * 10 + ["Notice"])
+        self.assertEqual(items[-1].text, "Alert cap reached: further alerts in the next 10 minutes are counted, not sent")
+        self.clock.time += 300
+        self.assertEqual(self.watcher.gate(self.watcher.scan(self.probes(12, 2))), [], "counted, not sent")
+        self.clock.time += 299
+        self.assertEqual(self.watcher.gate([]), [])
+        self.clock.time += 1
+
+        [cleared] = self.watcher.gate([])
+
+        self.assertEqual(cleared.text, "4 alerts suppressed between 09:00 and 09:10; the morning brief has the counts")
+        self.assertEqual(len(self.watcher.gate(self.watcher.scan(self.probes(14, 1)))), 1, "alerts flow again")
+        self.assertEqual(self.watcher.gate([]), [], "said once")
+
+    def test_the_alert_window_slides(self):
+        self.assertEqual(len(self.watcher.gate(self.watcher.scan(self.probes(0, 5)))), 5)
+        self.clock.time += 300
+        self.assertEqual(len(self.watcher.gate(self.watcher.scan(self.probes(5, 5)))), 5)
+        self.clock.time += 301
+
+        self.assertEqual([type(item).__name__ for item in self.watcher.gate(self.watcher.scan(self.probes(10, 6)))],
+                         ["Alert"] * 5 + ["Notice"], "the first five slid out of the window, the second five did not")
+
+    def test_notes_are_capped_at_six_an_hour(self):
+        notes = []
+        for i in range(8):
+            notes += [alert.note for alert in self.watcher.gate(self.watcher.scan(self.probes(i, 1)))]
+            self.clock.time += 60
+
+        self.assertEqual(notes, [f"185.1.3.{i}" for i in range(6)] + [None, None])
+        self.clock.time += 3600 - 7 * 60
+        [alert] = self.watcher.gate(self.watcher.scan(self.probes(8, 1)))
+        self.assertEqual(alert.note, "185.1.3.8", "the first note left the hour")
+
+    def test_an_alert_whose_note_was_refused_still_goes_out(self):
+        for i in range(6):
+            self.watcher.gate(self.watcher.scan(self.probes(i, 1)))
+
+        [alert] = self.watcher.gate(self.watcher.scan(self.probes(6, 1)))
+
+        self.assertEqual((alert.indicator, alert.note), ("185.1.3.6", None))
+
+    def test_notes_are_capped_at_thirty_a_day_and_one_per_indicator_a_day(self):
+        cap = telegram_bot.NoteCap()
+        start = datetime(2026, 10, 28, 1, 0).timestamp()
+
+        admitted = [cap.admit(f"185.1.3.{i}", start + i * 601) for i in range(31)]
+
+        self.assertEqual(admitted, [True] * 30 + [False])
+        self.assertTrue(cap.admit("185.1.3.99", datetime(2026, 10, 29, 0, 1).timestamp()), "a new day")
+        cap = telegram_bot.NoteCap()
+        self.assertTrue(cap.admit("Evil.example", start))
+        self.assertFalse(cap.admit("evil.example", start + 86399))
+        self.assertTrue(cap.admit("evil.example", start + 86400))
 
     def test_a_malformed_line_does_not_stop_the_scan(self):
         self.assertEqual(len(self.watcher.scan([MALFORMED, "", "garbage", OUTBOUND_TO_C2])), 1)
