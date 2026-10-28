@@ -259,12 +259,12 @@ class ParseMessageTest(unittest.TestCase):
 
     def test_the_label_loses_quotes_and_control_format_and_bidi_marks(self):
         # The label lands in the gateway's CSV and in the public commit subject.
-        text = 'evil.com "APT\x1b[31m34"‮ report​, \x00x'
+        text = 'evil.com "APT\x1b[31m34"\u202e report\u200b, \x00x'
 
         self.assertEqual(telegram_bot.parse_message(text), ("check", ["evil.com"], "APT[31m34 report x"))
 
     def test_a_token_with_a_quote_or_a_hidden_mark_is_no_indicator(self):
-        for token in ('hxxps://bad[.]example/"x', "hxxps://bad[.]example/\x1b[2J", "evil​.com"):
+        for token in ('hxxps://bad[.]example/"x', "hxxps://bad[.]example/\x1b[2J", "evil\u200b.com"):
             with self.subTest(token=token):
                 verb, indicators, label = telegram_bot.parse_message(f"185.1.2.9 {token} Campaign")
 
@@ -444,20 +444,22 @@ class AddTest(BotTestCase):
         self.assertEqual(commit[4:], ["--", "spark-ioc-feed.csv"])
 
     def test_a_label_with_quotes_and_hidden_marks_reaches_the_feed_and_the_commit_clean(self):
-        self.send('/trust 185.1.2.10 "Unit\x1b 42"‮​')
+        self.send('/trust 185.1.2.10 "Unit\x1b 42"\u202e\u200b')
 
         row = self.feed.read_text().splitlines()[-1]
         self.assertEqual(row.split(",")[6], "Unit 42 - sent from Telegram - added without VirusTotal check 2026-10-28")
         self.assertEqual(self.git.calls[4], ["git", "commit", "-m", "Add 1 indicator sent from Telegram: Unit 42",
                                              "--", "spark-ioc-feed.csv"])
         for text in (row, self.git.calls[4][3]):
-            self.assertFalse(any(c in text for c in '"\x1b‮​'), repr(text))
+            self.assertFalse(any(c in text for c in '"\x1b\u202e\u200b'), repr(text))
 
     def test_trust_refuses_what_must_never_be_blocked(self):
         (self.syslog / "allow.txt").write_text("vendor.example.net\n")
         for value in ("github.com", "raw.githubusercontent.com", "api.telegram.org", "api.anthropic.com",
                       "www.virustotal.com", "gsp-ssl.ls.apple.com", "cdn.vendor.example.net",
-                      "https://raw.githubusercontent.com/owner/spark-ioc-feed/main/spark-ioc-feed.csv"):
+                      "https://raw.githubusercontent.com/owner/spark-ioc-feed/main/spark-ioc-feed.csv",
+                      # the parent of a needed host: a Domain row for it would block the host too
+                      "telegram.org", "githubusercontent.com"):
             with self.subTest(value=value):
                 self.send(f"/trust {value} oops")
 
@@ -467,6 +469,7 @@ class AddTest(BotTestCase):
         self.assertFalse(self.lock.exists())
         self.assertFalse(self.bot.never_block("https://[::1"), "a URL without a readable host is no refusal")
         self.assertFalse(self.bot.never_block("notgithub.com"))
+        self.assertFalse(self.bot.never_block("https://telegram.org/malware.exe"), "a URL blocks one page")
 
     def test_a_check_refuses_a_never_block_value_and_checks_the_rest(self):
         self.send("raw.githubusercontent.com evil[.]com")

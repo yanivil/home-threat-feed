@@ -76,7 +76,7 @@ lint() {
     lint_problem=$(printf '%s\n' "$out" | grep '^line ' | head -n 1 | tr '"' "'")
     more=$(printf '%s\n' "$out" | grep -c '^line ')
     [ "$more" -le 1 ] || lint_problem="$lint_problem and $((more - 1)) more"
-    [ -n "$lint_problem" ] || lint_problem="feed_lint.py itself failed (see $LOG_FILE)"
+    [ "$status" -eq 0 ] || [ -n "$lint_problem" ] || lint_problem="feed_lint.py itself failed (see $LOG_FILE)"
     return "$status"
 }
 fail() {
@@ -125,7 +125,7 @@ git pull --rebase --autostash --quiet || fail "git pull failed; the feed was not
 # commit is still here: either way nothing runs until the file is fixed, and the notice says where.
 if ! lint; then
     where="on main"
-    git diff --quiet -- "$FEED" || where="on this Mac (uncommitted changes)"
+    git diff --quiet HEAD -- "$FEED" || where="on this Mac (uncommitted changes)"
     fail "the feed $where fails its lint, nothing was checked: $lint_problem; fix $FEED"
 fi
 

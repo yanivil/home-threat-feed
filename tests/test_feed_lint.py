@@ -46,10 +46,14 @@ class FeedLintTest(unittest.TestCase):
         self.assertEqual(problems(ROWS), [HEADER_PROBLEM + ", not " + repr(ROWS.split("\n")[0])])
         self.assertEqual(problems(""), [HEADER_PROBLEM + ", not ''"])
         # A byte-order mark or a trailing space looks exactly like the header; the repr shows it.
-        self.assertEqual(problems("﻿" + GOOD),
+        self.assertEqual(problems("\ufeff" + GOOD),
                          [HEADER_PROBLEM + ", not '\\ufeff# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT'"])
         self.assertEqual(problems(GOOD.replace("COMMENT\n", "COMMENT \n", 1)),
                          [HEADER_PROBLEM + ", not '# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT '"])
+        # A giant first line is cut short (a whole row, above, is not): the message goes into a Telegram
+        # notice and an osascript string.
+        [message] = problems("x" * 300 + "\n")
+        self.assertEqual(message, HEADER_PROBLEM + ", not '" + "x" * 157 + "...'")
 
     def test_every_row_has_seven_fields(self):
         text = GOOD + "x-1,bad.example,Domain,high,high,AB,a comment, with a comma\n"
@@ -141,10 +145,11 @@ class FeedLintTest(unittest.TestCase):
         column = len(row) + 1
         cases = [
             ("\x1b[2K", "U+001B (escape)"),
-            ("​wide", "U+200B (ZERO WIDTH SPACE)"),
+            ("\u200bwide", "U+200B (ZERO WIDTH SPACE)"),
             ("\ttab", "U+0009 (tab)"),
             ("\r", "U+000D (carriage return: a Windows line ending)"),
-            (" more", "U+2028 (LINE SEPARATOR)"),  # not category C, but splitlines() breaks on it
+            ("\u2028more", "U+2028 (LINE SEPARATOR)"),  # not category C, but splitlines() breaks on it
+            (chr(0xE000) + "x", "U+E000 (private-use character)"),
         ]
         for tail, named in cases:
             with self.subTest(named=named):
@@ -205,6 +210,16 @@ class MainTest(unittest.TestCase):
         self.assertEqual(self.run_main(), (1, "line 9: VALUE github.com is a host this system needs (never block)\n"
                                               "line 10: VALUE evil.example repeats line 2\n"
                                               f"{self.path}: 2 problems in 9 rows\n"))
+
+    def test_the_file_is_read_as_it_is_on_disk(self):
+        # Universal newlines would hide a Windows line ending; a byte that is not UTF-8 is named too.
+        row = "x-1,other.example,Domain,high,high,AB,c"
+        self.path.write_bytes((GOOD + row).encode() + b"\r\n")
+        self.assertEqual(self.run_main(), (1, "line 9: hidden character U+000D (carriage return: a Windows line "
+                                              f"ending) at column {len(row) + 1}\n{self.path}: 1 problem in 8 rows\n"))
+        self.path.write_bytes((GOOD + row[:-1]).encode() + b"caf\xe9\n")
+        self.assertEqual(feed_lint.problems_in(self.path),
+                         [f"line 9: hidden character U+DCE9 (a byte that is not UTF-8) at column {len(row) + 3}"])
 
     def test_the_repository_feed_is_the_default(self):
         out = io.StringIO()

@@ -55,10 +55,9 @@ MISSING_WAIT = 300  # without the bot in the Keychain: seconds before exiting (l
 GIT_TIMEOUT = 300
 LABEL_LIMIT = 120  # characters of a label: it goes into the CSV row and the commit subject
 NOTE_QUEUE = 10  # notes waiting for the note thread; one more is dropped
-# What this system talks to: the feed's home (the gateway pulls it from raw.githubusercontent.com),
-# Telegram, the note's model and VirusTotal. With spark_logs' vendor list, never added to the feed;
-# the list lives with the lint that keeps them out of the file too.
-NEVER_BLOCK = feed_lint.NEVER_BLOCK
+# What this system talks to (the feed's home, Telegram, the note's model, VirusTotal) is never added
+# to the feed: the list is feed_lint.NEVER_BLOCK, with the lint that keeps them out of the file too,
+# and Bot.never_block applies it at intake together with spark_logs' vendor list.
 
 HELP = """Send indicators (IPs, domains, URLs, hashes; defanged is fine), then an optional label:
   evil[.]com hxxps://bad[.]example/x MuddyWater - Unit 42
@@ -302,13 +301,16 @@ class Bot:
 
     def never_block(self, value):
         """True when the feed must not hold `value`: a domain, or a URL's host, that spark_logs never
-        looks up (its vendor list and syslog/allow.txt) or that this system needs (NEVER_BLOCK)."""
+        looks up (its vendor list and syslog/allow.txt) or that this system needs (NEVER_BLOCK, and
+        for a domain the parent of one: the lint's rule, so that a row refused here is never one the
+        lint would refuse to commit)."""
+        if feed_lint.never_block_problem(value, "URL" if "://" in value else "Domain"):
+            return True
         try:
             host = urlsplit(value).hostname if "://" in value else value
         except ValueError:  # "https://[::1": no host to compare
             return False
-        suffixes = spark_logs.load_allow(self.syslog / spark_logs.ALLOW_NAME) | NEVER_BLOCK
-        return bool(host) and spark_logs.allowed(host, suffixes)
+        return bool(host) and spark_logs.allowed(host, spark_logs.load_allow(self.syslog / spark_logs.ALLOW_NAME))
 
     @staticmethod
     def _keychain_fetch():
@@ -354,7 +356,7 @@ class Bot:
         if status == 0:
             return "Nothing added, nothing committed."
         if status == 1:
-            faults = feed_lint.problems(self.feed.read_text())
+            faults = feed_lint.problems_in(self.feed)
             if faults:  # never the bot's own rows: a hand edit of the file, left for the owner to fix
                 self.error(f"the feed failed its lint, nothing committed: {faults[0]}")
                 more = f" and {len(faults) - 1} more" if len(faults) > 1 else ""

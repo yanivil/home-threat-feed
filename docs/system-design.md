@@ -533,7 +533,8 @@ itself needs nor a Domain that covers one of them (that list moved from the bot 
 Each problem names its line, its field and what to use instead, because the owner reads it in a
 Telegram notice, not in a log. A feed that fails after the pull stops the whole daily run, not
 only its commit: the check would otherwise write rows into a broken file and fail the second lint
-anyway, and the two-day window makes up the skipped day once the file is fixed. (3)
+anyway, and the two-day window makes up the skipped day when the file is fixed before the next
+run. (3)
 `actions/checkout` is pinned to a commit, and the repository's Actions settings are to require
 SHA pinning once the pinned workflow is on main, so a moved tag cannot change what runs with write
 access to the feed.
@@ -548,13 +549,17 @@ what the ruleset on main forbids.
 Outcome: built 2026-10-28/29 on branch `worktree-repo-hardening`, test-first and reviewed by a
 fresh reader, after the GitHub side was set on 2026-10-28 by hand: a ruleset on main that refuses
 force-pushes and deletion, Actions limited to GitHub's and verified creators', secret scanning
-with push protection, the owner's no-reply identity on every new commit. The commits pushed with
-this work carried, in their history, three more private LAN addresses on the subnets already
-public; by rule (1)'s reasoning they were scrubbed forward, not rewritten. Known limits: the
-lint's verdict follows the Python it runs under (3.9 on the Mac, newer on Actions: a character
-assigned after Unicode 13 counts as hidden on the Mac only, and `is_global` differs for a few
-IPv6 blocks, of which the feed has none); `vt_check.refang` runs once, so a doubly defanged value
-typed by hand is reported as not normalised rather than repaired. Still the owner's: two-factor
+with push protection, the owner's no-reply identity on every new commit. The thirty-one commits on
+main that this work is published together with, none of them public until then, carry in their
+history three more private LAN addresses on the two subnets the public history already names; they
+were not rewritten before the push, since such an address reveals nothing new and the stand-ins at
+the tip are what a reader of the files sees. Known limits: the lint's verdict follows the Python it
+runs under (3.9 on the Mac, newer on Actions: a character assigned after Unicode 13 counts as
+hidden on the Mac only, and `is_global` differs for a few special-purpose blocks);
+`vt_check.refang` runs once, so a doubly defanged value typed by hand is reported as not normalised
+rather than repaired; the rows the writers produce have no round-trip test of their own through the
+lint, the committed feed (every row of it theirs) and the bot's tests standing in for one. Still
+the owner's: two-factor
 authentication, the scope and expiry of the token the Mac pushes with, the e-mail privacy
 toggles, BotFather's `/setjoingroups`, and whether the vendor exports named in the feed's COMMENT
 column may be republished.

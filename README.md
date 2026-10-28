@@ -247,10 +247,11 @@ time.
   pushes it. A run missed while the Mac slept happens on wake; one missed while it was off is
   skipped.
 - The feed is linted (`feed_lint.py`, "Format" above) right after the pull and again before the
-  commit. A feed on main that fails (a bad web edit) stops the run before the check, with
-  `Daily check failed: the feed on main fails its lint …` as the morning message; rows the check
-  wrote that fail stay uncommitted and the brief carries the error. Fix `spark-ioc-feed.csv` and
-  the next run goes on.
+  commit. A feed that fails stops the run before the check, with `Daily check failed: the feed on
+  main fails its lint, nothing was checked: line N: …; fix spark-ioc-feed.csv` as the morning
+  message (`on this Mac (uncommitted changes)` instead of `on main` when the bad row is a hand
+  edit here that the bot refused to commit); rows the check wrote that fail stay uncommitted and
+  the brief's ERRORS line names the problem. Fix `spark-ioc-feed.csv` and the next run goes on.
 - Every run ends with one Telegram message. A run that fails after the check (the commit or the
   push) sends the brief with the failure among its errors; one that fails before it (the lock,
   `syslog/`, the pull) sends one line, `Daily check failed: <reason>`; and when the brief itself
@@ -386,7 +387,9 @@ Send the bot a message and it answers in the same chat. `/help` lists what it un
   list`: a domain, or a URL's host, under the vendor domains the daily check never looks up
   (`ALLOWED_SUFFIXES` and `syslog/allow.txt`), and `github.com`, `raw.githubusercontent.com`
   (where the gateway pulls this feed from), `api.telegram.org`, `api.anthropic.com` and
-  `www.virustotal.com`. There is no override and no `/remove`: for such a value, or to take a
+  `www.virustotal.com`, or a domain that covers one of those (`telegram.org`): the same rule as
+  the lint's, so a value taken here is never one the lint then refuses to commit. There is no
+  override and no `/remove`: for such a value, or to take a
   row out, edit the CSV on the Mac.
 - **`/who <indicator>`** says who is behind an indicator and what it did here: the facts and the
   note described under "Alerts" below.

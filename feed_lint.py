@@ -30,8 +30,11 @@ PRODUCTS = ("AB", "AV")
 NEVER_BLOCK = frozenset({"github.com", "raw.githubusercontent.com", "api.telegram.org", "api.anthropic.com",
                          "www.virustotal.com"})
 _AN = {"IP", "IP Range", "MD5"}
-# The hidden characters most often typed or pasted, named for the owner; the rest get their Unicode name.
+# The hidden characters most often typed or pasted, named for the owner; the rest get their Unicode
+# name, or their category's when they have none (a lone surrogate is how read() keeps a byte that is
+# not UTF-8).
 _HIDDEN_NAMES = {"\t": "tab", "\r": "carriage return: a Windows line ending", "\x1b": "escape"}
+_CATEGORY_NAMES = {"Cs": "a byte that is not UTF-8", "Co": "private-use character", "Cn": "unassigned character"}
 
 
 def _a(kind):
@@ -49,12 +52,13 @@ def _hidden(line):
     for index, char in enumerate(line):
         category = unicodedata.category(char)
         if category.startswith("C") or category in ("Zl", "Zp"):
-            name = _HIDDEN_NAMES.get(char) or unicodedata.name(char, "control character")
+            name = (_HIDDEN_NAMES.get(char)
+                    or unicodedata.name(char, _CATEGORY_NAMES.get(category, "control character")))
             return index + 1, f"U+{ord(char):04X} ({name})"
     return None
 
 
-def _never_block_problem(value, kind):
+def never_block_problem(value, kind):
     """Why a Domain or URL row of `value` must not be in the feed, or None: its host is one the
     system needs (or under one) or, for a Domain, the parent of one, since a gateway that matches a
     Domain row against subdomains would block the host with it. A URL blocks one page, not a host."""
@@ -98,7 +102,7 @@ def _value_problems(value, kind):
     if normalised != value:
         return [f"VALUE {value} is not normalised (expected {normalised})"]
     if kind in ("Domain", "URL"):
-        problem = _never_block_problem(value, kind)
+        problem = never_block_problem(value, kind)
         if problem:
             return [problem]
     return []
@@ -116,8 +120,9 @@ def problems(text):
     elif text:
         found.append(f"line {len(lines)}: no newline at the end of the file")
     first = lines[0] if lines else ""
-    if first != HEADER:  # the repr shows a byte-order mark or a trailing space
-        found.append(f"line 1: the header must be exactly `{HEADER}`, not {first!r}")
+    if first != HEADER:  # the repr shows a byte-order mark or a trailing space; a huge line is cut
+        shown = first if len(first) <= 160 else first[:157] + "..."  # a whole row still shows
+        found.append(f"line 1: the header must be exactly `{HEADER}`, not {shown!r}")
     names, values = {}, {}
     for number, line in enumerate(lines[1:], start=2):
         hidden = _hidden(line)
@@ -170,10 +175,22 @@ def problems(text):
     return found
 
 
+def read(path):
+    """The feed file as it is on disk: Path.read_text() would turn a Windows line ending into a plain
+    newline and refuse a byte that is not UTF-8; here the first is reported as a hidden character and
+    the second is kept as a lone surrogate, which _hidden names."""
+    return Path(path).read_bytes().decode("utf-8", errors="surrogateescape")
+
+
+def problems_in(path):
+    """problems() of the file at `path`, read with read()."""
+    return problems(read(path))
+
+
 def main(argv=None):
     args = sys.argv[1:] if argv is None else argv
     path = Path(args[0]) if args else vt_check.FEED
-    text = path.read_text()
+    text = read(path)
     found = problems(text)
     rows = sum(1 for line in text.split("\n")[1:] if line and not line.startswith("#"))
     rows_text = f"{rows} row{'s' if rows != 1 else ''}"
