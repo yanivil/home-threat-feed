@@ -219,6 +219,218 @@ push when rows were added. `launchd/com.spark-ioc-feed.daily.plist` runs it ever
   skipped.
 - By hand with other settings: `DAYS=3 MAX_LOOKUPS=50 bash daily_check.sh`.
 
+## Telegram: alerts, the morning brief and sending indicators
+
+`telegram_bot.py` is the part of the system you talk to from your phone. It follows today's
+capture and messages you within a minute or two when a LAN device reaches something in the
+feed, or when the gateway's Threat Prevention enforces something against a public address;
+every morning the daily check sends you a brief of the previous day through the same bot; and
+indicators you send it are checked on VirusTotal, and the flagged ones added to the feed,
+committed and pushed. Only your own chat is served: a message from any other chat is ignored
+(and logged, once a day per chat). The bot runs on this Mac as the LaunchAgent
+`com.spark-ioc-feed.telegram` and logs to `~/Library/Logs/spark-ioc-feed/telegram-bot.log`.
+`docs/system-design.md`, decision D6, has the design.
+
+### Setting it up
+
+The bot's token and your chat id live in the login Keychain under the service `spark-ioc-feed`,
+like the VirusTotal key; nothing about the bot is stored in the repository. This is your
+checklist, once:
+
+1. Create the bot. In Telegram open BotFather, send `/newbot` and answer its questions; it
+   replies with the bot's token. Store it:
+   ```
+   security add-generic-password -s spark-ioc-feed -a TELEGRAM_BOT_TOKEN -w '<token>' -U
+   ```
+2. Pair your chat. Send the bot any message from your Telegram account, then run
+   ```
+   python3 telegram_bot.py --pair
+   ```
+   It waits up to 50 seconds for a message, then prints your chat id and the command that
+   stores it, which looks like
+   ```
+   security add-generic-password -s spark-ioc-feed -a TELEGRAM_CHAT_ID -w '<chat id>' -U
+   ```
+   Run that command. Without the chat id the bot serves nobody.
+3. Install the agent (edit the paths in the plist first if the repository or your home
+   directory lives elsewhere). It runs through the same `Python.app` as the other two agents,
+   so the Full Disk Access grant described above covers it:
+   ```
+   cp launchd/com.spark-ioc-feed.telegram.plist ~/Library/LaunchAgents/
+   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.spark-ioc-feed.telegram.plist
+   ```
+   If the token or the chat id is missing, the agent logs that and exits after five minutes,
+   and launchd starts it again; store them and it picks them up on a later start.
+4. Optional: a GreyNoise community API key adds GreyNoise's view (a known mass scanner or not)
+   to the attacker notes. Without it that line says `skipped (no key)`.
+   ```
+   security add-generic-password -s spark-ioc-feed -a GREYNOISE_API_KEY -w '<key>' -U
+   ```
+5. The notes also need an Anthropic API key in the Keychain item `ANTHROPIC_API_KEY`, which is
+   already stored on this Mac. Without it a note is the facts followed by
+   `(context note unavailable: no ANTHROPIC_API_KEY in the Keychain)`.
+
+Then check it end to end, and tick each line:
+
+- [ ] `launchctl list | grep telegram` shows a process id next to `com.spark-ioc-feed.telegram`.
+- [ ] `/status` and `/help` both answer in Telegram.
+- [ ] Send one test indicator that VirusTotal flags (a domain that 3 engines flag, or an IP that
+  5 do) with a label, for example `<indicator> bot test`. The bot replies that it is checking,
+  then `<indicator>: added (...)` and `Committed and pushed.`; `git log -1` shows
+  `Add 1 indicator sent from Telegram: bot test`, and the commit is on GitHub.
+- [ ] Append a crafted line to today's capture for a LAN device reaching that indicator (this
+  one is for a domain; for an IP put it in `dst` instead of using `destination_domain_name`).
+  Within a minute an alert arrives, and after it the attacker note:
+  ```
+  printf '%s Action="drop" inzone="Internal" outzone="External" service_id="HTTPS" src="10.45.60.50" dst="104.18.32.47" proto="6" destination_domain_name="<the test domain>" ProductName="VPN-1 & FireWall-1"\n' "$(date +%Y-%m-%dT%H:%M:%S)" >> syslog/spark-$(date +%F).log
+  ```
+- [ ] `/sources` sends yesterday's probing sources as a text file (or says there are none).
+- [ ] `launchctl start com.spark-ioc-feed.daily` and the brief arrives when the run ends. Do the
+  steps above first: while the daily check runs it holds the feed lock and the bot will not add
+  indicators.
+- [ ] Kill the bot's process id (`kill <pid>`, the number `launchctl list | grep telegram`
+  shows); a few seconds later the same command shows a new one, because launchd restarts the
+  job.
+
+To stop the bot: `launchctl bootout gui/$(id -u)/com.spark-ioc-feed.telegram`.
+
+### Talking to it
+
+Send the bot a message and it answers in the same chat. `/help` lists what it understands:
+
+- **Indicators, with no command.** A message of indicators (IPs, domains, URLs, hashes;
+  defanged input such as `evil[.]com` and `hxxps://` is fine), then an optional label:
+  ```
+  evil[.]com hxxps://bad[.]example/x MuddyWater - Unit 42
+  ```
+  Every leading word that is an indicator is checked on VirusTotal and added when enough engines
+  flag it (the thresholds under "Adding indicators checked on VirusTotal"); the first word that
+  is not one starts the label, and commas in the label become spaces. The reply has one line per
+  indicator, a count, and what happened to the commit:
+  ```
+  Checking 2 indicators on VirusTotal, about 1 minute.
+  evil.com: added (Domain 11/94 malicious)
+  harmless.example: clean (Domain 0/94 malicious)
+  1 added, 1 clean, 0 unknown to VirusTotal, 0 already in the feed
+  Committed and pushed.
+  ```
+  An indicator can also come back `in-feed`, `duplicate`, `not-found (VirusTotal has no
+  record)`, `invalid (...)`, `error (...)`, `quota (...)` or `unchecked`. With nothing added
+  the last line is `Nothing added, nothing committed.`
+- **`/trust <indicators> [label]`** adds them without a VirusTotal check, as
+  `vt_check.py --trusted` does: the rows carry `added without VirusTotal check <date>` and join
+  the 90-day first check under "Keeping the feed fresh". There is no wait, so the reply comes
+  in seconds.
+- **`/who <indicator>`** says who is behind an indicator and what it did here: the facts and the
+  note described under "Alerts" below.
+- **`/sources [YYYY-MM-DD]`** sends that day's probing sources as a text file, busiest first,
+  each with its count and `(in feed)` when the feed has it. The default is yesterday.
+- **`/status`** answers in five lines:
+  ```
+  receiver: writing
+  last daily check: 2026-10-28 07:30 done, 45 lookups
+  next re-check 2026-12-18
+  bot: up since 2026-10-28 09:12
+  last error: none
+  ```
+  The receiver line says `no capture for N minutes` once today's capture has not been written
+  for two minutes, and `no capture today` before the first line arrives. The last daily check is
+  `running`, `done, N lookups` or `failed: <the error>`. The last error is the latest one the
+  bot logged, with its time.
+- **`/help`** prints the list. So does any command the bot does not know; a message with no
+  indicator in it gets the list after `No indicator in that message.`
+
+What to expect of an addition:
+
+- At most 50 indicators are taken from one message; the rest are reported as `N not checked,
+  send them again`.
+- Lookups on the free key are 15 seconds apart, so a full message of 50 takes about 13 minutes.
+  The bot says how long before it starts, answers nothing else until it is done (messages sent
+  meanwhile wait their turn; alerts keep coming, the watcher has a thread of its own), and holds
+  the feed lock the whole time.
+- The label becomes `<label> - sent from Telegram` in the row's COMMENT, ahead of the
+  VirusTotal note (`sent from Telegram` alone without a label). The commit holds
+  `spark-ioc-feed.csv` only and reads `Add N indicator(s) sent from Telegram: <label>`.
+- The bot pulls before it writes. If the pull fails nothing is added and the reply says so.
+- If the daily check holds the feed lock, the bot waits 60 seconds for it, then replies
+  `The daily check has been writing the feed for N minute(s); send the indicators again later.`
+  and adds nothing. The daily check, for its part, waits up to twenty minutes for the bot.
+- If a check is interrupted (a refused key, a network error) the reply says `stopped: <why>`;
+  the rows added so far are kept and committed.
+- If the push fails the reply says `Committed, but the push failed (...); the daily check will
+  push it.` The commit stays local and the next daily check pushes it.
+
+### Alerts
+
+Two things alert, each as one message:
+
+- **A LAN device reached something in the feed**, by its name or by its address:
+  ```
+  13:05:17 — 10.45.60.50 tried to reach c2.example.net (MuddyWater - VT 9/94 malicious 2026-10-01) — drop; 1× today
+  ```
+  That is the time, the device, the feed member with its row's COMMENT, what the gateway did
+  with the connection (`drop`, `accept`, ...), and how many times that device has reached that
+  indicator today.
+- **Threat Prevention enforced something** (Anti-Malware, Anti-Virus, Anti-Bot, IPS or
+  SmartDefense, Threat Emulation):
+  ```
+  10:02:11 — Threat Prevention: SmartDefense Header Spoofing from 31.14.32.6 to 10.45.60.50 — drop
+  ```
+  A detection alerts only when the gateway's action is not `monitor` (monitor mode enforces
+  nothing) and one of its two addresses is public. Monitor-mode detections and detections
+  between two LAN addresses appear in the morning brief's count and nowhere else.
+
+The same pair alerts at most once an hour (a detection's pair is its source, destination and
+protection). After a restart the bot reads what today's capture already holds and counts it
+without sending alerts, so a restart repeats none and silences none.
+
+A feed alert, and a detection whose source is the public address (an attack coming in), is
+followed by a second message, the attacker note. It starts with the facts: what the capture
+holds about the indicator, then one line per public service (VirusTotal; for an IP also RDAP,
+Shodan InternetDB and, with a key, GreyNoise; for a domain also RDAP). Then comes a note of at
+most eight lines from Claude Opus 5.5, which may search the web, on who the attacker is, what
+it did here, whether it is aimed at this network or scanning everything, and what to do. A
+detection where a LAN device is the source gets no note. A service that cannot be asked shows as
+`unavailable`; if the model cannot be asked, the facts arrive alone with a line saying why. All
+the alerts of one moment go out before their notes, which take tens of seconds each.
+
+### The morning brief
+
+`daily_check.sh` sends it as its last step, after the push and even when the check stopped early,
+so it reports what that run did. It is one message about the previous day, with these sections
+(a section with nothing in it is left out):
+
+- the title and a totals line: probes dropped and from how many sources, Threat Prevention
+  detections, sources sent to block, outbound hits;
+- `SENT TO BLOCK`: the sources the run added, with their VirusTotal ratio and how often they
+  probed;
+- `OUTBOUND HIT`: LAN devices that reached a flagged destination;
+- `THREAT PREVENTION`: the detections counted per blade;
+- `TOP PROBING SOURCES`: the ten busiest, with `(in feed)` where the feed has them, and how many
+  more there were;
+- `INDICATORS ENTERED`: rows added since the last brief, from the Spark's logs, from news, by
+  hand (Telegram or `--trusted`), and other;
+- `ERRORS`: the first five error lines of the run, then a count;
+- a last line: lookups used of 500, the next re-check date, and the error count.
+
+Each source sent to block then gets its attacker note as a message of its own. When there is no
+bot token or chat id in the Keychain the brief is printed in the daily check's log instead
+(`~/Library/Logs/spark-ioc-feed/daily-check.log`). `syslog/last-brief.json` records the feed
+commit a delivered brief covered, so the next one counts the rows committed since and none
+twice. `python3 spark_brief.py` prints yesterday's brief by hand (`--date YYYY-MM-DD` for another
+day).
+
+### Quotas
+
+The free VirusTotal key allows 500 lookups a day and 4 a minute. The daily check spends up to
+400 of the day's 500 (`MAX_LOOKUPS` lowers that); your checks through the bot (one lookup per
+indicator), each `/who` and each attacker note (one lookup each) share the remaining 100. A
+note's lookup made while a check is running can exceed the 4 a minute; the check then stops,
+keeps the rows it added and lists the indicators it did not check, and you send those again.
+Nothing the bot asks of the public services is retried: a service that does not answer shows as
+`unavailable`, and a 404 is read as its answer (`no record`, or for GreyNoise `not observed
+scanning`).
+
 ## Keeping the feed fresh
 
 Attacker infrastructure rotates: command-and-control servers are re-leased within weeks,
