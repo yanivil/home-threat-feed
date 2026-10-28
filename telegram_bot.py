@@ -42,6 +42,7 @@ import vt_check
 REPO = Path(__file__).resolve().parent
 FEED_NAME = "spark-ioc-feed.csv"
 OFFSET_NAME = "telegram-offset.json"  # in the capture directory, beside checked.json
+POSITION_NAME = "watcher-offset.json"  # the watcher's place in today's capture, beside it
 DAILY_LOG = Path.home() / "Library/Logs/spark-ioc-feed/daily-check.log"
 MAX_INDICATORS = 50  # a message's indicators handled at once: 50 lookups take about 12 minutes
 POLL_TIMEOUT = 50  # seconds a getUpdates long poll waits
@@ -86,8 +87,9 @@ ALERT_ACTIONS = frozenset({"prevent", "drop", "reject", "block", "detect"})
 # the Anti-Virus and Anti-Bot family.
 NOTE_BLADES = frozenset({"Anti-Bot", "Anti Virus", "Threat Emulation", "Anti Malware"})
 
-# `note`: the indicator the alert's attacker-context note is about, None for no note.
-Alert = namedtuple("Alert", "kind device indicator action entry note", defaults=(None,))
+# `note`: the indicator the alert's attacker-context note is about, None for no note; `late`: raised from
+# lines written while the watcher was down (a same-day restart), sent with "late: " and no note.
+Alert = namedtuple("Alert", "kind device indicator action entry note late", defaults=(None, False))
 Notice = namedtuple("Notice", "text")  # a message of the watcher's own, sent like an alert (the caps)
 
 
@@ -278,10 +280,15 @@ class Watcher:
     Anti-Bot, Anti-Virus or Threat Emulation detection's destination. gate() holds the alerts to
     ALERT_LIMIT in ALERT_WINDOW seconds (a Notice says when the cap is reached and, once the window
     clears, how many were held) and the notes to NoteCap's limits. `alert(items)` gets each pass's
-    Alerts and Notices in one call, so their texts can all go out before the slower notes."""
+    Alerts and Notices in one call, so their texts can all go out before the slower notes. After each
+    pass the place reached in the capture is saved (POSITION_NAME), for a restart to pick up from;
+    `log(text)` reports what the watcher could not do."""
 
-    def __init__(self, capture_dir, feed_loader, alert, *, today=None, cooldown=COOLDOWN, clock=time.time):
+    def __init__(self, capture_dir, feed_loader, alert, *, today=None, cooldown=COOLDOWN, clock=time.time,
+                 log=log):
         self.capture_dir = Path(capture_dir)
+        self.position = self.capture_dir / POSITION_NAME
+        self.log = log
         self.feed_loader = feed_loader
         self.alert = alert
         self.today = today or date.today
@@ -293,11 +300,16 @@ class Watcher:
         self.alerted = {}  # (kind, ...pair) -> when it last alerted
         self.alert_cap = AlertCap()
         self.note_cap = NoteCap()
-        self.pending = ""  # the start of a line the receiver is still writing
+        self.pending = b""  # the start of a line the receiver is still writing
+        self.line_no = 0  # complete lines read from the open capture
+        self.quiet_end = self.late_end = 0  # its bytes only counted, then alerted late (see follow)
+        self.position_failed = False
 
-    def scan(self, lines, catch_up=False):
+    def scan(self, lines, catch_up=False, first_line=1):
         """The Alerts the capture `lines` raise, past the cooldown. With `catch_up` the feed hits are
-        only counted: no Alert, and no cooldown started."""
+        only counted: no Alert, and no cooldown started. A line that cannot be read in any way costs
+        only itself; the pass logs how many there were and the first one's number (`first_line` is the
+        number of the first of `lines`), never what they hold."""
         self.feed = self.feed_loader()
         today = self.today()
         if today != self.day:
@@ -305,17 +317,20 @@ class Watcher:
             self.counts.clear()
             now = self.clock()
             self.alerted = {key: at for key, at in self.alerted.items() if now - at < self.cooldown}
-        alerts = []
-        for line in lines:
+        alerts, failed = [], []
+        for number, line in enumerate(lines, first_line):
             if not line.strip():
                 continue
-            entry = spark_logs.parse_entry(line.rstrip("\n"))
             try:
-                found = self._match(entry)
-            except ValueError:  # a malformed resource URL (spark_logs._host_name)
+                found = self._match(spark_logs.parse_entry(line.rstrip("\n")))
+            except Exception as e:  # the alerts must not stop over one line
+                failed.append((number, type(e).__name__))
                 continue
             if found and not catch_up and self._due(found[1]):
                 alerts.append(found[0])
+        if failed:
+            self.log(f"the watcher skipped {spark_brief._count(len(failed), 'capture line')} it could not read, "
+                     f"the first at line {failed[0][0]} ({failed[0][1]})")
         return alerts
 
     def _match(self, entry):
@@ -340,9 +355,10 @@ class Watcher:
                 return Alert("detection", device, external, action.lower(), entry, note), key
         return None
 
-    def gate(self, alerts):
+    def gate(self, alerts, late=False):
         """The pass's `alerts` under the caps, with the Notices they call for: the alerts past the
-        alert cap are counted and dropped, a note past the note cap is taken off its alert."""
+        alert cap are counted and dropped, a note past the note cap is taken off its alert. `late`
+        alerts are marked so, and get no note."""
         now = self.clock()
         cleared = self.alert_cap.tick(now)
         items = [Notice(cleared)] if cleared else []
@@ -352,7 +368,9 @@ class Watcher:
                 items.append(Notice(notice))
             if not send:
                 continue
-            if alert.note and not self.note_cap.admit(alert.note, now):
+            if late:
+                alert = alert._replace(note=None, late=True)
+            elif alert.note and not self.note_cap.admit(alert.note, now):
                 alert = alert._replace(note=None)
             items.append(alert)
         return items
@@ -365,7 +383,11 @@ class Watcher:
         return True
 
     def describe(self, alert):
-        """The alert's message."""
+        """The alert's message, "late: " first for a late one."""
+        text = self._describe(alert)
+        return f"late: {text}" if alert.late else text
+
+    def _describe(self, alert):
         entry = alert.entry
         at = attacker_context.clean(entry.get("received", "").partition("T")[2][:8]) or ""
         if alert.kind == "feed":
@@ -383,24 +405,27 @@ class Watcher:
         """Alert on the lines written to today's capture until `stop_event` is set, waiting `poll`
         seconds whenever nothing is new: a missing file is waited for, a replaced one read again, and
         at midnight the new day's file followed. What today's file holds when the watcher starts is
-        counted without alerting, so a restart repeats no alert and silences none."""
+        counted without alerting, except that when the saved position names this very file (same day,
+        same inode) only the lines up to it are counted and the ones after it, written while the
+        watcher was down, are alerted late: a same-day restart repeats no alert and silences none."""
         day = handle = None
-        catching_up = True
+        starting = True
         self.day = None  # count today afresh
         try:
             while not stop_event.is_set():
                 today = self.today()
                 if handle is not None and today != day:
-                    self._deliver(self.gate(self.scan(self._lines(handle))))  # the old day's last lines
+                    self._pass(handle, day, list(self._lines(handle)))  # the old day's last lines
                     handle.close()
                     handle = None
                 if handle is None:
-                    day, handle, self.pending = today, self._open(today), ""
-                lines = list(itertools.islice(self._lines(handle), BATCH)) if handle else []
-                if lines:
-                    self._deliver(self.gate(self.scan(lines, catch_up=catching_up)))
-                catching_up = catching_up and len(lines) == BATCH
-                if not lines:
+                    day, handle = today, self._open(today)
+                    self._start(handle, day, starting)
+                    starting = False
+                batch = list(itertools.islice(self._lines(handle), BATCH)) if handle else []
+                if batch:
+                    self._pass(handle, day, batch)
+                else:
                     self._deliver(self.gate([]))  # the alert cap's window may clear without a new alert
                     if handle is not None and self._replaced(handle):
                         handle.close()
@@ -410,25 +435,78 @@ class Watcher:
             if handle is not None:
                 handle.close()
 
+    def _start(self, handle, day, starting):
+        """Set what of the capture just opened is only counted and what is alerted late: nothing of a
+        file opened later on (a new day, a replaced file); for the one open at start, everything it
+        holds, or with a saved position for it, only what lies before the position."""
+        self.pending, self.line_no = b"", 0
+        self.quiet_end = self.late_end = 0
+        if handle is None or not starting:
+            return
+        stat = os.fstat(handle.fileno())
+        self.quiet_end = self.late_end = stat.st_size
+        saved = self._saved()
+        if saved and saved[0] == day.isoformat() and saved[1] == stat.st_ino and saved[2] <= stat.st_size:
+            self.quiet_end = saved[2]
+
+    def _saved(self):
+        """(day, inode, offset) of the saved position; None without a readable one."""
+        try:
+            position = json.loads(self.position.read_text())
+            day, inode, offset = position["day"], position["inode"], position["offset"]
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+        if not (isinstance(day, str) and all(isinstance(n, int) and not isinstance(n, bool) and n >= 0
+                                             for n in (inode, offset))):
+            return None
+        return day, inode, offset
+
+    def _pass(self, handle, day, batch):
+        """Scan one batch of (line, end offset, number), deliver what it raises, save the position."""
+        if not batch:
+            return
+        parts = (([item for item in batch if item[1] <= self.quiet_end], "counted"),
+                 ([item for item in batch if self.quiet_end < item[1] <= self.late_end], "late"),
+                 ([item for item in batch if item[1] > self.late_end], "live"))
+        items = []
+        for part, mode in parts:
+            if part:
+                alerts = self.scan([line for line, _, _ in part], catch_up=mode == "counted", first_line=part[0][2])
+                items += self.gate(alerts, late=mode == "late")
+        self._deliver(items)
+        self._save(day, handle, batch[-1][1])
+
+    def _save(self, day, handle, offset):
+        position = {"day": day.isoformat(), "inode": os.fstat(handle.fileno()).st_ino, "offset": offset}
+        temporary = self.position.with_name(self.position.name + ".tmp")
+        try:
+            temporary.write_text(json.dumps(position) + "\n")
+            os.replace(temporary, self.position)
+        except OSError as e:
+            if not self.position_failed:  # once: it would fail on every pass
+                self.position_failed = True
+                self.log(f"the watcher's position could not be saved ({e}); a restart will only count what it missed")
+
     def _deliver(self, items):
         if items:
             self.alert(items)
 
     def _open(self, day):
         try:
-            return (self.capture_dir / f"spark-{day:%Y-%m-%d}.log").open(encoding="utf-8", errors="replace")
+            return (self.capture_dir / f"spark-{day:%Y-%m-%d}.log").open("rb")
         except FileNotFoundError:
             return None
 
     def _lines(self, handle):
-        """The complete lines written to `handle` since the last read; a line still being written
-        waits in `pending` for its end."""
-        for line in iter(handle.readline, ""):
-            if not line.endswith("\n"):
-                self.pending += line
+        """(line, the offset just past it, its number) for each complete line written to `handle` since
+        the last read; a line still being written waits in `pending` for its end."""
+        for raw in iter(handle.readline, b""):
+            if not raw.endswith(b"\n"):
+                self.pending += raw
                 return
-            line, self.pending = self.pending + line, ""
-            yield line
+            raw, self.pending = self.pending + raw, b""
+            self.line_no += 1
+            yield raw.decode("utf-8", errors="replace"), handle.tell(), self.line_no
 
     @staticmethod
     def _replaced(handle):
@@ -458,7 +536,8 @@ class Bot:
         self.last_error = None  # (when, message) of the last error logged, for /status
         self.ignored = {}  # "<chat type> <chat id>" -> the day it was last logged
         self.offset = self.load_offset()
-        self.watcher = Watcher(self.syslog, FeedFile(self.feed), self.on_alerts, today=self.today, clock=clock)
+        self.watcher = Watcher(self.syslog, FeedFile(self.feed), self.on_alerts, today=self.today, clock=clock,
+                               log=self.error)
         self.note_queue = queue.Queue(maxsize=NOTE_QUEUE)  # the notes' indicators, for the note thread
         self.note_thread = None  # started with the first note
 

@@ -888,8 +888,12 @@ class WatcherTest(unittest.TestCase):
         self.clock = Clock()
         self.day = TODAY
         self.alerts, self.batches = [], []
-        self.watcher = telegram_bot.Watcher(self.dir, telegram_bot.FeedFile(self.feed_path), self.deliver,
-                                            today=lambda: self.day, clock=self.clock.now)
+        self.logged = []
+        self.watcher = self.make_watcher()
+
+    def make_watcher(self):
+        return telegram_bot.Watcher(self.dir, telegram_bot.FeedFile(self.feed_path), self.deliver,
+                                    today=lambda: self.day, clock=self.clock.now, log=self.logged.append)
 
     def deliver(self, batch):
         """The watcher's `alert`: it gets each batch's Alerts in one call."""
@@ -1083,6 +1087,33 @@ class WatcherTest(unittest.TestCase):
     def test_a_malformed_line_does_not_stop_the_scan(self):
         self.assertEqual(len(self.watcher.scan([MALFORMED, "", "garbage", OUTBOUND_TO_C2])), 1)
 
+    def test_a_line_that_fails_in_any_way_costs_only_itself_and_is_logged_once_without_its_content(self):
+        real = telegram_bot.spark_logs.candidate
+
+        def candidate(entry, *args):
+            if entry.get("Uuid") == "{0xBAD}":
+                raise KeyError("SECRET-CONTENT")
+            return real(entry, *args)
+
+        bad = OUTBOUND_TO_C2.replace("{0x3}", "{0xBAD}")
+        with patch("spark_logs.candidate", candidate):
+            alerts = self.watcher.scan([bad, OUTBOUND_TO_C2, bad, OUTBOUND_TO_FEED_IP], first_line=41)
+
+        self.assertEqual([a.indicator for a in alerts], ["c2.example.net", "185.1.2.7"])
+        self.assertEqual(self.logged, ["the watcher skipped 2 capture lines it could not read, "
+                                       "the first at line 41 (KeyError)"])
+
+    def test_a_late_alert_says_so_and_gets_no_note(self):
+        [alert] = self.watcher.gate(self.watcher.scan([OUTBOUND_TO_C2]), late=True)
+
+        self.assertEqual((alert.late, alert.note), (True, None))
+        self.assertTrue(self.watcher.describe(alert).startswith("late: 09:15:02 — "), self.watcher.describe(alert))
+
+    def test_late_alerts_count_under_the_alert_cap(self):
+        items = self.watcher.gate(self.watcher.scan(self.probes(0, 11)), late=True)
+
+        self.assertEqual([type(item).__name__ for item in items], ["Alert"] * 10 + ["Notice"])
+
     # follow(): a thread reading the capture as the receiver writes it, polling every 10 ms. The stop
     # event counts the watcher's idle waits: once it waits, it has read everything there was.
 
@@ -1093,9 +1124,9 @@ class WatcherTest(unittest.TestCase):
         with self.capture(day).open("a") as f:
             f.write(text)
 
-    def follow(self):
+    def follow(self, watcher=None):
         stop = IdleCount()
-        thread = threading.Thread(target=self.watcher.follow, args=(stop, 0.01))
+        thread = threading.Thread(target=(watcher or self.watcher).follow, args=(stop, 0.01))
         thread.start()
 
         def end():
@@ -1159,6 +1190,72 @@ class WatcherTest(unittest.TestCase):
 
         self.assertEqual([a.indicator for a in self.alerts], ["c2.example.net"])
         self.assertTrue(self.watcher.describe(self.alerts[0]).endswith("; 2× today"))
+
+    def position(self):
+        return json.loads((self.dir / "watcher-offset.json").read_text())
+
+    def test_the_position_is_saved_after_each_pass(self):
+        self.append(OUTBOUND_TO_C2 + "\n")
+        stop, _ = self.follow()
+        self.idle(stop)
+        self.append(OUTBOUND_TO_FEED_IP + "\n" + OUTBOUND_TO_RANGE[:40])
+        self.wait_for(1)
+        self.idle(stop)
+
+        self.assertEqual(self.position(), {"day": "2026-10-28", "inode": self.capture().stat().st_ino,
+                                           "offset": len((OUTBOUND_TO_C2 + "\n" + OUTBOUND_TO_FEED_IP + "\n").encode())},
+                         "up to the last whole line")
+
+    def test_a_same_day_restart_alerts_what_it_missed_as_late_and_without_notes(self):
+        self.append(OUTBOUND_TO_C2 + "\n")
+        stop, thread = self.follow()
+        self.idle(stop)
+        self.append(OUTBOUND_TO_FEED_IP + "\n")
+        self.wait_for(1)
+        self.idle(stop)
+        stop.set()
+        thread.join(5)
+        self.append(INBOUND_PREVENTED + "\n")  # while the watcher was down
+
+        restarted = self.make_watcher()
+        stop, _ = self.follow(restarted)
+        self.wait_for(2)
+        self.idle(stop)
+
+        late = self.alerts[1]
+        self.assertEqual((late.kind, late.indicator, late.late, late.note), ("detection", "185.1.2.66", True, None))
+        self.assertTrue(restarted.describe(late).startswith("late: 08:12:40 — Threat Prevention"))
+        self.assertEqual(len(self.alerts), 2, "what came before the saved position is not alerted again")
+
+        self.append(OUTBOUND_TO_RANGE + "\n")
+        self.wait_for(3)
+        self.assertFalse(self.alerts[2].late, "after the gap, alerts are live again")
+
+    def test_a_restart_after_a_day_change_only_counts(self):
+        self.append(OUTBOUND_TO_C2 + "\n" + INBOUND_PREVENTED + "\n")
+        (self.dir / "watcher-offset.json").write_text(json.dumps(
+            {"day": "2026-10-27", "inode": self.capture().stat().st_ino, "offset": 0}))
+
+        stop, _ = self.follow()
+        self.idle(stop)
+
+        self.assertEqual(self.alerts, [])
+        self.assertEqual(sum(self.watcher.counts.values()), 1, "the feed hit is counted")
+
+    def test_a_position_for_another_file_or_an_unreadable_one_only_counts(self):
+        for position in ({"day": "2026-10-28", "inode": -1, "offset": 0}, {"day": "2026-10-28"}, "garbage",
+                         {"day": "2026-10-28", "inode": "x", "offset": 0}):
+            with self.subTest(position=position):
+                self.alerts.clear()
+                self.capture().write_text(INBOUND_PREVENTED + "\n")
+                (self.dir / "watcher-offset.json").write_text(json.dumps(position))
+                watcher = self.make_watcher()
+                stop, thread = self.follow(watcher)
+                self.idle(stop)
+                stop.set()
+                thread.join(5)
+
+                self.assertEqual(self.alerts, [])
 
     def test_the_lines_of_one_pass_are_handed_over_together(self):
         self.append("")
