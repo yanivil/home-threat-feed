@@ -5,10 +5,12 @@ The addresses are public ones (185.1.2.x): vt_check.classify refuses the documen
 spark_logs.candidate never takes them for an outbound destination."""
 
 import contextlib
+import http.client
 import io
 import json
 import os
 import plistlib
+import signal
 import subprocess
 import tempfile
 import threading
@@ -41,6 +43,20 @@ OUTBOUND_TO_FEED_IP = OUTBOUND_TO_C2.replace('dst="104.18.32.47"', 'dst="185.1.2
 OUTBOUND_TO_RANGE = OUTBOUND_TO_C2.replace('dst="104.18.32.47"', 'dst="45.155.205.233"').replace(
     'destination_domain_name="c2.example.net" ', "")
 MALFORMED = OUTBOUND_TO_C2.replace('destination_domain_name="c2.example.net"', 'resource="http://[::1"')
+# Threat Prevention rows shaped like spark_logs' INBOUND_PREVENT: a LAN device's request the IPS let
+# through, the same in monitor mode, and one between two LAN addresses.
+OUTBOUND_DETECTION = (INBOUND_PREVENT.replace("2026-10-20T20:57:09", "2026-10-28T10:02:11")
+                      .replace('Action=" "', 'Action="accept"').replace('src="31.14.32.6"', 'src="10.68.144.121"')
+                      .replace('dst="176.230.223.47"', 'dst="104.18.32.47"')
+                      .replace('Protection Name=""', 'Protection Name="Header Spoofing"')
+                      .replace('ProductName="Anti Malware"', 'ProductName="SmartDefense"'))
+MONITORED_DETECTION = OUTBOUND_DETECTION.replace('Action="accept"', 'Action="monitor"')
+LAN_DETECTION = (OUTBOUND_DETECTION.replace('src="10.68.144.121"', 'src="10.68.144.100"')
+                 .replace('dst="104.18.32.47"', 'dst="10.68.144.1"').replace("Header Spoofing", "Max Ping Size")
+                 .replace('Action="accept"', 'Action="drop"'))
+# The Spark enforces the feed through Anti-Bot, so a feed hit can come as a detection row too.
+FEED_HIT_DETECTED = OUTBOUND_TO_C2.replace('ProductName="VPN-1 & FireWall-1"',
+                                           'Protection Name="spark-ioc-feed" ProductName="Anti-Bot"')
 
 FEED = (HEADER
         + "vt-domain-c2,c2.example.net,Domain,high,high,AB,MuddyWater - VT 9/94 malicious 2026-10-01\n"
@@ -143,6 +159,18 @@ def quiet(test):
     return err
 
 
+class LogTest(unittest.TestCase):
+    def test_a_log_line_is_one_write_so_the_two_threads_do_not_interleave(self):
+        writes = []
+        stream = type("Stream", (), {"write": lambda self, text: writes.append(text), "flush": lambda self: None})()
+
+        with patch("sys.stderr", stream):
+            telegram_bot.log("watcher failed")
+
+        self.assertEqual(len(writes), 1, writes)
+        self.assertRegex(writes[0], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} watcher failed\n$")
+
+
 class ParseMessageTest(unittest.TestCase):
     def test_bare_text_is_a_check_of_the_leading_indicators_and_the_rest_is_the_label(self):
         self.assertEqual(telegram_bot.parse_message("evil[.]com 185.1.2.9 MuddyWater - Unit 42"),
@@ -165,6 +193,16 @@ class ParseMessageTest(unittest.TestCase):
     def test_commas_and_newlines_in_the_label_become_spaces(self):
         self.assertEqual(telegram_bot.parse_message("evil.com Unit 42,\nMuddyWater, APT34"),
                          ("check", ["evil.com"], "Unit 42 MuddyWater APT34"))
+
+    def test_a_comma_after_an_indicator_separates_it_from_the_next(self):
+        self.assertEqual(telegram_bot.parse_message("a.example, b.example, Campaign"),
+                         ("check", ["a.example", "b.example"], "Campaign"))
+
+    def test_a_url_with_a_comma_is_not_shortened_into_another_url(self):
+        verb, indicators, label = telegram_bot.parse_message("hxxps://bad[.]example/a?x=1,2 Campaign")
+
+        self.assertEqual(indicators, [])
+        self.assertEqual(label, "hxxps://bad[.]example/a?x=1 2 Campaign")
 
     def test_the_label_starts_at_the_first_token_that_is_not_an_indicator(self):
         self.assertEqual(telegram_bot.parse_message("/trust 185.1.2.9 Cyberint report on bad.example"),
@@ -301,8 +339,8 @@ class AddTest(BotTestCase):
         self.send("evil.com")
 
         self.assertEqual(sum(self.clock.sleeps), 60)
-        self.assertEqual(self.tg.sent[-1], "The daily check has been writing the feed for 26 minutes; "
-                                           "send the indicators again later.")
+        self.assertEqual(self.tg.sent, ["The daily check has been writing the feed for 26 minutes; "
+                                        "send the indicators again later."], "no 'Checking…' before the lock is ours")
         self.assertEqual((self.git.calls, self.vt.calls), ([], []))
         self.assertEqual(self.feed.read_text(), FEED)
         self.assertTrue(self.lock.exists(), "the daily check's lock is not ours to remove")
@@ -340,8 +378,39 @@ class AddTest(BotTestCase):
 
         self.send("evil.com 185.1.2.9")
 
-        self.assertIn("stopped: VirusTotal refused the API key: HTTP 401 WrongCredentialsError", self.tg.sent[-1])
+        self.assertEqual(self.tg.sent[-1].splitlines(), [
+            "evil.com: added (Domain 11/94 malicious)",
+            "stopped: VirusTotal refused the API key: HTTP 401 WrongCredentialsError",
+            "1 added, 0 clean, 0 unknown to VirusTotal, 0 already in the feed",
+            "Committed and pushed."])
         self.assertEqual([c[1] for c in self.git.calls], ["pull", "add", "commit", "push"])
+
+    def test_a_network_error_mid_check_keeps_and_commits_what_was_added(self):
+        def fetch(path):
+            if path == vt_check.api_path("IP", "185.1.2.9"):
+                raise urllib.error.URLError("timed out")
+            return self.vt(path)
+
+        reply = self.make_bot(fetch=fetch).add(["evil.com", "185.1.2.9"], "", trusted=False)
+
+        self.assertEqual(reply.splitlines(), [
+            "evil.com: added (Domain 11/94 malicious)",
+            "stopped: <urlopen error timed out>",
+            "1 added, 0 clean, 0 unknown to VirusTotal, 0 already in the feed",
+            "Committed and pushed."])
+        self.assertIn(",evil.com,Domain,high,high,AB,sent from Telegram - VT 11/94 malicious 2026-10-28\n",
+                      self.feed.read_text())
+        self.assertEqual(self.git.calls[2][3], "Add 1 indicator sent from Telegram")
+        self.assertFalse(self.lock.exists())
+
+    def test_a_systemexit_mid_check_still_releases_the_lock(self):
+        def fetch(path):
+            raise SystemExit(0)  # what SIGTERM raises (see main)
+
+        with self.assertRaises(SystemExit):
+            self.make_bot(fetch=fetch).add(["evil.com"], "", trusted=False)
+
+        self.assertFalse(self.lock.exists())
 
     def test_without_a_virustotal_key_nothing_is_done(self):
         bot = self.make_bot(fetch=None)
@@ -409,6 +478,24 @@ class UpdatesTest(BotTestCase):
         self.send("/help")
 
         self.assertIn("Forbidden", self.err.getvalue())
+
+    def test_a_reply_that_fails_oddly_is_logged_and_the_next_update_handled(self):
+        replies = []
+
+        def send_message(text):
+            if not replies:
+                replies.append(text)
+                raise TypeError("odd body")
+            replies.append(text)
+
+        self.tg.send_message = send_message
+        self.updates([message("/help", update_id=1), message("/status", update_id=2)])
+
+        self.assertEqual(self.bot.run_once(), 2)
+
+        self.assertEqual(len(replies), 2)
+        self.assertIn("odd body", self.bot.status().splitlines()[-1])
+        self.assertEqual(self.bot.offset, 3)
 
 
 class SourcesTest(BotTestCase):
@@ -512,30 +599,55 @@ class WhoTest(BotTestCase):
 
 
 class AlertTest(BotTestCase):
+    """The watcher hands the bot each batch's alerts in one call (on_alerts)."""
+
     def test_an_alert_goes_out_then_the_context_note_on_the_indicator(self):
-        [alert] = self.bot.watcher.scan([OUTBOUND_TO_C2])
+        alerts = self.bot.watcher.scan([OUTBOUND_TO_C2])
 
         with patch("attacker_context.note", return_value="note on c2") as note:
-            self.bot.on_alert(alert)
+            self.bot.on_alerts(alerts)
 
         self.assertEqual(self.tg.sent, ["09:15:02 — 10.68.144.121 tried to reach c2.example.net "
                                         "(MuddyWater - VT 9/94 malicious 2026-10-01) — drop; 1× today", "note on c2"])
         note.assert_called_once_with("c2.example.net", self.syslog, "2026-10-28")
 
-    def test_a_detection_gets_the_note_on_its_external_address(self):
-        [alert] = self.bot.watcher.scan([INBOUND_PREVENT])
+    def test_an_inbound_detection_gets_the_note_on_its_source(self):
+        alerts = self.bot.watcher.scan([INBOUND_PREVENT])
 
         with patch("attacker_context.note", return_value="note") as note:
-            self.bot.on_alert(alert)
+            self.bot.on_alerts(alerts)
 
+        self.assertEqual(len(self.tg.sent), 2)
         note.assert_called_once_with("31.14.32.6", self.syslog, "2026-10-28")
 
+    def test_an_outbound_detection_gets_its_alert_but_no_note(self):
+        alerts = self.bot.watcher.scan([OUTBOUND_DETECTION])
+
+        with patch("attacker_context.note", return_value="note") as note:
+            self.bot.on_alerts(alerts)
+
+        self.assertEqual(self.tg.sent, ["10:02:11 — Threat Prevention: SmartDefense Header Spoofing from 10.68.144.121 "
+                                        "to 104.18.32.47 — accept"])
+        note.assert_not_called()
+
+    def test_a_burst_sends_every_alert_before_the_first_note(self):
+        alerts = self.bot.watcher.scan([OUTBOUND_TO_C2, OUTBOUND_TO_FEED_IP, INBOUND_PREVENT])
+
+        with patch("attacker_context.note", side_effect=lambda indicator, *a: f"note on {indicator}"):
+            self.bot.on_alerts(alerts)
+
+        self.assertEqual([text.split(" — ")[1] if " — " in text else text for text in self.tg.sent], [
+            "10.68.144.121 tried to reach c2.example.net (MuddyWater - VT 9/94 malicious 2026-10-01)",
+            "10.68.144.121 tried to reach 185.1.2.7 (Cyberint - added without VirusTotal check 2026-10-01)",
+            "Threat Prevention: Anti-Malware IP reputation from 31.14.32.6 to 176.230.223.47",
+            "note on c2.example.net", "note on 185.1.2.7", "note on 31.14.32.6"])
+
     def test_an_alert_telegram_refuses_is_logged(self):
-        [alert] = self.bot.watcher.scan([OUTBOUND_TO_C2])
+        alerts = self.bot.watcher.scan([OUTBOUND_TO_C2])
         self.tg.send_message = lambda text: (_ for _ in ()).throw(telegram_api.TelegramError("Too Many Requests"))
 
         with patch("attacker_context.note", return_value="note"):
-            self.bot.on_alert(alert)
+            self.bot.on_alerts(alerts)
 
         self.assertIn("Too Many Requests", self.err.getvalue())
         self.assertIn("Too Many Requests", self.bot.status().splitlines()[-1])
@@ -555,6 +667,15 @@ class RunForeverTest(BotTestCase):
         self.assertIn("Bad Gateway", self.err.getvalue())
         self.assertIn("no route", self.err.getvalue())
         self.assertEqual(threading.active_count(), threads, "the watcher thread was joined")
+
+    def test_an_odd_failure_of_a_poll_is_logged_and_the_loop_goes_on(self):
+        self.tg.batches = [http.client.IncompleteRead(b"partial"), [message("/help")], KeyboardInterrupt()]
+
+        self.bot.run_forever()
+
+        self.assertEqual(self.clock.sleeps, [10])
+        self.assertEqual(self.tg.sent, [telegram_bot.HELP])
+        self.assertIn("IncompleteRead", self.bot.status().splitlines()[-1])
 
     def test_the_watcher_thread_survives_an_exception(self):
         stop = threading.Event()
@@ -583,9 +704,14 @@ class WatcherTest(unittest.TestCase):
         self.feed_path.write_text(FEED)
         self.clock = Clock()
         self.day = TODAY
-        self.alerts = []
-        self.watcher = telegram_bot.Watcher(self.dir, telegram_bot.FeedFile(self.feed_path), self.alerts.append,
+        self.alerts, self.batches = [], []
+        self.watcher = telegram_bot.Watcher(self.dir, telegram_bot.FeedFile(self.feed_path), self.deliver,
                                             today=lambda: self.day, clock=self.clock.now)
+
+    def deliver(self, batch):
+        """The watcher's `alert`: it gets each batch's Alerts in one call."""
+        self.batches.append(list(batch))
+        self.alerts.extend(batch)
 
     def summary(self, alerts):
         return [(a.kind, a.device, a.indicator, a.action) for a in alerts]
@@ -621,6 +747,33 @@ class WatcherTest(unittest.TestCase):
         self.assertEqual(self.watcher.describe(alerts[0]),
                          "20:57:09 — Threat Prevention: Anti-Malware IP reputation from 31.14.32.6 to 176.230.223.47"
                          " — detected")
+
+    def test_a_detection_of_a_lan_device_reaching_out_alerts(self):
+        self.assertEqual(self.summary(self.watcher.scan([OUTBOUND_DETECTION])),
+                         [("detection", "10.68.144.121", "104.18.32.47", "accept")])
+
+    def test_monitor_mode_and_lan_only_detections_are_left_to_the_brief(self):
+        self.assertEqual(self.watcher.scan([MONITORED_DETECTION, LAN_DETECTION]), [])
+
+    def test_two_protections_on_the_same_pair_both_alert(self):
+        other = INBOUND_PREVENT.replace('Protection Type="IP reputation"', 'Protection Type="Scanner"')
+
+        self.assertEqual(len(self.watcher.scan([INBOUND_PREVENT, other])), 2)
+
+    def test_a_feed_hit_logged_as_a_detection_gives_the_feed_alert_only(self):
+        self.assertEqual(self.summary(self.watcher.scan([FEED_HIT_DETECTED])),
+                         [("feed", "10.68.144.121", "c2.example.net", "drop")])
+
+    def test_cooldowns_older_than_the_cooldown_are_dropped_at_midnight(self):
+        self.watcher.scan([OUTBOUND_TO_C2])
+        self.clock.time += 1800
+        self.watcher.scan([INBOUND_PREVENT])
+        self.clock.time += 1800
+        self.day += timedelta(days=1)
+
+        self.watcher.scan([])
+
+        self.assertEqual([key[0] for key in self.watcher.alerted], ["detection"])
 
     def test_the_alert_text_counts_the_pair_today(self):
         alerts = self.watcher.scan([OUTBOUND_TO_C2, OUTBOUND_TO_C2])
@@ -720,14 +873,24 @@ class WatcherTest(unittest.TestCase):
         self.append(OUTBOUND_TO_C2 + "\n")
         stop, _ = self.follow()
         self.idle(stop)
-        self.append(OUTBOUND_TO_FEED_IP + "\n")
-        self.wait_for(1)
-        self.clock.time += 3600
+        self.assertEqual(self.alerts, [])
+
+        # No cooldown started for what was only counted: a new hit on that pair alerts at once.
         self.append(OUTBOUND_TO_C2 + "\n")
+        self.wait_for(1)
+
+        self.assertEqual([a.indicator for a in self.alerts], ["c2.example.net"])
+        self.assertTrue(self.watcher.describe(self.alerts[0]).endswith("; 2× today"))
+
+    def test_the_lines_of_one_pass_are_handed_over_together(self):
+        self.append("")
+        stop, _ = self.follow()
+        self.idle(stop)
+
+        self.append(OUTBOUND_TO_C2 + "\n" + OUTBOUND_TO_FEED_IP + "\n")
         self.wait_for(2)
 
-        self.assertEqual([a.indicator for a in self.alerts], ["185.1.2.7", "c2.example.net"])
-        self.assertTrue(self.watcher.describe(self.alerts[1]).endswith("; 2× today"))
+        self.assertEqual([[a.indicator for a in batch] for batch in self.batches], [["c2.example.net", "185.1.2.7"]])
 
     def test_a_line_still_being_written_waits_for_its_end(self):
         self.append("")
@@ -786,6 +949,18 @@ class MainTest(unittest.TestCase):
         self.assertEqual(self.tg.sent, [telegram_bot.HELP])
         self.assertEqual(self.tg.polls, [(0, 0)])
         self.assertEqual(json.loads((self.repo / "syslog" / "telegram-offset.json").read_text()), {"offset": 2})
+
+    def test_launchds_sigterm_becomes_an_exit_that_runs_the_finally_blocks(self):
+        # signal.signal is patched: the test process keeps its own SIGTERM handling.
+        with patch("signal.signal") as install, patch.object(telegram_bot.Bot, "run_forever") as run_forever:
+            code, out, err, sleep = self.main([], telegram=self.tg)
+
+        self.assertEqual(code, 0, err)
+        run_forever.assert_called_once_with()
+        signum, handler = install.call_args[0]
+        self.assertEqual(signum, signal.SIGTERM)
+        with self.assertRaises(SystemExit):
+            handler(signal.SIGTERM, None)
 
     def test_without_the_bot_in_the_keychain_it_says_what_is_missing_and_waits_before_exiting(self):
         code, out, err, sleep = self.main([])

@@ -19,6 +19,7 @@ import json
 import math
 import os
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -68,14 +69,16 @@ Alert = namedtuple("Alert", "kind device indicator action entry")
 
 
 def log(text, at=None):
-    print(f"{at or datetime.now():%Y-%m-%d %H:%M:%S} {text}", file=sys.stderr, flush=True)
+    # One write per line: the command loop and the watcher thread both log.
+    sys.stderr.write(f"{at or datetime.now():%Y-%m-%d %H:%M:%S} {text}\n")
+    sys.stderr.flush()
 
 
 def parse_message(text):
     """(verb, indicators, label) of a message: verb "check" for bare text, else the command
     (an unknown one is "help"); the indicators are the leading words vt_check.classify accepts,
-    normalised; the label is the rest, commas and line breaks made spaces."""
-    words = text.replace(",", " ").split()
+    normalised, a comma after one allowed; the label is the rest, commas and line breaks made spaces."""
+    words = text.split()
     verb = "check"
     if words and words[0].startswith("/"):
         command = words.pop(0)[1:].split("@")[0].lower()
@@ -83,10 +86,10 @@ def parse_message(text):
     indicators = []
     for word in words:
         try:
-            indicators.append(vt_check.classify(word)[1])
+            indicators.append(vt_check.classify(word.rstrip(","))[1])
         except ValueError:
             break
-    return verb, indicators, " ".join(words[len(indicators):])
+    return verb, indicators, " ".join(" ".join(words[len(indicators):]).replace(",", " ").split())
 
 
 def summary(statuses, trusted):
@@ -143,16 +146,22 @@ def _protection(entry):
 
 
 def _external(entry):
-    """(external address, the other one) of a detection: the source unless it is not public."""
+    """(public address, the other one) of a detection, the source first; None when both are on the LAN."""
     src, dst = entry["src"], entry["dst"]
-    ip = spark_logs._ip(src)
-    return (src, dst) if ip is not None and ip.is_global else (dst, src)
+    for public, other in ((src, dst), (dst, src)):
+        ip = spark_logs._ip(public)
+        if ip is not None and ip.is_global:
+            return public, other
+    return None
 
 
 class Watcher:
-    """Follows today's capture in `capture_dir` and hands `alert` an Alert for a LAN device reaching a
-    member of the feed `feed_loader()` returns ("feed") and for a Threat Prevention detection
-    ("detection"); the same pair is alerted at most once per `cooldown` seconds of `clock`."""
+    """Follows today's capture in `capture_dir` and raises an Alert for a LAN device reaching a member
+    of the feed `feed_loader()` returns ("feed") and for a Threat Prevention detection that enforced
+    something on traffic with a public address ("detection"; the monitor-mode and LAN-only ones are
+    left to the morning brief). The same pair is alerted at most once per `cooldown` seconds of
+    `clock`. `alert(alerts)` gets each pass's Alerts in one call, so their texts can all go out
+    before the slower notes."""
 
     def __init__(self, capture_dir, feed_loader, alert, *, today=None, cooldown=COOLDOWN, clock=time.time):
         self.capture_dir = Path(capture_dir)
@@ -167,13 +176,16 @@ class Watcher:
         self.alerted = {}  # (kind, ...pair) -> when it last alerted
         self.pending = ""  # the start of a line the receiver is still writing
 
-    def scan(self, lines):
-        """The Alerts the capture `lines` raise, past the cooldown."""
+    def scan(self, lines, catch_up=False):
+        """The Alerts the capture `lines` raise, past the cooldown. With `catch_up` the feed hits are
+        only counted: no Alert, and no cooldown started."""
         self.feed = self.feed_loader()
         today = self.today()
         if today != self.day:
             self.day = today
             self.counts.clear()
+            now = self.clock()
+            self.alerted = {key: at for key, at in self.alerted.items() if now - at < self.cooldown}
         alerts = []
         for line in lines:
             if not line.strip():
@@ -183,7 +195,7 @@ class Watcher:
                 found = self._match(entry)
             except ValueError:  # a malformed resource URL (spark_logs._host_name)
                 continue
-            if found and self._due(found[1]):
+            if found and not catch_up and self._due(found[1]):
                 alerts.append(found[0])
         return alerts
 
@@ -197,10 +209,12 @@ class Watcher:
                 if target in self.feed:
                     self.counts[device, target] += 1
                     return Alert("feed", device, target, action, entry), ("feed", device, target)
-        if spark_logs.is_tp_detection(entry):
-            external, device = _external(entry)
-            key = ("detection", entry["src"], entry["dst"], _protection(entry))
-            return Alert("detection", device, external, action, entry), key
+        if spark_logs.is_tp_detection(entry) and action.lower() != "monitor":  # monitor mode enforced nothing
+            ends = _external(entry)
+            if ends:  # a detection between two LAN addresses is left to the brief
+                external, device = ends
+                key = ("detection", entry["src"], entry["dst"], _protection(entry))
+                return Alert("detection", device, external, action, entry), key
         return None
 
     def _due(self, key):
@@ -226,7 +240,7 @@ class Watcher:
         """Alert on the lines written to today's capture until `stop_event` is set, waiting `poll`
         seconds whenever nothing is new: a missing file is waited for, a replaced one read again, and
         at midnight the new day's file followed. What today's file holds when the watcher starts is
-        counted without alerting, so a restart repeats no alert."""
+        counted without alerting, so a restart repeats no alert and silences none."""
         day = handle = None
         catching_up = True
         self.day = None  # count today afresh
@@ -234,15 +248,14 @@ class Watcher:
             while not stop_event.is_set():
                 today = self.today()
                 if handle is not None and today != day:
-                    self._raise(self.scan(self._lines(handle)))  # the old day's last lines
+                    self._deliver(self.scan(self._lines(handle)))  # the old day's last lines
                     handle.close()
                     handle = None
                 if handle is None:
                     day, handle, self.pending = today, self._open(today), ""
                 lines = list(itertools.islice(self._lines(handle), BATCH)) if handle else []
-                alerts = self.scan(lines) if lines else []
-                if not catching_up:
-                    self._raise(alerts)
+                if lines:
+                    self._deliver(self.scan(lines, catch_up=catching_up))
                 catching_up = catching_up and len(lines) == BATCH
                 if not lines:
                     if handle is not None and self._replaced(handle):
@@ -253,9 +266,9 @@ class Watcher:
             if handle is not None:
                 handle.close()
 
-    def _raise(self, alerts):
-        for alert in alerts:
-            self.alert(alert)
+    def _deliver(self, alerts):
+        if alerts:
+            self.alert(alerts)
 
     def _open(self, day):
         try:
@@ -301,7 +314,7 @@ class Bot:
         self.last_error = None  # (when, message) of the last error logged, for /status
         self.ignored = {}  # chat id -> the day it was last logged
         self.offset = self.load_offset()
-        self.watcher = Watcher(self.syslog, FeedFile(self.feed), self.on_alert, today=self.today, clock=clock)
+        self.watcher = Watcher(self.syslog, FeedFile(self.feed), self.on_alerts, today=self.today, clock=clock)
 
     def error(self, text):
         """Log an error and keep it as the last one /status shows; called from both threads."""
@@ -338,8 +351,9 @@ class Bot:
             while True:
                 try:
                     self.run_once()
-                except (telegram_api.TelegramError, OSError) as e:  # URLError and timeouts are OSErrors
-                    self.error(f"Telegram: {e}; trying again in {BACKOFF} s")
+                except Exception as e:  # URLError, timeouts, an odd answer: dying would only replay the update
+                    detail = e if isinstance(e, telegram_api.TelegramError) else repr(e)
+                    self.error(f"Telegram: {detail}; trying again in {BACKOFF} s")
                     self.sleep(BACKOFF)
         except KeyboardInterrupt:
             stop.set()
@@ -378,7 +392,7 @@ class Bot:
     def send(self, text):
         try:
             self.telegram.send_message(text)
-        except (telegram_api.TelegramError, OSError) as e:
+        except Exception as e:  # Telegram refusing it, the network, an odd answer
             self.error(f"a message to the owner was not sent: {e}")
 
     def respond(self, verb, indicators, label):
@@ -414,9 +428,6 @@ class Bot:
             fetch = self.fetch or self._keychain_fetch()
             if fetch is None:
                 return f"No VirusTotal key: {vt_check.NO_KEY_HELP}"
-            minutes = max(1, math.ceil((len(taken) - 1) * vt_check.FREE_API_DELAY / 60))
-            self.send(f"Checking {spark_brief._count(len(taken), 'indicator')} on VirusTotal, "
-                      f"about {spark_brief._count(minutes, 'minute')}.")
         lock = feed_lock.FeedLock(self.syslog / feed_lock.LOCK_NAME, sleep=self.sleep, now=self.clock)
         self.syslog.mkdir(exist_ok=True)
         if not lock.acquire(timeout=LOCK_WAIT):
@@ -426,6 +437,10 @@ class Bot:
                 held = 0
             return (f"The daily check has been writing the feed for {spark_brief._count(held, 'minute')}; "
                     "send the indicators again later.")
+        if not trusted:
+            minutes = max(1, math.ceil((len(taken) - 1) * vt_check.FREE_API_DELAY / 60))
+            self.send(f"Checking {spark_brief._count(len(taken), 'indicator')} on VirusTotal, "
+                      f"about {spark_brief._count(minutes, 'minute')}.")
         try:
             lines = self._write(taken, label, fetch)
         finally:
@@ -451,14 +466,17 @@ class Bot:
         pairs = [(indicator, f"{label} - sent from Telegram" if label else "sent from Telegram")
                  for indicator in indicators]
         today = self.today().isoformat()
+        stopped = None
         try:
             if fetch is None:
                 vt_check.add_trusted(pairs, self.feed, today=today, out=lines.append)
             else:
                 vt_check.run(pairs, self.feed, fetch, sleep=self.sleep, today=today, out=lines.append)
-        except vt_check.VTError as e:
-            lines.append(f"stopped: {e}")
-        statuses = Counter(m.group(1) for m in map(STATUS_RE.match, lines) if m)
+        except Exception as e:  # a refused key, the network, an odd answer: commit the rows already written
+            stopped = f"stopped: {e}"
+        statuses = Counter(m.group(1) for m in map(STATUS_RE.match, lines) if m)  # vt_check's lines only
+        if stopped:
+            lines.append(stopped)
         lines.append(summary(statuses, trusted=fetch is None))
         lines.append(self._commit(statuses["added"], label) if statuses["added"] else "Nothing added, nothing committed.")
         return lines
@@ -536,15 +554,16 @@ class Bot:
 
     # The watcher's alerts, sent from its thread.
 
-    def on_alert(self, alert):
-        """Send the alert, then the attacker-context note on its indicator (a detection's external address)."""
-        try:
-            self.telegram.send_message(self.watcher.describe(alert))
-            note = attacker_context.note(alert.indicator, self.syslog, self.today().isoformat())
-            if note:
-                self.telegram.send_message(note)
-        except (telegram_api.TelegramError, OSError) as e:
-            self.error(f"an alert on {alert.indicator} was not sent: {e}")
+    def on_alerts(self, alerts):
+        """Send every alert of one pass first, then the attacker-context notes (tens of seconds each): on
+        each feed alert's indicator and each inbound detection's source, the cases with an attacker."""
+        for alert in alerts:
+            self.send(self.watcher.describe(alert))
+        for alert in alerts:
+            if alert.kind == "feed" or alert.indicator == alert.entry["src"]:
+                note = attacker_context.note(alert.indicator, self.syslog, self.today().isoformat())
+                if note:
+                    self.send(note)
 
 
 BOTFATHER_HELP = f"""No bot token in the Keychain. To create the bot:
@@ -601,8 +620,14 @@ def main(argv=None):
             log(f"Telegram: {e}")
             return 1
         return 0
+    signal.signal(signal.SIGTERM, _exit_on_sigterm)
     bot.run_forever()
     return 0
+
+
+def _exit_on_sigterm(signum, frame):
+    # launchctl bootout sends SIGTERM; as an exception it runs the finally that releases the feed lock.
+    raise SystemExit(0)
 
 
 if __name__ == "__main__":
