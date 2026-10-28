@@ -567,6 +567,132 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(self.feed.read_text(), HEADER + EXISTING + OLD)
 
 
+    # Rows added with --trusted carry no VirusTotal date; they get their first check 90 days
+    # after they were added (hashes never) and become ordinary checked rows if it passes.
+    def trusted(self, value, ioc_type, days, name="trusted-x"):
+        product = "AV" if ioc_type in ("MD5", "SHA1", "SHA256") else "AB"
+        return (f"{name},{value},{ioc_type},high,high,{product},"
+                f"MuddyWater - Cyberint export - added without VirusTotal check {aged(days)}\n")
+
+    def test_trusted_row_verified_after_90_days_becomes_a_checked_row(self):
+        self.feed.write_text(HEADER + self.trusted("157.230.234.35", "IP", 90))
+        fake = FakeVT({"/ip_addresses/157.230.234.35": vt_object("ip_address", "157.230.234.35", malicious=7)})
+
+        results = self.recheck(fake)
+
+        self.assertEqual(self.statuses(results)["157.230.234.35"], "verified")
+        self.assertEqual(
+            self.feed.read_text(),
+            HEADER + "trusted-x,157.230.234.35,IP,medium,high,AB,MuddyWater - Cyberint export - VT 7/87 malicious 2026-10-19\n",
+        )
+
+    def test_trusted_row_not_flagged_after_90_days_is_removed(self):
+        self.feed.write_text(HEADER + EXISTING + self.trusted("c2.example.org", "Domain", 90))
+        fake = FakeVT({"/domains/c2.example.org": vt_object("domain", "c2.example.org", malicious=1)})
+
+        results = self.recheck(fake)
+
+        self.assertEqual(self.statuses(results)["c2.example.org"], "removed")
+        self.assertEqual(self.feed.read_text(), HEADER + EXISTING)
+
+    def test_younger_trusted_rows_and_trusted_hashes_are_kept_without_a_lookup(self):
+        self.feed.write_text(HEADER + self.trusted("157.230.234.35", "IP", 89) + self.trusted(SHA256, "SHA256", 400))
+        fake = FakeVT({})
+
+        results = self.recheck(fake)
+
+        self.assertEqual(fake.calls, [])
+        self.assertEqual(set(self.statuses(results).values()), {"kept"})
+
+    # An IP that probed this network carries "seen in Spark logs <date>" and is re-verified 180
+    # days after its last sighting, however old its VirusTotal check is.
+    def seen_ip(self, checked_days, seen_days):
+        return (f"vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,Inbound probe of WAN - Spark syslog - "
+                f"seen in Spark logs {aged(seen_days)} - VT 6/86 malicious {aged(checked_days)}\n")
+
+    def test_an_ip_seen_in_the_logs_waits_180_days_from_its_last_sighting(self):
+        self.feed.write_text(HEADER + self.seen_ip(checked_days=70, seen_days=100))
+        fake = FakeVT({})
+
+        results = self.recheck(fake)
+
+        self.assertEqual(fake.calls, [])
+        self.assertEqual(self.statuses(results)["203.0.113.7"], "kept")
+
+    def test_an_ip_not_seen_for_180_days_is_re_verified_and_keeps_its_sighting_note(self):
+        self.feed.write_text(HEADER + self.seen_ip(checked_days=70, seen_days=180))
+        fake = FakeVT({"/ip_addresses/203.0.113.7": vt_object("ip_address", "203.0.113.7", malicious=8)})
+
+        results = self.recheck(fake)
+
+        self.assertEqual(self.statuses(results)["203.0.113.7"], "refreshed")
+        self.assertEqual(
+            self.feed.read_text().splitlines()[1],
+            f"vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,Inbound probe of WAN - Spark syslog - "
+            f"seen in Spark logs {aged(180)} - VT 8/88 malicious 2026-10-19",
+        )
+
+    def test_max_age_overrides_the_trusted_and_sighting_clocks(self):
+        self.feed.write_text(HEADER + self.trusted("157.230.234.35", "IP", 1) + self.seen_ip(checked_days=1, seen_days=1))
+        fake = FakeVT({
+            "/ip_addresses/157.230.234.35": vt_object("ip_address", "157.230.234.35", malicious=7),
+            "/ip_addresses/203.0.113.7": vt_object("ip_address", "203.0.113.7", malicious=8),
+        })
+
+        results = self.recheck(fake, max_age=0)
+
+        self.assertEqual(fake.calls, ["/ip_addresses/157.230.234.35", "/ip_addresses/203.0.113.7"])
+        self.assertEqual(self.statuses(results), {"157.230.234.35": "verified", "203.0.113.7": "refreshed"})
+
+
+class StampSeenTest(unittest.TestCase):
+    """stamp_seen(): the daily check marks feed IPs that probed the network with the date."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.feed = Path(tmp.name) / "feed.csv"
+
+    def test_stamps_an_ip_row_before_its_closing_note(self):
+        trusted = f"trusted-ip-1,198.51.100.9,IP,high,high,AB,Cyberint - added without VirusTotal check {aged(5)}\n"
+        self.feed.write_text(HEADER + OLD_IP + trusted)
+
+        stamped = vt_check.stamp_seen(self.feed, ["203.0.113.7", "198.51.100.9"], today=TODAY)
+
+        self.assertEqual(stamped, ["203.0.113.7", "198.51.100.9"])
+        self.assertEqual(self.feed.read_text(), HEADER
+                         + "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,seen in Spark logs 2026-10-19 - VT 6/86 malicious 2026-07-15\n"
+                         + f"trusted-ip-1,198.51.100.9,IP,high,high,AB,Cyberint - seen in Spark logs 2026-10-19 - "
+                           f"added without VirusTotal check {aged(5)}\n")
+
+    def test_refreshes_a_stamp_older_than_30_days_and_leaves_a_fresh_one(self):
+        def row(value, days):
+            return f"vt-ip-{value[-1]},{value},IP,medium,high,AB,seen in Spark logs {aged(days)} - VT 6/86 malicious 2026-07-15\n"
+        self.feed.write_text(HEADER + row("203.0.113.1", 30) + row("203.0.113.2", 29))
+
+        stamped = vt_check.stamp_seen(self.feed, ["203.0.113.1", "203.0.113.2"], today=TODAY)
+
+        self.assertEqual(stamped, ["203.0.113.1"])
+        self.assertEqual(self.feed.read_text(), HEADER + row("203.0.113.1", 0) + row("203.0.113.2", 29))
+
+    def test_a_hand_written_ip_row_gets_the_note_appended(self):
+        self.feed.write_text(HEADER + "x,1.2.3.4,IP,high,high,AB,Modat\n")
+
+        vt_check.stamp_seen(self.feed, ["1.2.3.4"], today=TODAY)
+
+        self.assertEqual(self.feed.read_text(), HEADER + "x,1.2.3.4,IP,high,high,AB,Modat - seen in Spark logs 2026-10-19\n")
+
+    def test_ignores_addresses_not_in_the_feed_ranges_and_other_types(self):
+        text = (HEADER + EXISTING + OLD
+                + "scanner-modat-net,212.73.148.0-212.73.148.255,IP Range,high,medium,AB,Modat\n")
+        self.feed.write_text(text)
+
+        stamped = vt_check.stamp_seen(self.feed, ["212.73.148.42", "9.9.9.9", "evil.com"], today=TODAY)
+
+        self.assertEqual(stamped, [])
+        self.assertEqual(self.feed.read_text(), text)
+
+
 class ApiKeyTest(unittest.TestCase):
     def test_environment_variable_wins_without_touching_the_keychain(self):
         run = Mock()

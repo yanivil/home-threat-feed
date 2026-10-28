@@ -12,11 +12,14 @@ and a label (group, source...) that goes into the COMMENT column. Tab-separated
 label fields are joined with " - ". Blank lines and lines starting with # are skipped.
 Defanged input (evil[.]com, hxxps://...) is accepted.
 
---recheck looks up again every feed row whose COMMENT ends in "VT n/m malicious
-YYYY-MM-DD" once that date is old enough for the row's TYPE (IPs 60 days, domains
-and URLs 180, hashes never; --max-age DAYS applies DAYS to every type): rows still
-flagged by enough engines get a fresh ratio, date and confidence, rows that fell
-below are removed. Rows without such a note (hand-written ones) are never touched.
+--recheck looks up again every feed row that is due by the dates in its COMMENT: IPs
+60 days after their "VT n/m malicious YYYY-MM-DD" note, domains and URLs 180, rows
+"added without VirusTotal check YYYY-MM-DD" 90 days after that, hashes never; an IP
+"seen in Spark logs YYYY-MM-DD" (the daily check's note for feed IPs that probed the
+WAN) is besides never due before 180 days after that sighting. --max-age DAYS applies
+DAYS to every row's own date. Rows still flagged by enough engines get a fresh ratio,
+date and confidence (an unchecked row becomes a checked one), rows that fell below are
+removed. Rows without any date (hand-written ones) are never touched.
 """
 
 import argparse
@@ -53,12 +56,24 @@ KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT = "spark-ioc-feed", "VT_API_KEY"
 NO_KEY_HELP = (f"set the VT_API_KEY environment variable to your VirusTotal API key, or store it in the "
                f"Keychain: security add-generic-password -s {KEYCHAIN_SERVICE} -a {KEYCHAIN_ACCOUNT} -w '<key>' -U")
 
-# The note feed_row() puts at the end of COMMENT; --recheck finds rows by it.
+# The notes that close a COMMENT: feed_row() ends it with the VirusTotal ratio and date,
+# add_trusted() with the day the row was added unchecked. --recheck reads its clock from
+# them. "seen in Spark logs <date>" sits before the closing note (stamp_seen) and says when
+# the IP last probed this network.
 VT_NOTE_RE = re.compile(r"VT (\d+)/(\d+) malicious (\d{4}-\d{2}-\d{2})$")
+TRUSTED_NOTE_RE = re.compile(r"added without VirusTotal check (\d{4}-\d{2}-\d{2})$")
+SEEN_NOTE_RE = re.compile(r"seen in Spark logs (\d{4}-\d{2}-\d{2})")
 # Days after which --recheck looks a row up again, per TYPE. Attacker IPs are
 # re-leased within weeks and domains re-registered after a year or so, while a
 # malicious file stays malicious: hashes are rechecked only when --max-age says so.
 MAX_AGE = {"IP": 60, "Domain": 180, "URL": 180}
+# A row added without a check gets its first VirusTotal look 90 days in (hashes never); an
+# IP that probed this network is first-hand evidence and waits 180 days after its last
+# sighting, whatever its check date, since VirusTotal's count for a scanner decays while
+# the scanning goes on. The daily check refreshes a sighting at most every 30 days.
+TRUSTED_MAX_AGE = 90
+SEEN_MAX_AGE = 180
+SEEN_REFRESH_DAYS = 30
 RECHECK_TYPES = ("IP", "Domain", "URL", "MD5", "SHA1", "SHA256")
 # Engines that must flag an indicator before it is added or kept, per TYPE. IPs
 # get a higher bar: hosting addresses collect a few blocklist hits just for being
@@ -275,16 +290,47 @@ def add_trusted(indicators, feed_path, *, today=None, out=print):
     return results
 
 
+def _note_date(match, group=1):
+    """The date a note's regex match carries, or None without a match or with a bad date."""
+    if not match:
+        return None
+    try:
+        return date.fromisoformat(match.group(group))
+    except ValueError:
+        return None
+
+
+def recheck_due(ioc_type, checked, trusted, last_seen, max_age=None):
+    """The day a row comes up for re-verification, or None for never.
+
+    `checked` is the date of the row's last VirusTotal check, or the day it was added
+    without one when `trusted`; `last_seen` the day the IP last probed this network. A row
+    is due once every clock it carries has run: TRUSTED_MAX_AGE or MAX_AGE for its type
+    from `checked`, SEEN_MAX_AGE from `last_seen`. Hashes are never due. With `max_age`,
+    every row is due that many days after its own date, hashes included.
+    """
+    if max_age is not None:
+        return (checked or last_seen) + timedelta(days=max_age)
+    if ioc_type in HASH_TYPES.values():
+        return None
+    dues = []
+    if checked is not None:
+        dues.append(checked + timedelta(days=TRUSTED_MAX_AGE if trusted else MAX_AGE[ioc_type]))
+    if last_seen is not None:
+        dues.append(last_seen + timedelta(days=SEEN_MAX_AGE))
+    return max(dues)
+
+
 def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False,
             delay=FREE_API_DELAY, sleep=time.sleep, today=None, out=print):
-    """Look up again the feed rows whose VirusTotal check is old enough for their type.
+    """Look up again the feed rows that are due for their type (see recheck_due).
 
-    "Old enough" is MAX_AGE days for the row's TYPE (never for hashes), or
-    `max_age` days for every type when given. Rows that enough engines still
-    flag (MIN_MALICIOUS for the type, or `min_malicious` for every type) get a
-    fresh ratio, date and confidence; rows that fell below are removed. Every other row, the header and the row order stay exactly as they
-    were. The file is rewritten after each change, so a run that stops early
-    (quota, Ctrl-C) leaves it consistent.
+    Rows that enough engines flag (MIN_MALICIOUS for the type, or `min_malicious`
+    for every type) get a fresh ratio, date and confidence; a row added without a
+    check becomes an ordinary checked row that way ("verified"); rows that fell
+    below are removed. Every other row, the header and the row order stay exactly
+    as they were. The file is rewritten after each change, so a run that stops
+    early (quota, Ctrl-C) leaves it consistent.
     """
     today = today or date.today().isoformat()
     today_date = date.fromisoformat(today)
@@ -310,19 +356,18 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False
             continue
         value, ioc_type, comment = fields[1], fields[2], fields[6]
         note = VT_NOTE_RE.search(comment)
-        try:
-            checked = date.fromisoformat(note.group(3)) if note else None
-        except ValueError:
-            checked = None
-        if checked is None or ioc_type not in RECHECK_TYPES:
+        trusted = None if note else TRUSTED_NOTE_RE.search(comment)
+        checked = _note_date(note, 3) if note else _note_date(trusted)
+        last_seen = _note_date(SEEN_NOTE_RE.search(comment))
+        if ioc_type not in RECHECK_TYPES or (checked is None and last_seen is None):
             record(value, "kept", "no VirusTotal date", quiet=True)
             continue
-        age_limit = MAX_AGE.get(ioc_type) if max_age is None else max_age
-        if age_limit is None:
+        due = recheck_due(ioc_type, checked, trusted is not None, last_seen, max_age)
+        if due is None:
             record(value, "kept", f"{ioc_type} rows are not rechecked", quiet=True)
             continue
-        if checked > today_date - timedelta(days=age_limit):
-            record(value, "kept", f"checked {checked}", quiet=True)
+        if due > today_date:
+            record(value, "kept", f"due {due}", quiet=True)
             continue
         if stopped:
             record(value, "unchecked")
@@ -338,21 +383,66 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False
             continue
         malicious = stats.get("malicious", 0)
         total = sum(stats.values())
-        change = f"{ioc_type} {note.group(1)}/{note.group(2)} -> {malicious}/{total} malicious"
+        before = f"{note.group(1)}/{note.group(2)}" if note else "unchecked"
+        change = f"{ioc_type} {before} -> {malicious}/{total} malicious"
         if malicious < min_for(ioc_type, min_malicious):
             record(value, "would-remove" if dry_run else "removed", change)
             if not dry_run:
                 lines[i] = None
                 save()
             continue
+        closing = note or trusted  # a hand-written row carrying only a sighting has neither
+        fresh = f"VT {malicious}/{total} malicious {today}"
         fields[3] = confidence(malicious)
-        fields[6] = comment[:note.start()] + f"VT {malicious}/{total} malicious {today}"
-        record(value, "would-refresh" if dry_run else "refreshed", change)
+        fields[6] = comment[:closing.start()] + fresh if closing else f"{comment} - {fresh}"
+        done, would = ("verified", "would-verify") if trusted else ("refreshed", "would-refresh")
+        record(value, would if dry_run else done, change)
         if not dry_run:
             lines[i] = ",".join(fields)
             save()
 
     return results
+
+
+def stamp_seen(feed_path, addresses, *, today=None, refresh_after=SEEN_REFRESH_DAYS):
+    """Note on the feed's IP rows for `addresses` that they probed this network today.
+
+    The note goes before the row's closing VirusTotal or trusted note (at the end of a
+    hand-written COMMENT) and is refreshed only once it is `refresh_after` days old, so a
+    scanner that knocks every day does not rewrite the feed every day. Rows of other types,
+    IP ranges and addresses not in the feed are ignored. Returns the values stamped, in
+    feed order; the file is untouched when there are none.
+    """
+    today = today or date.today().isoformat()
+    today_date = date.fromisoformat(today)
+    wanted = set(addresses)
+    feed_path = Path(feed_path)
+    with feed_path.open(newline="") as f:
+        lines = f.read().split("\n")
+    stamped = []
+    for i, line in enumerate(lines):
+        fields = line.split(",")
+        if line.startswith("#") or len(fields) != 7 or fields[2] != "IP" or fields[1] not in wanted:
+            continue
+        comment = fields[6]
+        seen = SEEN_NOTE_RE.search(comment)
+        if seen:
+            last = _note_date(seen)
+            if last is not None and last > today_date - timedelta(days=refresh_after):
+                continue
+            comment = comment[:seen.start(1)] + today + comment[seen.end(1):]
+        else:
+            closing = VT_NOTE_RE.search(comment) or TRUSTED_NOTE_RE.search(comment)
+            sighting = f"seen in Spark logs {today}"
+            comment = (comment[:closing.start()] + sighting + " - " + comment[closing.start():] if closing
+                       else f"{comment} - {sighting}")
+        fields[6] = comment
+        lines[i] = ",".join(fields)
+        stamped.append(fields[1])
+    if stamped:
+        with feed_path.open("w", newline="") as f:
+            f.write("\n".join(lines))
+    return stamped
 
 
 def api_key(environ=None, run=None):
@@ -427,7 +517,9 @@ def main(argv=None):
                              "VirusTotal check is old get a fresh ratio and date, or are removed")
     parser.add_argument("--max-age", type=int, default=None, metavar="DAYS",
                         help="with --recheck, re-verify rows of every type checked DAYS or more days ago "
-                             "(0 = every row); default per type: IPs 60, domains and URLs 180, hashes never")
+                             "(0 = every row); default per type: IPs 60, domains and URLs 180, rows added "
+                             f"without a check {TRUSTED_MAX_AGE}, IPs seen in the Spark's logs {SEEN_MAX_AGE} "
+                             "after their last sighting, hashes never")
     parser.add_argument("--trusted", action="store_true",
                         help="add the indicators without looking them up (a source you vouch for); "
                              "needs no API key, rows are never re-checked")
@@ -458,7 +550,9 @@ def main(argv=None):
     try:
         if args.recheck:
             ages = (f"{args.max_age}+ days ago, every type" if args.max_age is not None
-                    else ", ".join(f"{t} {d}+" for t, d in MAX_AGE.items()) + " days ago, hashes never")
+                    else ", ".join(f"{t} {d}+" for t, d in MAX_AGE.items())
+                    + f" days ago, unchecked rows {TRUSTED_MAX_AGE}+, IPs seen in the logs {SEEN_MAX_AGE}+ "
+                    "after their last sighting, hashes never")
             say(f"Re-checking {args.feed.name} rows last verified {ages} on VirusTotal ({mode})")
             results = recheck(args.feed, make_fetch(key), max_age=args.max_age,
                               min_malicious=args.min_malicious, dry_run=args.dry_run,

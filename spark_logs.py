@@ -250,7 +250,8 @@ def check(found, feed_path, cache_path, fetch, *, today=None, max_lookups=None, 
                     min_inbound_hits=min_inbound_hits, max_inbound=max_inbound)
     picked, skipped = budget(groups, max_lookups)
     outbound, inbound = picked["names"] + picked["ips"], picked["inbound"]
-    report = {"added": [], "outbound_hits": [], "clean": 0, "not_found": 0, "skipped": skipped, "quota": False}
+    report = {"added": [], "outbound_hits": [], "clean": 0, "not_found": 0, "skipped": skipped, "quota": False,
+              "stamped": []}
 
     def run(items, label, dry_run):
         if not items:
@@ -280,6 +281,9 @@ def check(found, feed_path, cache_path, fetch, *, today=None, max_lookups=None, 
         elif r.status == "quota":
             report["quota"] = True
     Path(cache_path).write_text(json.dumps(cache, indent=1, sort_keys=True))
+    # Every inbound source that is a feed IP, the ones just added included, probed us today:
+    # note it, so --recheck runs its longer clock from the last sighting (vt_check.SEEN_MAX_AGE).
+    report["stamped"] = vt_check.stamp_seen(feed_path, list(found["inbound"]), today=today)
     return report
 
 
