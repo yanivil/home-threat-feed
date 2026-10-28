@@ -11,6 +11,7 @@ GREYNOISE_API_KEY.
 """
 
 import json
+import urllib.error
 import urllib.request
 import zlib
 from collections import Counter
@@ -59,12 +60,18 @@ class NoteUnavailable(Exception):
 
 
 def default_fetch_json(url, headers=None, timeout=15):
-    """GET `url` and parse the JSON answer; None on any network or HTTP error, or an answer that is not JSON."""
+    """GET `url` and parse the JSON answer. A 404 is the service saying it has no record, so its body is
+    returned too; None on any other HTTP error, a network error, or an answer that is not JSON."""
     # rdap.org turns away Python's own User-Agent
     request = urllib.request.Request(url, headers={"User-Agent": "spark-ioc-feed", **(headers or {})})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.load(response)
+    except urllib.error.HTTPError as e:
+        try:
+            return json.load(e) if e.code == 404 else None
+        except ValueError:
+            return None
     except (OSError, ValueError):
         return None
 
@@ -115,7 +122,7 @@ def _activity(ioc_type, value, capture_dir, today):
 
 
 def _virustotal(body):
-    attributes = body["data"]["attributes"]
+    attributes = (body.get("data") or {}).get("attributes") or {}
     stats = attributes.get("last_analysis_stats")
     return {
         "as_owner": attributes.get("as_owner"),
@@ -170,8 +177,9 @@ def _endpoint(source, ioc_type, value, key):
 
 
 def _lookup(fetch_json, source, ioc_type, value, key):
-    """The source's facts, None when its request or its answer fails in any way: one source going down
-    must not cost the others."""
+    """The source's facts, with None for each field the answer lacks (a source that has no record answers
+    with a body that has none); None when its request or its answer fails in any way: one source going
+    down must not cost the others."""
     url, headers = _endpoint(source, ioc_type, value, key)
     try:
         body = fetch_json(url, headers=headers)
@@ -182,7 +190,8 @@ def _lookup(fetch_json, source, ioc_type, value, key):
 
 def gather(indicator, capture_dir, today, fetch_json, vt_key="", greynoise_key=""):
     """The facts about `indicator`: its activity in the captures of `today` (an ISO date) and the day before
-    in `capture_dir`, and one section per source that applies to its kind, None when the source failed.
+    in `capture_dir`, and one section per source that applies to its kind: None when the source failed,
+    a dict of Nones (GreyNoise: noise and riot False) when it answered that it has no record.
     A source whose key is empty is not asked and is named in "skipped". `fetch_json(url, headers=None,
     timeout=15)` returns the parsed JSON or None. Raises ValueError for an indicator vt_check.classify refuses."""
     ioc_type, value = vt_check.classify(indicator)
@@ -244,9 +253,22 @@ LINES = {"virustotal": _virustotal_line, "rdap": _rdap_line, "internetdb": _inte
          "greynoise": _greynoise_line}
 
 
+def _has_data(section):
+    return any(value is not None and value is not False for value in section.values())
+
+
+def _source_detail(source, section, skipped):
+    if section is None:
+        return "skipped (no key)" if skipped else "unavailable"
+    if not _has_data(section):
+        return "no record (not observed scanning)" if source == "greynoise" and section["noise"] is False else "no record"
+    return LINES[source](section) or "no details"
+
+
 def facts_text(facts):
     """The facts as plain lines for the owner and the model: the activity (a head line, and one for the
-    gateway's actions), then one line per source that applies to the indicator's kind."""
+    gateway's actions), then one line per source that applies to the indicator's kind: its facts, "no
+    record" when it answered that it knows nothing, "unavailable" when it could not be asked."""
     activity = facts["activity"]
     head = f"{facts['indicator']} ({facts['type']}): {activity['count']} attempts"
     if activity["count"]:
@@ -257,10 +279,7 @@ def facts_text(facts):
     if activity["actions"]:
         lines.append(f"Gateway actions: {_counted(activity['actions'])}")
     for source in SOURCES.get(facts["type"], ("virustotal",)):
-        if facts[source] is not None:
-            detail = LINES[source](facts[source]) or "no details"
-        else:
-            detail = "skipped (no key)" if source in facts["skipped"] else "unavailable"
+        detail = _source_detail(source, facts[source], source in facts["skipped"])
         lines.append(f"{LABELS[source]}: {detail}")
     return "\n".join(lines)
 

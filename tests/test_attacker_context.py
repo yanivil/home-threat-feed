@@ -61,7 +61,7 @@ GREYNOISE_IP = {"ip": ATTACKER, "noise": True, "riot": False, "classification": 
 
 class FakeFetch:
     """A `fetch_json` stand-in answering from {url: body}; a body that is an exception is raised, a url
-    it does not know is a 404 (None). Records the urls asked and the headers sent with each."""
+    it does not know gets no answer (None). Records the urls asked and the headers sent with each."""
 
     def __init__(self, responses):
         self.responses = responses
@@ -171,6 +171,29 @@ class GatherTest(CaptureTestCase):
 
         self.assertEqual((facts["virustotal"], facts["rdap"], facts["internetdb"]), (None, None, None))
         self.assertIsNotNone(facts["greynoise"])
+
+    def test_a_404_body_is_the_service_saying_it_has_no_record(self):
+        self.fetch.responses.update({
+            GREYNOISE_URL: {"ip": ATTACKER, "noise": False, "riot": False,
+                            "message": "IP not observed scanning the internet or contained in RIOT data set."},
+            INTERNETDB_URL: {"detail": "No information available"},
+            RDAP_URL: {"errorCode": 404, "title": "Not Found"},
+            VT_URL: {"error": {"code": "NotFoundError", "message": "Resource not found"}},
+        })
+
+        facts = self.gather(vt_key="vt", greynoise_key="g")
+
+        self.assertEqual(facts["greynoise"], {"classification": None, "name": None, "noise": False, "riot": False})
+        self.assertEqual(facts["internetdb"], {"ports": None, "tags": None, "vulns": None})
+        self.assertEqual(facts["rdap"], {"name": None, "handle": None, "abuse": None})
+        self.assertEqual(facts["virustotal"], {"as_owner": None, "asn": None, "country": None, "malicious": None,
+                                               "total": None, "categories": None, "registrar": None})
+        self.assertEqual(attacker_context.facts_text(facts).splitlines()[-4:], [
+            "VirusTotal: no record",
+            "RDAP: no record",
+            "InternetDB: no record",
+            "GreyNoise: no record (not observed scanning)",
+        ])
 
     def test_greynoise_is_skipped_without_a_key(self):
         facts = self.gather(vt_key="vt")
@@ -329,6 +352,30 @@ class FactsTextTest(unittest.TestCase):
 
         self.assertIn("\nRDAP: unavailable\n", text)
         self.assertTrue(text.endswith("\nGreyNoise: skipped (no key)"))
+
+    def test_a_source_with_no_data_has_no_record_and_one_with_nothing_at_all_is_unavailable(self):
+        no_data = {"ports": None, "tags": None, "vulns": None}
+
+        lines = attacker_context.facts_text(self.facts(internetdb=no_data, rdap=None)).splitlines()
+
+        self.assertIn("InternetDB: no record", lines)
+        self.assertIn("RDAP: unavailable", lines)
+
+    def test_a_known_address_with_nothing_open_is_not_a_missing_record(self):
+        nothing_open = {"ports": [], "tags": [], "vulns": []}
+
+        lines = attacker_context.facts_text(self.facts(internetdb=nothing_open)).splitlines()
+
+        self.assertIn("InternetDB: ports none; tags none; vulns none", lines)
+
+    def test_greynoise_not_observed_scanning_is_said_so_but_a_benign_record_is_a_record(self):
+        unseen = {"classification": None, "name": None, "noise": False, "riot": False}
+        benign = {"classification": "benign", "name": "Google Public DNS", "noise": False, "riot": True}
+
+        self.assertIn("GreyNoise: no record (not observed scanning)",
+                      attacker_context.facts_text(self.facts(greynoise=unseen)).splitlines())
+        self.assertIn("GreyNoise: classification benign; name Google Public DNS; noise no; riot yes",
+                      attacker_context.facts_text(self.facts(greynoise=benign)).splitlines())
 
     def test_a_domain_shows_virustotal_and_rdap_only(self):
         facts = self.facts(indicator="evil.example", type="Domain", internetdb=None, greynoise=None)
@@ -557,9 +604,21 @@ class DefaultFetchJsonTest(unittest.TestCase):
         self.assertEqual(request.get_header("User-agent"), "spark-ioc-feed")
         self.assertEqual(urlopen.call_args[1]["timeout"], 7)
 
+    def http_error(self, status, body):
+        return urllib.error.HTTPError("https://rdap.org/ip/1.2.3.4", status, "x", {}, io.BytesIO(body))
+
+    def test_a_404_is_the_services_own_answer_and_its_json_body_is_returned(self):
+        body = b'{"ip": "1.2.3.4", "noise": false, "riot": false, "message": "IP not observed scanning"}'
+        with patch("urllib.request.urlopen", side_effect=self.http_error(404, body)):
+            reply = attacker_context.default_fetch_json("https://api.greynoise.io/v3/community/1.2.3.4")
+
+        self.assertEqual(reply, {"ip": "1.2.3.4", "noise": False, "riot": False, "message": "IP not observed scanning"})
+
     def test_a_failed_request_or_a_body_that_is_not_json_gives_none(self):
-        not_found = urllib.error.HTTPError("https://rdap.org/ip/1.2.3.4", 404, "Not Found", {}, io.BytesIO(b"{}"))
-        for failure in (not_found, urllib.error.URLError("down"), TimeoutError()):
+        failures = (self.http_error(500, b'{"error": "boom"}'), self.http_error(429, b"{}"),
+                    self.http_error(404, b"<html>Not Found</html>"), self.http_error(404, b""),
+                    urllib.error.URLError("down"), TimeoutError())
+        for failure in failures:
             with self.subTest(failure=failure), patch("urllib.request.urlopen", side_effect=failure):
                 self.assertIsNone(attacker_context.default_fetch_json("https://rdap.org/ip/1.2.3.4"))
         with patch("urllib.request.urlopen", return_value=self.response(b"<html>portal</html>")):
