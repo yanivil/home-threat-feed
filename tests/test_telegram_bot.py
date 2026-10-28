@@ -76,8 +76,10 @@ Brief sent to Telegram
 """
 
 
-def message(text, chat=OWNER, update_id=1):
-    return {"update_id": update_id, "message": {"chat": {"id": chat}, "text": text}}
+def message(text, chat=OWNER, update_id=1, chat_type="private", sender=None):
+    """An update carrying a text message, by default from the owner's private chat."""
+    sender = sender or {"id": chat if chat_type == "private" else OWNER, "username": "owner", "first_name": "Owner"}
+    return {"update_id": update_id, "message": {"chat": {"id": chat, "type": chat_type}, "from": sender, "text": text}}
 
 
 class FakeTelegram:
@@ -211,6 +213,26 @@ class ParseMessageTest(unittest.TestCase):
     def test_a_date_argument_is_left_in_the_label(self):
         self.assertEqual(telegram_bot.parse_message("/sources 2026-10-20"), ("sources", [], "2026-10-20"))
 
+    def test_the_label_loses_quotes_and_control_format_and_bidi_marks(self):
+        # The label lands in the gateway's CSV and in the public commit subject.
+        text = 'evil.com "APT\x1b[31m34"‮ report​, \x00x'
+
+        self.assertEqual(telegram_bot.parse_message(text), ("check", ["evil.com"], "APT[31m34 report x"))
+
+    def test_a_token_with_a_quote_or_a_hidden_mark_is_no_indicator(self):
+        for token in ('hxxps://bad[.]example/"x', "hxxps://bad[.]example/\x1b[2J", "evil​.com"):
+            with self.subTest(token=token):
+                verb, indicators, label = telegram_bot.parse_message(f"185.1.2.9 {token} Campaign")
+
+                self.assertEqual(indicators, ["185.1.2.9"])
+                self.assertTrue(label.endswith("Campaign"), label)
+
+    def test_the_label_is_cut_to_120_characters(self):
+        verb, indicators, label = telegram_bot.parse_message("evil.com " + "word " * 60)
+
+        self.assertEqual(len(label), 119, "cut at 120, the trailing space dropped")
+        self.assertTrue(label.startswith("word word"))
+
 
 class BotTestCase(unittest.TestCase):
     def setUp(self):
@@ -248,7 +270,7 @@ class BotTestCase(unittest.TestCase):
 
 class AddTest(BotTestCase):
     def test_bare_text_is_checked_and_added_then_committed_and_pushed(self):
-        self.updates([{"update_id": 1, "message": {"chat": {"id": 42}, "text": "evil[.]com 185.1.2.9 MuddyWater - Unit 42"}}])
+        self.updates([message("evil[.]com 185.1.2.9 MuddyWater - Unit 42")])
         self.bot.run_once()
         self.assertIn("evil.com: added (Domain 11/94 malicious)", self.tg.sent[-1])
         self.assertIn("185.1.2.9: clean (IP 1/94 malicious)", self.tg.sent[-1])
@@ -319,6 +341,50 @@ class AddTest(BotTestCase):
         self.assertEqual(commit[:3], ["git", "commit", "-m"])
         self.assertEqual(commit[3], 'Add 1 indicator sent from Telegram: x" ; rm -rf / y')
         self.assertEqual(commit[4:], ["--", "spark-ioc-feed.csv"])
+
+    def test_a_label_with_quotes_and_hidden_marks_reaches_the_feed_and_the_commit_clean(self):
+        self.send('/trust 185.1.2.10 "Unit\x1b 42"‮​')
+
+        row = self.feed.read_text().splitlines()[-1]
+        self.assertEqual(row.split(",")[6], "Unit 42 - sent from Telegram - added without VirusTotal check 2026-10-28")
+        self.assertEqual(self.git.calls[2], ["git", "commit", "-m", "Add 1 indicator sent from Telegram: Unit 42",
+                                             "--", "spark-ioc-feed.csv"])
+        for text in (row, self.git.calls[2][3]):
+            self.assertFalse(any(c in text for c in '"\x1b‮​'), repr(text))
+
+    def test_trust_refuses_what_must_never_be_blocked(self):
+        (self.syslog / "allow.txt").write_text("vendor.example.net\n")
+        for value in ("github.com", "raw.githubusercontent.com", "api.telegram.org", "api.anthropic.com",
+                      "www.virustotal.com", "gsp-ssl.ls.apple.com", "cdn.vendor.example.net",
+                      "https://raw.githubusercontent.com/owner/spark-ioc-feed/main/spark-ioc-feed.csv"):
+            with self.subTest(value=value):
+                self.send(f"/trust {value} oops")
+
+                self.assertEqual(self.tg.sent[-1], f"refused: {value} is on the never-block list")
+        self.assertEqual((self.git.calls, self.vt.calls), ([], []))
+        self.assertEqual(self.feed.read_text(), FEED)
+        self.assertFalse(self.lock.exists())
+        self.assertFalse(self.bot.never_block("https://[::1"), "a URL without a readable host is no refusal")
+        self.assertFalse(self.bot.never_block("notgithub.com"))
+
+    def test_a_check_refuses_a_never_block_value_and_checks_the_rest(self):
+        self.send("raw.githubusercontent.com evil[.]com")
+
+        self.assertEqual(self.tg.sent[0], "Checking 1 indicator on VirusTotal, about 1 minute.")
+        self.assertEqual(self.tg.sent[1].splitlines()[:2], ["refused: raw.githubusercontent.com is on the never-block list",
+                                                            "evil.com: added (Domain 11/94 malicious)"])
+        self.assertEqual(self.vt.calls, [vt_check.api_path("Domain", "evil.com")])
+        self.assertNotIn("githubusercontent", self.feed.read_text())
+
+    def test_a_git_argument_that_subprocess_refuses_is_a_failed_git_command(self):
+        def git(args, **kwargs):
+            if args[1] == "commit":
+                raise ValueError("embedded null byte")
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        reply = self.make_bot(git=git).add(["185.1.2.10"], "Unit 42", trusted=True)
+
+        self.assertIn("git commit failed, the rows are in the feed file but not committed: embedded null byte", reply)
 
     def test_the_feed_is_locked_while_it_is_pulled_written_and_committed(self):
         seen = []
@@ -441,9 +507,22 @@ class UpdatesTest(BotTestCase):
         self.assertEqual((self.tg.sent, self.git.calls, self.vt.calls), ([], [], []))
         self.assertEqual(self.err.getvalue().count("chat 7"), 1, "logged once a day")
 
+    def test_only_the_owners_private_chat_is_served(self):
+        # In a group the owner's own messages carry the group's chat: every member could use the bot there.
+        self.updates([message("/trust 185.1.2.10", chat=-100123, chat_type="supergroup", update_id=1),
+                      message("/trust 185.1.2.10", chat=OWNER, chat_type="group", update_id=2),
+                      message("/status", chat=OWNER, chat_type="channel", update_id=3),
+                      {"update_id": 4, "message": {"chat": {"id": OWNER}, "text": "/help"}}])
+
+        self.assertEqual(self.bot.run_once(), 4)
+
+        self.assertEqual((self.tg.sent, self.git.calls), ([], []))
+        self.assertEqual(self.feed.read_text(), FEED)
+        self.assertEqual(self.bot.offset, 5)
+
     def test_updates_without_text_are_ignored(self):
-        self.updates([{"update_id": 1, "edited_message": {"chat": {"id": OWNER}, "text": "x"}},
-                      {"update_id": 2, "message": {"chat": {"id": OWNER}, "sticker": {}}}])
+        self.updates([{"update_id": 1, "edited_message": {"chat": {"id": OWNER, "type": "private"}, "text": "x"}},
+                      {"update_id": 2, "message": {"chat": {"id": OWNER, "type": "private"}, "sticker": {}}}])
 
         self.bot.run_once()
 
@@ -928,14 +1007,21 @@ class MainTest(unittest.TestCase):
         (self.repo / "spark-ioc-feed.csv").write_text(FEED)
         self.tg = FakeTelegram()
 
-    def main(self, argv, telegram=None, stored=None):
+    def main(self, argv, telegram=None, stored=None, real_client=False):
+        """Run main with the client `telegram` (with `real_client`, the one telegram_api.from_keychain
+        builds from the `stored` Keychain items) and time.sleep patched."""
         out, err = io.StringIO(), io.StringIO()
         stored = stored or {}
-        with patch("telegram_api.from_keychain", return_value=telegram), \
-                patch("telegram_api.Telegram", side_effect=lambda token, chat_id: self.paired(token, chat_id)), \
-                patch("keychain.item", side_effect=lambda account, *a, **k: stored.get(account, "")), \
-                patch("telegram_bot.REPO", self.repo), patch("time.sleep") as sleep, \
-                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        with contextlib.ExitStack() as stack:
+            if not real_client:
+                stack.enter_context(patch("telegram_api.from_keychain", return_value=telegram))
+            stack.enter_context(patch("telegram_api.Telegram",
+                                      side_effect=lambda token, chat_id: self.paired(token, chat_id)))
+            stack.enter_context(patch("keychain.item", side_effect=lambda account, *a, **k: stored.get(account, "")))
+            stack.enter_context(patch("telegram_bot.REPO", self.repo))
+            sleep = stack.enter_context(patch("time.sleep"))
+            stack.enter_context(contextlib.redirect_stdout(out))
+            stack.enter_context(contextlib.redirect_stderr(err))
             code = telegram_bot.main(argv)
         return code, out.getvalue(), err.getvalue(), sleep
 
@@ -974,18 +1060,66 @@ class MainTest(unittest.TestCase):
         self.assertIn("--pair", err)
         sleep.assert_called_once_with(300)
 
-    def test_pair_prints_the_chat_id_and_the_command_that_stores_it(self):
-        self.tg.batches = [[message("hello", chat=4242)]]
+    def test_a_chat_id_that_is_not_a_number_is_logged_without_its_value_and_waits_before_exiting(self):
+        stored = {"TELEGRAM_BOT_TOKEN": "123456:SECRET-token", "TELEGRAM_CHAT_ID": "abc-123-secret"}
 
-        code, out, err, sleep = self.main(["--pair"], stored={"TELEGRAM_BOT_TOKEN": "123456:SECRET-token"})
+        code, out, err, sleep = self.main([], stored=stored, real_client=True)
+
+        self.assertEqual(code, 1)
+        self.assertIn("TELEGRAM_CHAT_ID is not a number", err)
+        self.assertNotIn("abc-123-secret", out + err)
+        self.assertNotIn("SECRET", out + err)
+        sleep.assert_called_once_with(300)
+
+    def pair(self, *updates):
+        self.tg.batches = [list(updates)]
+        return self.main(["--pair"], stored={"TELEGRAM_BOT_TOKEN": "123456:SECRET-token"})
+
+    def test_pair_prints_the_chat_id_and_the_command_that_stores_it(self):
+        code, out, err, sleep = self.pair(message("hello", chat=4242, sender={"id": 4242, "username": "owner_handle",
+                                                                               "first_name": "Owner"}))
 
         self.assertEqual(code, 0, err)
         self.assertEqual(self.client, ("123456:SECRET-token", None))
         self.assertEqual(self.tg.polls, [(0, 50)])
-        self.assertIn("4242", out)
+        self.assertIn("private chat 4242 from @owner_handle (Owner)", out)
         self.assertIn("security add-generic-password -s spark-ioc-feed -a TELEGRAM_CHAT_ID -w '4242' -U", out)
         self.assertNotIn("SECRET", out + err)
         self.assertEqual(self.tg.sent, [])
+
+    def test_pair_refuses_a_group_and_prints_no_id_for_it(self):
+        code, out, err, sleep = self.pair(message("/start", chat=-100123, chat_type="supergroup",
+                                                  sender={"id": 7, "username": "member", "first_name": "M"}))
+
+        self.assertEqual(code, 1)
+        self.assertIn("supergroup chat from @member (M): refused", out)
+        self.assertIn("send /start to the bot from your own account, not from a group", out)
+        self.assertNotIn("100123", out)
+        self.assertNotIn("TELEGRAM_CHAT_ID -w", out)
+
+    def test_pair_lists_every_candidate_and_prints_only_the_private_ones_id(self):
+        code, out, err, sleep = self.pair(
+            message("/start", chat=-100123, chat_type="group", update_id=1,
+                    sender={"id": 7, "username": "member", "first_name": "M"}),
+            message("/start", chat=4242, update_id=2, sender={"id": 4242, "first_name": "Owner"}),
+            message("again", chat=4242, update_id=3, sender={"id": 4242, "first_name": "Owner"}))
+
+        self.assertEqual(code, 0, err)
+        self.assertIn("group chat from @member (M): refused", out)
+        self.assertEqual(out.count("private chat 4242 from Owner"), 1)
+        self.assertNotIn("100123", out)
+        self.assertIn("-w '4242' -U", out)
+
+    def test_pair_with_two_private_chats_asks_which_is_yours(self):
+        code, out, err, sleep = self.pair(
+            message("/start", chat=4242, update_id=1, sender={"id": 4242, "username": "owner_handle", "first_name": "Y"}),
+            message("hi", chat=5151, update_id=2, sender={"id": 5151, "username": "stranger", "first_name": "S"}))
+
+        self.assertEqual(code, 0, err)
+        self.assertIn("private chat 4242 from @owner_handle (Y)", out)
+        self.assertIn("private chat 5151 from @stranger (S)", out)
+        self.assertIn("-w '<the id of your own account>' -U", out)
+        self.assertNotIn("-w '4242'", out)
 
     def test_pair_before_any_message_asks_for_one(self):
         code, out, err, sleep = self.main(["--pair"], stored={"TELEGRAM_BOT_TOKEN": "123456:SECRET-token"})

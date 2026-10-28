@@ -719,6 +719,23 @@ class SendTest(unittest.TestCase):
         self.assertEqual(self.sent[1:], ["note on 47.79.34.208", "note on 198.51.100.9"])
         self.assertEqual(self.notes, [(NEW, self.dir, "2026-10-28"), ("198.51.100.9", self.dir, "2026-10-28")])
 
+    def test_a_chat_id_that_is_not_a_number_prints_the_brief_and_never_its_value(self):
+        stored = {"TELEGRAM_BOT_TOKEN": "T", "TELEGRAM_CHAT_ID": "abc-123-secret"}
+        argv = ["--dir", str(self.dir), "--feed", str(self.dir / "spark-ioc-feed.csv"), "--date", DAY.isoformat(),
+                "--run-log", str(self.dir / "run.log"), "--send"]
+        out, err = io.StringIO(), io.StringIO()
+        with patch("keychain.item", side_effect=lambda account, *a, **k: stored.get(account, "")), \
+                patch.dict(sys.modules, {"attacker_context": self.attacker_context()}), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = spark_brief.main(argv)
+
+        self.assertEqual(code, 1, "the brief did not go out")
+        self.assertIn("TELEGRAM_CHAT_ID is not a number", err.getvalue())
+        self.assertNotIn("abc-123-secret", out.getvalue() + err.getvalue())
+        self.assertTrue(out.getvalue().startswith("Spark brief — Wed 2026-10-28\n"))
+        self.assertEqual((self.sent, self.notes), ([], []))
+        self.assertFalse(self.marker.exists())
+
     def test_a_sent_brief_leaves_one_line_in_the_log_and_is_not_printed(self):
         code, out, err = self.main()
 

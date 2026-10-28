@@ -7,8 +7,8 @@
 
 A message of indicators (defanged is fine) and an optional label is checked on VirusTotal and the
 flagged ones are added to the feed, committed and pushed; /trust adds without a check; /who,
-/sources, /status and /help answer from the capture and the feed. Only the owner's chat (the
-Keychain's TELEGRAM_CHAT_ID) is served. A second thread follows today's capture and alerts when a
+/sources, /status and /help answer from the capture and the feed. Only the owner's private chat
+(the Keychain's TELEGRAM_CHAT_ID) is served, and nothing on the never-block list is added. A second thread follows today's capture and alerts when a
 LAN device reaches a feed member or a Threat Prevention blade detects something, each alert
 followed by an attacker-context note. The design is docs/system-design.md, D6.
 """
@@ -24,9 +24,11 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 from collections import Counter, namedtuple
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import attacker_context
 import feed_lock
@@ -50,6 +52,11 @@ WATCH_POLL = 2.0
 BATCH = 1000  # capture lines read per pass
 MISSING_WAIT = 300  # without the bot in the Keychain: seconds before exiting (launchd starts the job again)
 GIT_TIMEOUT = 300
+LABEL_LIMIT = 120  # characters of a label: it goes into the CSV row and the commit subject
+# What this system talks to: the feed's home (the gateway pulls it from raw.githubusercontent.com),
+# Telegram, the note's model and VirusTotal. With spark_logs' vendor list, never added to the feed.
+NEVER_BLOCK = frozenset({"github.com", "raw.githubusercontent.com", "api.telegram.org", "api.anthropic.com",
+                         "www.virustotal.com"})
 
 HELP = """Send indicators (IPs, domains, URLs, hashes; defanged is fine), then an optional label:
   evil[.]com hxxps://bad[.]example/x MuddyWater - Unit 42
@@ -74,10 +81,17 @@ def log(text, at=None):
     sys.stderr.flush()
 
 
+def _hidden(char):
+    """True for a quote and for every control, format (bidi, zero-width), surrogate, private-use or
+    unassigned character: none of them may reach the gateway's CSV or the public commit."""
+    return char == '"' or unicodedata.category(char).startswith("C")
+
+
 def parse_message(text):
     """(verb, indicators, label) of a message: verb "check" for bare text, else the command
     (an unknown one is "help"); the indicators are the leading words vt_check.classify accepts,
-    normalised, a comma after one allowed; the label is the rest, commas and line breaks made spaces."""
+    normalised, a comma after one allowed; the label is the rest, without quotes or hidden
+    characters (_hidden), commas and line breaks made spaces, at most LABEL_LIMIT characters."""
     words = text.split()
     verb = "check"
     if words and words[0].startswith("/"):
@@ -85,11 +99,14 @@ def parse_message(text):
         verb = command if command in COMMANDS else "help"
     indicators = []
     for word in words:
+        if any(map(_hidden, word)):
+            break
         try:
             indicators.append(vt_check.classify(word.rstrip(","))[1])
         except ValueError:
             break
-    return verb, indicators, " ".join(" ".join(words[len(indicators):]).replace(",", " ").split())
+    label = "".join(c for c in " ".join(words[len(indicators):]) if not _hidden(c))
+    return verb, indicators, " ".join(label.replace(",", " ").split())[:LABEL_LIMIT].rstrip()
 
 
 def summary(statuses, trusted):
@@ -312,7 +329,7 @@ class Bot:
         self.daily_log = Path(daily_log)
         self.started = clock()
         self.last_error = None  # (when, message) of the last error logged, for /status
-        self.ignored = {}  # chat id -> the day it was last logged
+        self.ignored = {}  # "<chat type> <chat id>" -> the day it was last logged
         self.offset = self.load_offset()
         self.watcher = Watcher(self.syslog, FeedFile(self.feed), self.on_alerts, today=self.today, clock=clock)
 
@@ -372,11 +389,15 @@ class Bot:
         message = update.get("message") or {}
         if not message:
             return
-        chat = (message.get("chat") or {}).get("id")
-        if chat != self.telegram.chat_id:
-            if self.ignored.get(chat) != self.today():
-                self.ignored[chat] = self.today()
-                log(f"ignored a message from chat {chat}: only the owner's chat is served")
+        chat = message.get("chat") or {}
+        # Only the owner's private chat, whose id is the owner's own: in a group, every member could
+        # add to the public feed.
+        if chat.get("type") != "private" or chat.get("id") != self.telegram.chat_id:
+            seen = f"{chat.get('type')} {chat.get('id')}"
+            if self.ignored.get(seen) != self.today():
+                self.ignored[seen] = self.today()
+                log(f"ignored a message from {chat.get('type') or 'a'} chat {chat.get('id')}: "
+                    "only the owner's private chat is served")
             return
         if not message.get("text"):
             return
@@ -421,8 +442,13 @@ class Bot:
 
     def add(self, indicators, label, trusted):
         """Add the indicators to the feed, after a VirusTotal check unless `trusted`, then commit and
-        push the feed; returns the reply. At most MAX_INDICATORS are taken."""
+        push the feed; returns the reply. At most MAX_INDICATORS are taken, and one the gateway must
+        never block (never_block) is refused."""
         taken, rest = indicators[:MAX_INDICATORS], len(indicators) - MAX_INDICATORS
+        refused = [f"refused: {value} is on the never-block list" for value in taken if self.never_block(value)]
+        taken = [value for value in taken if not self.never_block(value)]
+        if not taken:
+            return "\n".join(refused)
         fetch = None
         if not trusted:
             fetch = self.fetch or self._keychain_fetch()
@@ -447,7 +473,17 @@ class Bot:
             lock.release()
         if rest > 0:
             lines.append(f"{rest} not checked, send them again")
-        return "\n".join(lines)
+        return "\n".join(refused + lines)
+
+    def never_block(self, value):
+        """True when the feed must not hold `value`: a domain, or a URL's host, that spark_logs never
+        looks up (its vendor list and syslog/allow.txt) or that this system needs (NEVER_BLOCK)."""
+        try:
+            host = urlsplit(value).hostname if "://" in value else value
+        except ValueError:  # "https://[::1": no host to compare
+            return False
+        suffixes = spark_logs.load_allow(self.syslog / spark_logs.ALLOW_NAME) | NEVER_BLOCK
+        return bool(host) and spark_logs.allowed(host, suffixes)
 
     @staticmethod
     def _keychain_fetch():
@@ -500,7 +536,7 @@ class Bot:
         """(whether git succeeded, what it said) for one git command in the repository."""
         try:
             proc = self.git(["git", *args], cwd=self.repo, capture_output=True, text=True, timeout=GIT_TIMEOUT)
-        except (OSError, subprocess.SubprocessError) as e:
+        except (OSError, subprocess.SubprocessError, ValueError) as e:  # ValueError: a NUL in an argument
             return False, str(e)
         return proc.returncode == 0, (proc.stderr or proc.stdout or "").strip()
 
@@ -574,26 +610,59 @@ BOTFATHER_HELP = f"""No bot token in the Keychain. To create the bot:
   3. Run python3 telegram_bot.py --pair again and send the bot any message."""
 
 
+GROUP_REFUSAL = "send /start to the bot from your own account, not from a group"
+STORE_CHAT_ID = f"security add-generic-password -s {keychain.SERVICE} -a TELEGRAM_CHAT_ID -w '{{}}' -U"
+
+
+def _sender(message):
+    """Who sent `message`: "@username (first name)", or what Telegram gives of the two."""
+    sender = message.get("from") or {}
+    username, first = sender.get("username"), sender.get("first_name")
+    name = " ".join(str(first).split()) if first else ""
+    if username:
+        return f"@{username} ({name})" if name else f"@{username}"
+    return name or "an unknown sender"
+
+
 def pair():
-    """First-time setup: print the chat id of the first message the bot receives."""
+    """First-time setup: list the chats that wrote to the bot, with their type and sender, and print
+    the chat id of a private one (a group's id is never offered: every member could use the bot)."""
     token = keychain.item("TELEGRAM_BOT_TOKEN")
     if not token:
         print(BOTFATHER_HELP)
         return 1
     telegram = telegram_api.Telegram(token, None)
-    print(f"Waiting up to {POLL_TIMEOUT} s for a message to the bot: send it anything from your Telegram account.",
+    print(f"Waiting up to {POLL_TIMEOUT} s for a message to the bot: send it /start from your own Telegram account.",
           flush=True)
     try:
         updates = telegram.get_updates(0, timeout=POLL_TIMEOUT)
     except (telegram_api.TelegramError, OSError) as e:
         print(f"error: Telegram did not answer: {e}", file=sys.stderr)
         return 1
-    chats = [update["message"]["chat"]["id"] for update in updates if "chat" in update.get("message", {})]
-    if not chats:
+    private, listed = [], set()
+    for update in updates:
+        message = update.get("message") or {}
+        chat = message.get("chat") or {}
+        kind = chat.get("type") or "unknown"
+        if "id" not in chat or (kind, chat["id"]) in listed:
+            continue
+        listed.add((kind, chat["id"]))
+        if kind == "private":
+            private.append(chat["id"])
+            print(f"  private chat {chat['id']} from {_sender(message)}")
+        else:
+            print(f"  {kind} chat from {_sender(message)}: refused — {GROUP_REFUSAL}")
+    if not listed:
         print("No message arrived. Send the bot a message first, then run python3 telegram_bot.py --pair again.")
         return 1
-    print(f"Your chat id is {chats[0]}. Store it with:\n"
-          f"  security add-generic-password -s {keychain.SERVICE} -a TELEGRAM_CHAT_ID -w '{chats[0]}' -U")
+    if not private:
+        print(f"No private chat wrote to the bot: {GROUP_REFUSAL}, then run python3 telegram_bot.py --pair again.")
+        return 1
+    if len(private) == 1:
+        print(f"Your chat id is {private[0]}. Store it with:\n  {STORE_CHAT_ID.format(private[0])}")
+    else:
+        print("More than one account wrote to the bot. Check the senders above and store the id of your own with:\n"
+              f"  {STORE_CHAT_ID.format('<the id of your own account>')}")
     return 0
 
 
@@ -607,10 +676,13 @@ def main(argv=None):
 
     if args.pair:
         return pair()
-    telegram = telegram_api.from_keychain()
+    try:
+        telegram, problem = telegram_api.from_keychain(), None
+    except telegram_api.TelegramError as e:  # its message never carries the stored value
+        telegram, problem = None, str(e)
     if telegram is None:
-        log(f"no TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID in the Keychain (service {keychain.SERVICE}): "
-            f"see python3 telegram_bot.py --pair; exiting in {MISSING_WAIT // 60} minutes")
+        problem = problem or f"no TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID in the Keychain (service {keychain.SERVICE})"
+        log(f"{problem}: see python3 telegram_bot.py --pair; exiting in {MISSING_WAIT // 60} minutes")
         time.sleep(MISSING_WAIT)  # launchd's KeepAlive starts the job again; the wait keeps the log quiet
         return 1
     bot = Bot(telegram, REPO)

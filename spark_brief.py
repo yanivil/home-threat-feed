@@ -330,7 +330,12 @@ def main(argv=None):
     marker, head = args.dir / MARKER_NAME, head_commit(args.feed)
     rows = committed_rows(args.feed, read_marker(marker))
     brief = compose(day, args.dir, args.feed, run_log, rows, day + timedelta(days=1))
-    telegram = telegram_api.from_keychain() if args.send else None
+    try:
+        telegram = telegram_api.from_keychain() if args.send else None
+    except telegram_api.TelegramError as e:  # a chat id that is not a number; the message never carries it
+        print(brief)
+        print(f"error: the brief was not sent: {e}", file=sys.stderr)
+        return 1
     if telegram is None:
         if args.send:
             print("no Telegram bot token and chat id in the Keychain; printing the brief instead", file=sys.stderr)

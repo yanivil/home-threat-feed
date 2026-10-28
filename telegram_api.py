@@ -7,6 +7,7 @@ into an exception.
 """
 
 import json
+import re
 import secrets
 import urllib.error
 import urllib.request
@@ -16,6 +17,7 @@ import keychain
 API = "https://api.telegram.org/bot{token}/{method}"
 MESSAGE_LIMIT = 4096  # characters per sendMessage text
 HTTP_MARGIN = 10  # seconds the HTTP timeout outlasts a long poll
+CHAT_ID_RE = re.compile(r"-?[0-9]+")
 
 
 class TelegramError(Exception):
@@ -113,9 +115,13 @@ class Telegram:
 
 
 def from_keychain():
-    """The client for the bot in the Keychain, None when its token or the owner's chat id is missing."""
+    """The client for the bot in the Keychain, None when its token or the owner's chat id is missing.
+    Raises TelegramError("TELEGRAM_CHAT_ID is not a number") when the stored chat id is not an
+    integer; the message never carries the value, which may be the token (the items swapped)."""
     token = keychain.item("TELEGRAM_BOT_TOKEN")
     chat_id = keychain.item("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
         return None
+    if not CHAT_ID_RE.fullmatch(chat_id):  # int() would echo the value in its ValueError
+        raise TelegramError("TELEGRAM_CHAT_ID is not a number")
     return Telegram(token, int(chat_id))

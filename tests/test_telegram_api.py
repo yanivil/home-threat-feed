@@ -1,6 +1,7 @@
 import email
 import io
 import json
+import traceback
 import unittest
 import urllib.error
 from unittest.mock import patch
@@ -208,10 +209,23 @@ class FromKeychainTest(unittest.TestCase):
             self.assertIsNone(telegram_api.from_keychain())
 
     def test_builds_the_client_with_the_chat_id_as_an_int(self):
-        with self.items(TELEGRAM_BOT_TOKEN="T", TELEGRAM_CHAT_ID="-100123"):
+        # The owner's private chat: its id is the owner's user id, a positive integer.
+        with self.items(TELEGRAM_BOT_TOKEN="T", TELEGRAM_CHAT_ID="4242"):
             tg = telegram_api.from_keychain()
 
-        self.assertEqual((tg.token, tg.chat_id), ("T", -100123))
+        self.assertEqual((tg.token, tg.chat_id), ("T", 4242))
+
+    def test_a_chat_id_that_is_not_a_number_is_an_error_that_never_carries_it(self):
+        # With the two items swapped, the stored chat id is the bot token: it must reach no log.
+        for stored in ("abc-123-secret", "123456:SECRET-token", "42 43", "4.2", "4_2", "\u0664\u0662"):
+            with self.subTest(stored=stored), self.items(TELEGRAM_BOT_TOKEN="T", TELEGRAM_CHAT_ID=stored):
+                with self.assertRaises(telegram_api.TelegramError) as caught:
+                    telegram_api.from_keychain()
+
+                self.assertEqual(str(caught.exception), "TELEGRAM_CHAT_ID is not a number")
+                printed = "".join(traceback.format_exception(type(caught.exception), caught.exception,
+                                                             caught.exception.__traceback__))
+                self.assertNotIn(stored, printed)
 
 
 class DefaultHttpTest(unittest.TestCase):
