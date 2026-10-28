@@ -16,7 +16,7 @@ REPO = Path(__file__).resolve().parent.parent
 SCRIPT = REPO / "daily_check.sh"
 PLIST = REPO / "launchd" / "com.spark-ioc-feed.daily.plist"
 HEADER = "# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT\n"
-SEED_ROW = "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,VT 6/86 malicious 2026-07-15\n"
+SEED_ROW = "vt-ip-7b3f0a9c21,185.1.5.7,IP,medium,high,AB,VT 6/86 malicious 2026-07-15\n"  # feed_lint wants a public IP
 
 # Stands in for spark_logs.py: records its arguments and whether the feed lock is held while it
 # runs, appends STUB_ADD rows to the feed beside it, prints STUB_OUTBOUND outbound hits the way
@@ -36,10 +36,15 @@ globals().update({k: v for k, v in vars(_real).items() if not k.startswith("__")
 def main():
     (here / "argv.txt").write_text(" ".join(sys.argv[1:]))
     (here / "lock_held.txt").write_text(str((here / "syslog" / ".feed-lock").is_dir()))
-    with (here / "spark-ioc-feed.csv").open("a") as f:
-        for i in range(int(os.environ.get("STUB_ADD", "0"))):
-            f.write(f"vt-ip-{i:010},198.51.100.{i},IP,medium,high,AB,"
+    feed = here / "spark-ioc-feed.csv"
+    # Rows numbered after those already there: a second run must not repeat one (feed_lint refuses it).
+    start = sum(1 for line in feed.read_text().splitlines() if line and not line.startswith("#"))
+    with feed.open("a") as f:
+        for i in range(start, start + int(os.environ.get("STUB_ADD", "0"))):
+            f.write(f"vt-ip-{i:010},185.1.4.{i},IP,medium,high,AB,"
                     "Inbound probe of WAN - Spark syslog 2026-10-21 - VT 7/95 malicious 2026-10-21\\n")
+        if os.environ.get("STUB_BAD_ROW"):
+            f.write("stub-bad,github.com,Domain,high,high,AB,a row the gateway must never see\\n")
     print("3 inbound sources and 2 outbound destinations in the last 2 day(s); 3 and 2 still to check")
     for i in range(int(os.environ.get("STUB_OUTBOUND", "0"))):
         print(f"OUTBOUND HIT  bad{i}.example  (Domain 7/94 malicious)  reached by 10.0.0.{i}  <- check these devices")
@@ -102,7 +107,7 @@ class DailyCheckTest(unittest.TestCase):
         shutil.copy(SCRIPT, self.repo / "daily_check.sh")
         shutil.copy(REPO / "syslog_retention.py", self.repo / "syslog_retention.py")  # the real one: no network, no key
         # The brief is the real one, over the real spark_logs functions; no Keychain item exists, so it prints.
-        for module in ("spark_brief.py", "telegram_api.py", "keychain.py", "vt_check.py"):
+        for module in ("spark_brief.py", "telegram_api.py", "keychain.py", "vt_check.py", "feed_lint.py"):
             shutil.copy(REPO / module, self.repo / module)
         shutil.copy(REPO / "spark_logs.py", self.repo / "spark_logs_real.py")
         (self.repo / "attacker_context.py").write_text('note = lambda *a, **k: ""\n')
@@ -206,6 +211,43 @@ class DailyCheckTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertEqual(self.head(), before)
         self.assertIn("unchanged", proc.stdout)
+
+    def test_a_bad_row_on_main_fails_the_run_before_the_check(self):
+        # Typed in the GitHub web editor: it reached main unchecked, and the next run says so.
+        self.stub_brief()
+        with (self.repo / "spark-ioc-feed.csv").open("a") as f:
+            f.write("web-edit,github.com,Domain,high,high,AB,typed in the GitHub web editor\n")
+        self.git("commit", "-q", "-am", "web edit", cwd=self.repo)
+        self.git("push", "-q", cwd=self.repo)
+        before = self.head()
+
+        proc = self.run_script(STUB_ADD=1)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("line 3: VALUE github.com is a host this system needs (never block)", proc.stdout)
+        self.assertIn("ERROR: the feed on main fails its lint: fix spark-ioc-feed.csv (see above); nothing was checked",
+                      proc.stdout)
+        self.assertFalse((self.repo / "argv.txt").exists())  # the check did not run
+        self.assertEqual(self.head(), before)
+        calls = self.brief_calls()
+        self.assertEqual([c["args"][:2] for c in calls], [["--send", "--notice"]])
+        self.assertIn("Daily check failed: the feed on main fails its lint", calls[0]["args"][2])
+        self.assertFalse(self.lock.exists())
+
+    def test_rows_the_check_wrote_that_fail_the_lint_are_not_committed(self):
+        self.stub_brief()
+        before = self.head()
+
+        proc = self.run_script(STUB_ADD=1, STUB_BAD_ROW=1)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("line 4: VALUE github.com is a host this system needs (never block)", proc.stdout)
+        self.assertIn("ERROR: the feed failed its lint after the check; its rows stay uncommitted in spark-ioc-feed.csv",
+                      proc.stdout)
+        self.assertEqual(self.head(), before)
+        self.assertIn("github.com", (self.repo / "spark-ioc-feed.csv").read_text())  # left for the fix
+        self.assertIn("ERROR: the feed failed its lint", self.brief_calls()[-1]["run_log"])
+        self.assertFalse(self.lock.exists())
 
     def test_log_lines_carry_a_timestamp_and_the_check_output(self):
         proc = self.run_script()

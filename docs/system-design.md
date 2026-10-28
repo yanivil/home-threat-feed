@@ -25,7 +25,8 @@ iMac "home-server" (on the LAN), user home-server     |            v  spark-ioc-
    |      -> syslog/spark-YYYY-MM-DD.log   one entry per line, one file per day
    |
    +-- daily_check.sh      (LaunchAgent com.spark-ioc-feed.daily, 07:30)
-   |      feed lock -> git pull -> spark_logs.py --days 2 --check -> vt_check.run() -> CSV -> commit, push
+   |      feed lock -> git pull -> feed_lint.py -> spark_logs.py --days 2 --check -> vt_check.run() -> CSV
+   |      -> feed_lint.py -> commit, push
    |      -> spark_brief.py --send (the morning brief to Telegram)
    |      macOS notification on outbound hits and on errors; a Telegram notice when a run fails
    |
@@ -512,6 +513,40 @@ unchanged. Sources, caps and cost are the open design questions. Rows from the n
 will carry a COMMENT starting with `News`, so the brief's origin count ("from news") can show
 them; the morning brief already recognises that convention.
 
+### D8. The public repository names nothing of the owner's network, lints the feed before every commit and pins its workflow (decided and built 2026-10-28)
+
+Decision: the repository is public and the gateway reads the feed from it as is, so three rules.
+(1) No address, hostname or handle of the owner's network appears in it. Fixtures copied from real
+log lines use stand-ins: `185.1.3.x` for the line's own address, which `spark_logs.candidate` and
+`_learn_wan_ip` need to look public, so no RFC 5737 range would do; `185.1.2.x` for attackers;
+`192.168.1.x` and `192.168.2.x` for the two LANs; `Home-Spark` for the gateway. This document
+names no address. The LaunchAgent plists keep `/Users/home-server`: the account name is generic
+and the installed copies must match the repository's. (2) `feed_lint.py` runs before every commit
+of the feed, in all three writers: the daily check after its pull (a bad web edit on main stops
+the run, with the problem in the morning message) and again before its commit; the Telegram bot
+before its commit (a failing file is left for the owner and the reply says what is wrong); the
+monthly re-check before its commit. It holds the file to the gateway's format: the exact header,
+seven fields, a VALUE of its TYPE and normalised, no VALUE or UNIQ-NAME twice, no hidden
+character, none of the hosts the system itself needs (that list moved from the bot into the
+lint). (3) `actions/checkout` is pinned to a commit, and the repository's Actions settings are to
+require SHA pinning once the pinned workflow is on main, so a moved tag cannot change what runs
+with write access to the feed.
+
+Why: the file is written by three unattended jobs and now and then by hand in a web editor, and
+whatever reaches main is on the gateway within half an hour and on the public internet at once.
+The checks at intake (`vt_check.classify`, the bot's never-block list) covered neither a hand
+edit nor a stray real address in a fixture. Rewriting the published history to remove the
+addresses already public was declined: they are DHCP addresses that rotate, and a force-push is
+what the ruleset on main forbids.
+
+Outcome: built 2026-10-28 on branch `worktree-repo-hardening`, test-first, after the GitHub side
+was set the same day by hand: a ruleset on main that refuses force-pushes and deletion, Actions
+limited to GitHub's and verified creators', secret scanning with push protection, the owner's
+no-reply identity on every new commit. Still the owner's: two-factor authentication, the scope
+and expiry of the token the Mac pushes with, the e-mail privacy toggles, BotFather's
+`/setjoingroups`, and whether the vendor exports named in the feed's COMMENT column may be
+republished.
+
 ## 5. Operating it
 
 - Is the system up? Send `/status` to the bot first: five lines, the receiver, the last daily
@@ -546,10 +581,12 @@ them; the morning brief already recognises that convention.
 
 ## 6. Open items
 
-1. Commit the D1 plist and README changes, D3, D5 and this document.
+1. Set `sha_pinning_required` in the repository's Actions settings now that `actions/checkout` is
+   pinned (D8); it could not be set while the workflow still named a tag.
 2. Design D7 (news agent) and record it here with its outcome; D6 is built (record the owner's
    end-to-end check under its outcome).
 3. Merge the two duplicate-check implementations when `vt_check.py` is next changed.
 4. The Telegram bot's alert rule (which detections alert, which get a note) and its caps were set
    on measured data and the review's arithmetic; tune them on the first week of `note usage`
    lines and alerts.
+5. The owner's hardening items listed under D8's outcome.

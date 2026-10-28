@@ -5,11 +5,14 @@
 #   1. feed lock           take syslog/.feed-lock, the directory the Telegram bot also holds while it
 #                          adds rows (feed_lock.py); wait up to twenty minutes for the bot, take over a
 #                          lock older than three hours, give it back right after the push
-#   2. git pull            bring in rows committed elsewhere (GitHub web edits, the monthly re-check)
+#   2. git pull            bring in rows committed elsewhere (GitHub web edits, the monthly re-check),
+#                          then feed_lint.py: a feed on main that fails it (a bad web edit) stops the
+#                          run here, so that the morning message says what to fix
 #   3. spark_logs.py       mine the last two daily captures, look new indicators up on VirusTotal
 #                          (outbound names first, then recurring outbound addresses, then persistent
 #                          inbound sources; see its --help for the thresholds)
-#   4. git commit + push   spark-ioc-feed.csv only, when the check added rows
+#   4. git commit + push   spark-ioc-feed.csv only, when the check added rows, after feed_lint.py
+#                          passed it again; a feed that fails stays uncommitted
 #   5. spark_brief.py      send the morning brief to Telegram: yesterday's attack attempts, the rows
 #                          this run added, the system's health (it is printed here when there is no
 #                          bot token); sent even when the check stopped early, never fails the run
@@ -105,6 +108,7 @@ locked=1
 trap 'remove_run_log; release_lock' EXIT
 
 git pull --rebase --autostash --quiet || fail "git pull failed; the feed was not checked (see $LOG_FILE)"
+python3 feed_lint.py "$FEED" 2>&1 || fail "the feed on main fails its lint: fix $FEED (see above); nothing was checked"
 
 run_log=$(mktemp -t spark-daily-check) || { run_log=; fail "cannot create the run log"; }
 python3 spark_logs.py --days "$DAYS" --check ${MAX_LOOKUPS:+--max-lookups "$MAX_LOOKUPS"} 2>&1 | tee "$run_log"
@@ -114,6 +118,7 @@ hits=$(grep -c '^OUTBOUND HIT' "$run_log")
 if git diff --quiet -- "$FEED"; then
     log "Feed unchanged"
 else
+    python3 feed_lint.py "$FEED" 2>&1 || fail "the feed failed its lint after the check; its rows stay uncommitted in $FEED (see above)"
     read -r added removed _ < <(git diff --numstat -- "$FEED")
     if [ "$removed" -eq 0 ]; then
         plural=s; [ "$added" -eq 1 ] && plural=

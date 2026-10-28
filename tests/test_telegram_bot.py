@@ -403,6 +403,19 @@ class AddTest(BotTestCase):
                       self.tg.sent[-1])
         self.assertEqual(self.git.commands(), ["pull", "diff"])
 
+    def test_a_feed_that_fails_its_lint_is_not_committed(self):
+        # A row typed into the file on the Mac and never committed; the bot's own rows always pass.
+        with self.feed.open("a") as f:
+            f.write("hand-edit,github.com,Domain,high,high,AB,typed into the file\n")
+
+        self.send("evil.com")
+
+        self.assertTrue(self.tg.sent[-1].endswith(
+            "The feed failed its lint, nothing committed (fix spark-ioc-feed.csv on the Mac): "
+            "line 6: VALUE github.com is a host this system needs (never block)."), self.tg.sent[-1])
+        self.assertEqual(self.git.commands(), ["pull", "diff"])
+        self.assertIn("evil.com", self.feed.read_text())  # written, for the fix to keep
+
     def test_a_systemexit_while_the_check_is_announced_still_releases_the_lock(self):
         self.tg.send_message = lambda text: (_ for _ in ()).throw(SystemExit(0))  # launchd's SIGTERM, then
 

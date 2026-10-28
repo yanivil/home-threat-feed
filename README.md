@@ -61,10 +61,20 @@ Check Point indicator CSV. Header line must stay exactly as is:
 
 The gateway re-fetches the file every 30 minutes (configurable under IoC Feeds → Settings).
 
+`feed_lint.py` holds the file to this format and refuses the rest: the header exactly as above,
+seven fields in every row, a VALUE of its TYPE and normalised (lower-case domains and hashes,
+public addresses, ranges as `a.b.c.d-a.b.c.e`), no VALUE or UNIQ-NAME twice, no hidden character,
+and none of the hosts this system itself needs (github.com, raw.githubusercontent.com,
+api.telegram.org, api.anthropic.com, www.virustotal.com). Every writer runs it before committing:
+the daily check (after its pull and again before its commit), the Telegram bot and the monthly
+re-check. `python3 feed_lint.py` runs it by hand and lists the problems as `line N: …`.
+
 ## Adding an indicator
 
 Edit `spark-ioc-feed.csv` in the GitHub web editor, add one line per indicator, commit.
-No spaces around commas. Do not put commas inside the COMMENT field.
+No spaces around commas. Do not put commas inside the COMMENT field. A web edit reaches main
+unchecked: when it broke the file, the next daily run stops at its lint with the problem in its
+log and in the morning message, and adds nothing until the file is fixed.
 
 ## Adding indicators checked on VirusTotal
 
@@ -233,6 +243,11 @@ time.
   the run exits non-zero, and a commit that could not be pushed stays local until the next run
   pushes it. A run missed while the Mac slept happens on wake; one missed while it was off is
   skipped.
+- The feed is linted (`feed_lint.py`, "Format" above) right after the pull and again before the
+  commit. A feed on main that fails (a bad web edit) stops the run before the check, with
+  `Daily check failed: the feed on main fails its lint …` as the morning message; rows the check
+  wrote that fail stay uncommitted and the brief carries the error. Fix `spark-ioc-feed.csv` and
+  the next run goes on.
 - Every run ends with one Telegram message. A run that fails after the check (the commit or the
   push) sends the brief with the failure among its errors; one that fails before it (the lock,
   `syslog/`, the pull) sends one line, `Daily check failed: <reason>`; and when the brief itself
@@ -356,7 +371,10 @@ Send the bot a message and it answers in the same chat. `/help` lists what it un
   ```
   An indicator can also come back `in-feed`, `duplicate`, `not-found (VirusTotal has no
   record)`, `invalid (...)`, `error (...)`, `quota (...)` or `unchecked`. With nothing added
-  the last line is `Nothing added, nothing committed.`
+  the last line is `Nothing added, nothing committed.`; when the file fails `feed_lint.py` (a
+  hand edit of it on the Mac, never the bot's own rows) it is `The feed failed its lint, nothing
+  committed (fix spark-ioc-feed.csv on the Mac): line N: …` and the rows wait, uncommitted, for
+  the fix.
 - **`/trust <indicators> [label]`** adds them without a VirusTotal check, as
   `vt_check.py --trusted` does: the rows carry `added without VirusTotal check <date>` and join
   the 90-day first check under "Keeping the feed fresh". There is no wait, so the reply comes

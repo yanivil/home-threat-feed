@@ -32,6 +32,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import attacker_context
+import feed_lint
 import feed_lock
 from capture_watcher import Alert, FeedFile, Notice, Watcher, log
 import keychain
@@ -55,9 +56,9 @@ GIT_TIMEOUT = 300
 LABEL_LIMIT = 120  # characters of a label: it goes into the CSV row and the commit subject
 NOTE_QUEUE = 10  # notes waiting for the note thread; one more is dropped
 # What this system talks to: the feed's home (the gateway pulls it from raw.githubusercontent.com),
-# Telegram, the note's model and VirusTotal. With spark_logs' vendor list, never added to the feed.
-NEVER_BLOCK = frozenset({"github.com", "raw.githubusercontent.com", "api.telegram.org", "api.anthropic.com",
-                         "www.virustotal.com"})
+# Telegram, the note's model and VirusTotal. With spark_logs' vendor list, never added to the feed;
+# the list lives with the lint that keeps them out of the file too.
+NEVER_BLOCK = feed_lint.NEVER_BLOCK
 
 HELP = """Send indicators (IPs, domains, URLs, hashes; defanged is fine), then an optional label:
   evil[.]com hxxps://bad[.]example/x MuddyWater - Unit 42
@@ -346,12 +347,19 @@ class Bot:
         """Commit and push the feed whenever git sees it changed: the rows this check added, and any an
         interrupted one left behind (they would otherwise go out under the daily check's message). The
         message counts the rows git says were added; when git also saw rows removed (a hand edit on the
-        Mac that was never committed) it says `+a/-r lines` like the daily check. Returns the reply's
-        last line."""
+        Mac that was never committed) it says `+a/-r lines` like the daily check. The file is linted
+        first (feed_lint): one that fails stays uncommitted and the reply says what is wrong. Returns
+        the reply's last line."""
         status, _, said = self._run_git("diff", "--quiet", "--", FEED_NAME)
         if status == 0:
             return "Nothing added, nothing committed."
         if status == 1:
+            faults = feed_lint.problems(self.feed.read_text())
+            if faults:  # never the bot's own rows: a hand edit of the file, left for the owner to fix
+                self.error(f"the feed failed its lint, nothing committed: {faults[0]}")
+                more = f" and {len(faults) - 1} more" if len(faults) > 1 else ""
+                return (f"The feed failed its lint, nothing committed (fix {FEED_NAME} on the Mac): "
+                        f"{faults[0]}{more}.")
             status, stdout, said = self._run_git("diff", "--numstat", "--", FEED_NAME)
         if status != 0:
             self.error(f"git diff failed: {said}")

@@ -17,7 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180  # 15 s per stale row; the free key allows 500 lookups a day
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to a commit, not a tag: the repository's Actions settings require it, so a moved
+      # tag cannot change what runs here. Bump the SHA and the comment together.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: Re-verify stale rows on VirusTotal
         id: recheck
@@ -32,6 +34,10 @@ jobs:
             exit 0
           fi
           python3 vt_check.py --recheck ${MAX_AGE:+--max-age "$MAX_AGE"}
+
+      # A feed that fails fails the job here, before anything is committed.
+      - name: Lint the feed
+        run: python3 feed_lint.py spark-ioc-feed.csv
 
       - name: Commit the updated feed
         run: |
