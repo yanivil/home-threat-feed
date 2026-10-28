@@ -27,11 +27,12 @@ iMac "home-server" (10.45.60.100), user home-server   |            v  spark-ioc-
    +-- daily_check.sh      (LaunchAgent com.spark-ioc-feed.daily, 07:30)
    |      feed lock -> git pull -> spark_logs.py --days 2 --check -> vt_check.run() -> CSV -> commit, push
    |      -> spark_brief.py --send (the morning brief to Telegram)
-   |      macOS notification on outbound hits and on errors
+   |      macOS notification on outbound hits and on errors; a Telegram notice when a run fails
    |
    +-- telegram_bot.py     (LaunchAgent com.spark-ioc-feed.telegram, always on)
    |      Telegram <-> commands (add indicators: feed lock -> git pull -> vt_check.run() -> CSV -> commit, push)
-   |      live watcher: syslog/spark-<today>.log -> alerts + attacker notes (attacker_context.py)
+   |      live watcher (capture_watcher.py): syslog/spark-<today>.log -> alerts (capped)
+   |      note thread: attacker notes (attacker_context.py), capped
    |
    +-- by hand: vt_check.py <indicators> | --trusted | cyberint_xlsx.py -> TSV -> vt_check.py --trusted
 
@@ -40,8 +41,8 @@ GitHub Actions, 1st of the month: .github/workflows/recheck.yml -> vt_check.py -
 
 | Piece | Runs | Reads | Writes |
 |---|---|---|---|
-| `syslog_receiver.py` | always, restarted by launchd if it dies | UDP 5514 | `syslog/spark-<day>.log` |
-| `daily_check.sh` | 07:30 daily (a run missed while asleep happens on wake) | capture of the last 2 days, `syslog/checked.json`, `syslog/allow.txt`, VT key from the Keychain | the feed, `syslog/checked.json`, `syslog/.feed-lock` (taken after the retention step, released on exit), `~/Library/Logs/spark-ioc-feed/daily-check.log`, a notification, and as its last step the morning brief |
+| `syslog_receiver.py` | always, restarted by launchd if it dies | UDP 5514, the gateway's datagrams only (`--source`, by default the default route's gateway) | `syslog/spark-<day>.log`, one line per entry; its log names the source it receives from and the ones it drops |
+| `daily_check.sh` | 07:30 daily (a run missed while asleep happens on wake) | capture of the last 2 days, `syslog/checked.json`, `syslog/allow.txt`, VT key from the Keychain | the feed, `syslog/checked.json`, `syslog/.feed-lock` (taken after the retention step, given back right after the push), `~/Library/Logs/spark-ioc-feed/daily-check.log`, a notification, and as its last step the morning brief |
 | `syslog_retention.py` | first step of the daily job | capture file names (the date in them) | `.log` → `.log.gz` after 7 days; removes both after 180 |
 | `spark_logs.py` | from the daily job or by hand | capture files, plain or `.gz` | feed rows (through `vt_check.run`) |
 | `vt_check.py` | by hand, from the daily job, from Actions | VirusTotal API v3 | feed rows; with `--recheck`, rewrites rows in place |
@@ -53,12 +54,13 @@ GitHub Actions, 1st of the month: .github/workflows/recheck.yml -> vt_check.py -
 | `spark_brief.py` | last step of the daily job, or by hand | the day's capture, the daily check's output, the feed and its git history, `syslog/last-brief.json` | the brief on Telegram (printed in the log when there is no token), `syslog/last-brief.json` |
 | `attacker_context.py` | for each alert's note, `/who` and the brief's sent-to-block notes | yesterday's and today's capture; VirusTotal, RDAP, Shodan InternetDB, GreyNoise (optional); the Anthropic API | nothing: it returns the text |
 | `telegram_bot.py` | always, restarted by launchd | Telegram updates, today's capture, the feed, the Keychain | the feed (rows and one commit per addition), `syslog/telegram-offset.json`, `~/Library/Logs/spark-ioc-feed/telegram-bot.log`, messages |
+| `capture_watcher.py` | a thread of the bot | today's capture, the feed | alerts (handed to the bot), `syslog/watcher-offset.json` (its place in the capture) |
 | `launchd/com.spark-ioc-feed.telegram.plist` | installed in `~/Library/LaunchAgents/`; `RunAtLoad` and `KeepAlive` | nothing | the bot's log |
 
 All three LaunchAgents run the Command Line Tools `Python.app` binary as their program (see
 decision D1), with logs in `~/Library/Logs/spark-ioc-feed/`. `daily_check.sh` takes the feed
 lock before its `git pull` (waiting up to twenty minutes for the bot, taking over a lock older
-than three hours) and ends by sending the brief; see D6.
+than three hours), gives it back right after its push and ends by sending the brief; see D6.
 
 ## 3. Rules the system enforces
 
@@ -218,7 +220,7 @@ why they attack. Settled with the owner on 2026-10-28, one question at a time:
   on request as a file, not sent daily.
 - Two events alert within minutes: a LAN device trying to reach an indicator already in the
   feed, and a Threat Prevention detection. Nothing else alerts live. (The detection rule was
-  narrowed in the build; see "The live watcher".)
+  narrowed in the build and again after the whole-branch review; see "The live watcher".)
 - A bare message to the bot means "check these on VirusTotal and add the flagged ones";
   `/trust` adds without a check. Only the owner's Telegram account is listened to.
 - Every live alert and every source sent to block gets a second message with the attacker's
@@ -243,20 +245,32 @@ run, so it reports exactly what that run did.
 | `keychain.py` | `item(account, env_var)`: a secret from an environment variable, else from the login Keychain (service `spark-ioc-feed`); the scripts read every key and token through it |
 | `feed_lock.py` | the `syslog/.feed-lock` directory lock, as a context manager with a wait and a stale-lock takeover, for the bot; `daily_check.sh` takes the same directory |
 | `telegram_api.py` | `send_message`, `send_document`, `get_updates` over HTTPS; the bot token and the owner's chat id from the login Keychain (`spark-ioc-feed` / `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`), the same mechanism as the VirusTotal key |
-| `telegram_bot.py` | the LaunchAgent `com.spark-ioc-feed.telegram` (Python.app program, `KeepAlive`): the command loop and the live watcher; `--pair` for first-time setup |
+| `telegram_bot.py` | the LaunchAgent `com.spark-ioc-feed.telegram` (Python.app program, `KeepAlive`): the command loop, the watcher's thread and the note thread; `--pair` for first-time setup |
+| `capture_watcher.py` | the live watcher: follows today's capture, raises the alerts under the caps, saves its place; split out of `telegram_bot.py` in the fix wave |
 | `spark_brief.py` | composes the morning brief from yesterday's capture, the daily run's log and the feed; `--send` posts it, otherwise prints it; called by `daily_check.sh` as its last step |
 | `attacker_context.py` | gathers the facts about an indicator and asks Opus 5.5 for the note; used by the brief, the live alerts and `/who` |
 | `launchd/com.spark-ioc-feed.telegram.plist` | keeps the bot running, logs to `~/Library/Logs/spark-ioc-feed/telegram-bot.log` |
 
 **First-time setup** (the owner's steps): create the bot in BotFather and store its token
 (`security add-generic-password -s spark-ioc-feed -a TELEGRAM_BOT_TOKEN -w '<token>' -U`);
-run `python3 telegram_bot.py --pair`, send the bot any message, and it prints the chat id
-and the `security` command that stores it; install the plist like the other two. The
-README's "Setting it up" has the checklist and the end-to-end check.
+send the bot `/start` from the owner's own account (a private chat) and run
+`python3 telegram_bot.py --pair`: it lists each chat that wrote with its type and sender, refuses
+a group, and prints a private chat's id and the `security` command that stores it; install the
+plist like the other two. A stored chat id that is not a number stops the bot like a missing one,
+with `TELEGRAM_CHAT_ID is not a number` in the log and never the value. The README's "Setting it
+up" has the checklist and the end-to-end check.
 
-**The bot's commands.** Messages from any other chat id are ignored (logged once a day per
-id). Text is split on whitespace; leading tokens that `vt_check.classify` accepts, defanged
-or not, are the indicators, the rest of the line is the label that goes into `COMMENT`:
+**The bot's commands.** Only the owner's private chat is served (chat type `private` and the
+stored id, which is then the owner's own user id); a message from any other chat, a group the
+owner is in included, is ignored (logged once a day per chat), since in a group every member
+could add to the public feed. Text is split on whitespace and commas (a URL keeps its commas);
+leading tokens that `vt_check.classify` accepts, defanged or not, are the indicators, and the
+rest is the label that goes into `COMMENT` and the commit subject, without quotes or Unicode
+control and format characters (bidi, zero-width), commas made spaces, at most 120 characters.
+Both adding paths refuse, with `refused: <value> is on the never-block list`, a domain or URL
+host that `spark_logs.allowed` covers (the vendor list and `syslog/allow.txt`) or one this
+system depends on: `github.com`, `raw.githubusercontent.com`, `api.telegram.org`,
+`api.anthropic.com`, `www.virustotal.com`. There is no override and no removal command.
 
 - *bare text*: `vt_check.run()` on the indicators, at most 50 a message (the rest are
   reported as `N not checked, send them again`), one lookup every 15 s; the bot first replies
@@ -277,20 +291,24 @@ or not, are the indicators, the rest of the line is the label that goes into `CO
 - `/status`: five lines. Whether the receiver is writing (today's capture modified within the
   last two minutes); when the daily check last ran and how it ended, with the lookups it
   used; the next re-check date (the earliest `recheck_due` over the feed); the bot's uptime;
-  and the last error the bot logged, or `last error: none`.
+  and the last error the bot logged, or `last error: none`. It reads the last 64 KB of the
+  daily check's log.
 - `/help`, and anything unrecognised: the list above.
 
 **Writing the feed from two places.** The daily check and the bot both commit the feed, on
 the same clone. A directory lock, `syslog/.feed-lock` (`mkdir` is atomic, and bash and
-Python can both take it), is held by `daily_check.sh` for its whole run and by the bot for
-the length of an addition: seconds for `/trust`, about 13 minutes for a 50-indicator check at
+Python can both take it), is held by `daily_check.sh` from before its pull until right after
+its push (so that the brief's notes may use VirusTotal) and by the bot for the length of an
+addition: seconds for `/trust`, about 13 minutes for a 50-indicator check at
 one lookup every 15 s. The bot waits `LOCK_WAIT` = 60 s for it; if the daily check still
 holds it, the bot tells the owner the daily check has been writing the feed for so many
 minutes (the lock's age) and to send the indicators again later, so that its command loop
 never stalls for a whole run. `daily_check.sh` waits up to twenty minutes for the bot before
 it gives up and fails the run, and a lock older than three hours is treated as stale and
 taken over (`feed_lock.py` and the script use the same limit). Both commit only
-`spark-ioc-feed.csv` and push at once.
+`spark-ioc-feed.csv` and push at once. The bot commits whenever `git diff` shows the feed
+changed and counts the added rows from `git diff --numstat`, so rows a killed check left behind
+go out with its next addition, never under the daily check's message.
 
 **The live watcher.** A thread follows today's capture (`syslog/spark-<today>.log`, moving
 to the new file at midnight) and raises an alert for two kinds of entry:
@@ -304,25 +322,51 @@ to the new file at midnight) and raises an alert for two kinds of entry:
    destination; the statistics rows those blades emit every minute (counters, no
    addresses) are not detections.
 
-As built, the second kind is narrower than that list. A detection alerts only when the
-gateway's action is not `monitor` (monitor mode enforced nothing) and a public address is
-involved; a detection between two LAN addresses, and every monitor-mode one, is counted in
-the brief and raises no alert. The measurement behind this: on 2026-10-28 the capture held 44
-detection rows (22 distinct source/destination/protection combinations), all SmartDefense; 32
-rows were `monitor` for "HTTP Methods" from one LAN device, six were LAN-only "Max Ping Size"
-rows, and none was inbound. Alerting on all of them would have sent about 22 alert-and-note
-pairs that day.
+As built, the second kind is narrower than that list. A detection alerts only when its
+`Action`, stripped and lower-cased, is one of `prevent`, `drop`, `reject`, `block`, `detect`, and
+a public address is involved; a blank Action, `monitor`, `accept`, `inspect` and anything else,
+and every detection between two LAN addresses, are counted in the brief and raise no alert. The
+measurement behind the first narrowing: on 2026-10-28 the capture held 44 detection rows (22
+distinct source/destination/protection combinations), all SmartDefense; 32 rows were `monitor`
+for "HTTP Methods" from one LAN device, six were LAN-only "Max Ping Size" rows, and none was
+inbound. Alerting on all of them would have sent about 22 alert-and-note pairs that day. The
+whole-branch review then found that a blank Action, which the IP-reputation rows on dropped
+probes carry, is no evidence of enforcement and the likeliest flood, hence the explicit list.
+The Spark's system log lines (`<stamp> <tag>: <text>`, forwarded since 2026-10-28) parse as
+`{"received", "tag", "system"}` with no key="value" pairs and never alert.
 
 An alert is one message. A feed alert reads `HH:MM:SS — <device> tried to reach <indicator>
-(<the feed row's COMMENT>) — <action>; N× today`; a detection reads `HH:MM:SS — Threat
-Prevention: <blade> <protection> from <source> to <destination> — <action>`, with an empty
-action shown as `detected`. The same pair (for a detection: source, destination and
-protection) is not alerted again for an hour (`COOLDOWN`). The attacker-context note follows
-as a second message for a feed alert and for an inbound detection (the public address is the
-source), not for an outbound one, and only after every alert of that pass has gone out, since
-a note takes tens of seconds. When the bot starts it reads what today's capture already holds
-and counts it without alerting, so a restart repeats no alert and silences none. The
-receiver's file is read, never the socket, so the watcher cannot disturb the capture.
+(<the feed row's COMMENT>) — <action>; N× today`, an empty action shown as `detected`; a
+detection reads `HH:MM:SS — Threat Prevention: <blade> <protection> from <source> to
+<destination> — <action>`. Every string taken from the capture goes through
+`attacker_context.clean` (one line, at most 100 characters, no control or format characters),
+and a source or destination is shown as the address it parses to, else cleaned the same way:
+since the receiver keeps only the gateway's datagrams this is defence in depth, but the capture
+is now an alert channel. The same pair (for a detection: source, destination and protection) is
+not alerted again for an hour (`COOLDOWN`). At most ten alerts go out in any sliding ten
+minutes: the first one over is replaced by `Alert cap reached: further alerts in the next 10
+minutes are counted, not sent`, and when those ten minutes are over one message says `N alerts
+suppressed between HH:MM and HH:MM; the morning brief has the counts`.
+
+The attacker-context note follows a feed alert (on the indicator), an inbound detection (on its
+source) and an outbound Anti-Bot, Anti-Virus, Anti-Malware or Threat Emulation detection (on its
+destination, the host name the row names or else the address: these blades name attacker
+infrastructure); an outbound IPS/SmartDefense detection, a protocol anomaly, gets none. Notes are
+capped at six an hour, thirty a local day and one per indicator in 24 hours; an alert whose note
+is over a cap goes out alone. They run in a daemon thread fed by a queue of ten (one more is
+dropped and logged), so an alert never waits on a note, and a pass's alerts still go out before
+its notes because the queue keeps their order. The caps live in the watcher and run on its
+clock, which the tests replace.
+
+After each pass the watcher saves its place, `syslog/watcher-offset.json` (`{"day", "inode",
+"offset"}`, the end of the last whole line). When it starts and that names today's capture
+(same day, same inode), the lines up to the offset are only counted and the ones after it, written
+while it was down, are alerted with the prefix `late: `, without notes and under the alert cap; a
+same-day restart (a crash, a `kickstart`, the five-minute wait for a missing secret, a watcher
+restarted after a failure) therefore repeats no alert and silences none. Otherwise what today's
+capture holds at start is counted without alerting. A line that cannot be read in any way costs
+only itself, and a pass logs how many it skipped and the first one's line number, never their
+content. The receiver's file is read, never the socket, so the watcher cannot disturb the capture.
 
 **The morning brief** (`daily_check.sh` runs `spark_brief.py --send` after the push; the
 format approved on 2026-10-28):
@@ -346,13 +390,18 @@ Lookups: 45 of 500 · next re-check 2026-12-18 · no errors
 
 Inputs: the previous calendar day's capture (drops and rejects from the External zone,
 distinct sources, top ten with the in-feed mark, Threat Prevention detections), the run's
-log (rows added with their ratio and probe count, outbound hits, lookups used, `ERROR`
-lines), the feed's commits since the previous brief grouped by the origin in `COMMENT`
+log (rows added with their ratio and probe count, outbound hits, lookups used, the lines
+that say something went wrong, `spark_logs.py: error: …` included), the feed's commits since the previous brief grouped by the origin in `COMMENT`
 (`Spark syslog`, the news agent's label, `Telegram`, `added without VirusTotal check`), and
 `recheck_due` over the feed for the next date. Sections with nothing to say are left out,
-but the message is always sent, so a quiet morning still shows the system ran. Each source
-under "sent to block" then gets its attacker-context message. With no bot token in the
-Keychain the brief is printed in the daily check's log instead. A delivered brief records
+but the message is always sent, so a quiet morning still shows the system ran: every exit of
+`daily_check.sh` ends with one Telegram message. A run that fails after its check sends the
+brief with the failure as an `ERROR` line; one that fails before it sends the one line `Daily
+check failed: <reason>` (`spark_brief.py --notice`); a brief that cannot be sent is followed by
+that line, and nothing recurses. A missing capture is the first error listed, and the Spark's
+system log lines are counted apart (`System log: N lines`). Each source under "sent to block"
+then gets its attacker-context message. With no bot token or chat id in the Keychain the brief
+is printed in the daily check's log instead. A delivered brief records
 the feed's commit in `syslog/last-brief.json`, so the next one counts the rows committed
 since and none twice (the first counts the feed's commits of the last 36 hours).
 
@@ -372,17 +421,26 @@ from the standard library because this Mac's only Python is the Command Line Too
 the Anthropic SDK needs 3.10; the key comes from the Keychain (`ANTHROPIC_API_KEY`, stored
 2026-10-28). The request carries the facts as data, the `web_search` server tool
 (`web_search_20260209`, at most three searches) for what the address and its network are
-known for, `output_config.effort` `medium`, and Anthropic's server-side refusal fallback
-(`fallbacks: "default"`). The instructions ask for at most eight plain lines: who (network,
+known for, `output_config.effort` `medium`, `max_tokens` 4000 (the plan's 1500 was raised in
+the fix wave: adaptive thinking shares the cap, and a note could end mid-sentence after three
+searches), and Anthropic's server-side refusal fallback (`fallbacks: "default"`). The facts
+travel inside `<facts>…</facts>`, which the system prompt names (a forged tag inside them is
+dropped). The instructions ask for at most eight plain lines, and the note is cut to eight lines
+and 1,200 characters whatever the model writes, with ` (note cut short)` when the reply stopped
+at `max_tokens`: who (network,
 country, what the address is known as), what they did here, whether this is aimed at this
 network or internet-wide scanning, and what to do; no motive is to be invented, and when
 the pattern is mass scanning the note says so. Search results are untrusted text and are
-never treated as instructions. A note costs one to three cents; at the daily cap of twenty
-blocked sources plus a few alerts that is well under a dollar a day. If the request fails,
-the facts go out alone with one line saying the note is unavailable.
+never treated as instructions. The cost is measured, not estimated: each note logs
+`note usage: input=N output=N searches=N seconds=N` from the replies' `usage` (summed over
+`pause_turn` continuations) in the bot's log, and the brief's notes in the daily check's log;
+the first week of those lines is what the caps should be tuned on. (The design's "one to three
+cents a note" left out the web-search results' tokens and the per-search fee.) If the request
+fails, the facts go out alone with one line saying the note is unavailable.
 
 **Errors.** The public services are asked once, with a 15 s timeout, and nothing is
-retried. A 404 is the service's answer (`no record`; for GreyNoise `not observed scanning`),
+retried. A 404 is the service's answer (`no record`; for GreyNoise
+`GreyNoise: no record (not observed scanning)`),
 and any other failure (an HTTP error, a timeout, an answer that is not JSON) shows that
 source as `unavailable` while the others carry on. The Claude request carries the server-side
 fallback (`fallbacks: "default"`), which re-runs a request the model's safeguards declined on
@@ -391,25 +449,41 @@ alone with a line saying why (`the model gave no note` for a refusal). The bot l
 Telegram poll and tries again after 10 s, and starts the watcher again after 10 s if it
 fails; the watcher survives a missing or rotated file. A failed push leaves the commit for
 the next daily run, as today. A check interrupted by a network error (or a refused key) keeps
-and commits the rows added so far and says `stopped: …`. Every error is logged to the bot's
+and commits the rows added so far and says `stopped: …`. An update the bot cannot handle is
+logged and skipped, never replayed. Every error is logged to the bot's
 log with a timestamp, and the `/status` reply shows the last one.
 
 **VirusTotal quota.** The free key allows 500 lookups a day and 4 a minute. The daily check
 spends up to 400 (`MAX_LOOKUPS` lowers it); the bot's checks (one lookup per indicator), each
-`/who` and each attacker note (one lookup each) share the remaining 100. A note's lookup made
-while a check is running can exceed the 4 a minute; the check then stops, keeps what it
-added and reports the rest as `unchecked`, to be sent again.
+`/who` and each attacker note (one lookup each) share the remaining 100. While
+`syslog/.feed-lock` exists, whoever holds it, notes and `/who` skip VirusTotal and say
+`VirusTotal: skipped (a feed check is running)`, so they cannot push a check past the 4 a minute;
+the daily check gives the lock back before its brief, so the brief's notes keep VirusTotal. A
+lookup that meets a 429 anyway (`vt_check.lookup_retrying`, in `run` and `recheck`) waits 61 s
+and tries once more; a second 429 is the quota stop as before.
 
 **Commits.** The bot's commits read `Add N indicator(s) sent from Telegram: <label>` and
 carry no `Co-Authored-By` trailer, like the daily check's: they are a program's commits, not
 a model's.
+
+**Known limits, left as they are** (README, "Limits"): two full 50-indicator messages back to
+back at 07:30 can hold the lock past the daily check's twenty-minute wait, which then fails
+with its notice; a bot killed mid-check leaves the lock until the three-hour takeover
+(`rmdir syslog/.feed-lock` clears it); an alert Telegram refuses is logged, not resent, and the
+brief's counts still include the event. The logs are rotated only by a `newsyslog.d` entry the
+owner installs (README, "Rotating the logs").
 
 **Tests** (unit, no network, in the repository's style): parsing of bare messages and
 labels, the allowlist, the `/trust` and bare paths against `FakeVT`, the lock between the
 script and the bot, watcher matching for both alert kinds with midnight rollover and the
 one-hour cooldown, brief rendering from a fixture capture and run log, context gathering
 with each source failing in turn, the Opus request body and the handling of its response and
-of a refusal, the plist.
+of a refusal, the plist. The fix wave added: the receiver's source filter over a loopback
+socket, the alert and note caps on a fake clock, an alert sent while a slow note runs, a
+same-day restart that alerts its gap late and one after a day change that does not, the system
+log lines exactly as the live capture shows them, every exit of the daily check sending its one
+message, and one `Bot.add` against real git (a bare origin, a staged file of the owner's, a
+commit pushed elsewhere).
 
 **Done means:** the brief arrives after the 07:30 run; an indicator sent to the bot is added,
 committed and pushed within a minute, and the bot says so; an entry appended to today's
@@ -419,6 +493,10 @@ a kill like the receiver does.
 
 Outcome: built 2026-10-28 on branch worktree-telegram-bot (commits 837f97d..9e48b22, 403
 tests); awaiting the owner's end-to-end check (README, "Setting it up"). Record the result here.
+A fix wave after the whole-branch review (the receiver's source filter, the caps, the note
+thread, the saved watcher position, explicit alert actions, the daily check's failure message,
+the private-chat rule and the never-block list, among others) followed on the same branch
+before that check.
 
 ### D7. A daily news-sourcing agent (requested 2026-10-28, design pending)
 
@@ -427,7 +505,7 @@ checks them and adds them. To be built on the Claude API (Opus 5.5, web search),
 the Keychain, output fed to `vt_check.py` so admission, deduplication and expiration apply
 unchanged. Sources, caps and cost are the open design questions. Rows from the news agent
 will carry a COMMENT starting with `News`, so the brief's origin count ("from news") can show
-them; the bot's brief already recognises that convention.
+them; the morning brief already recognises that convention.
 
 ## 5. Operating it
 
@@ -437,16 +515,21 @@ them; the bot's brief already recognises that convention.
   `launchctl list | grep telegram` shows a PID next to `com.spark-ioc-feed.telegram` when the
   job is running.
 - Is the receiver up? `launchctl list | grep spark` shows a PID next to `com.spark-ioc-feed.syslog`;
-  `lsof -nP -iUDP:5514` shows Python on `*:5514`; today's `syslog/spark-<day>.log` grows.
+  `lsof -nP -iUDP:5514` shows Python on `*:5514`; today's `syslog/spark-<day>.log` grows, and
+  `~/Library/Logs/spark-ioc-feed/syslog-receiver.log` says `receiving from <the gateway>`. A
+  `dropping datagrams from <address>` line names a sender that is not the gateway; a `WARNING`
+  that the default route could not be read means it keeps every sender until restarted.
 - Did the daily job run? `~/Library/Logs/spark-ioc-feed/daily-check.log`, one timestamped line
   per step; `OUTBOUND HIT` lines are the ones to read.
-- Run the daily job now: `launchctl start com.spark-ioc-feed.daily`. While it runs it holds
-  the feed lock, and the bot answers an addition by saying so.
+- Run the daily job now: `launchctl start com.spark-ioc-feed.daily`. Until its push it holds
+  the feed lock, and the bot answers an addition by saying so. A lock left by a killed bot is
+  taken over after three hours; `rmdir syslog/.feed-lock` clears it at once.
 - The bot's log is `~/Library/Logs/spark-ioc-feed/telegram-bot.log`: a timestamped line for
   its start, for a message ignored from another chat, and for each error. Restart the bot: `launchctl kickstart -k gui/$(id -u)/com.spark-ioc-feed.telegram`.
   Stop it: `launchctl bootout gui/$(id -u)/com.spark-ioc-feed.telegram`.
 - If the Keychain items are missing the bot logs that it found no `TELEGRAM_BOT_TOKEN` or
-  `TELEGRAM_CHAT_ID` (service `spark-ioc-feed`) and exits after 300 s, and launchd starts
+  `TELEGRAM_CHAT_ID` (service `spark-ioc-feed`), or that `TELEGRAM_CHAT_ID is not a number`, and
+  exits after 300 s, and launchd starts
   it again, so the line repeats every five minutes until they are stored. To see which
   is missing: `security find-generic-password -s spark-ioc-feed -a TELEGRAM_BOT_TOKEN` (and
   the same with `-a TELEGRAM_CHAT_ID`) prints the item or says it was not found. Store it
@@ -459,7 +542,9 @@ them; the bot's brief already recognises that convention.
 ## 6. Open items
 
 1. Commit the D1 plist and README changes, D3, D5 and this document.
-2. Design D6 (Telegram), then D7 (news agent); record each decision here with its outcome.
+2. Design D7 (news agent) and record it here with its outcome; D6 is built (record the owner's
+   end-to-end check under its outcome).
 3. Merge the two duplicate-check implementations when `vt_check.py` is next changed.
-4. The Telegram bot's alert rule (which detections alert, which get a note) was narrowed on
-   measured data and can be widened once the owner has lived with it.
+4. The Telegram bot's alert rule (which detections alert, which get a note) and its caps were set
+   on measured data and the review's arithmetic; tune them on the first week of `note usage`
+   lines and alerts.

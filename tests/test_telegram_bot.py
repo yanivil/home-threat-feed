@@ -623,6 +623,7 @@ class UpdatesTest(BotTestCase):
                 self.assertEqual(self.tg.sent[-1], telegram_bot.HELP)
         for command in ("/trust", "/who", "/sources", "/status"):
             self.assertIn(command, telegram_bot.HELP)
+        self.assertIn("/status - receiver, last daily check, next re-check, uptime, last error", telegram_bot.HELP)
 
     def test_a_failing_command_is_reported_and_the_bot_carries_on(self):
         with patch.object(self.bot, "status", side_effect=RuntimeError("disk gone")):

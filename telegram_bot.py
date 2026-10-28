@@ -65,7 +65,7 @@ They are checked on VirusTotal and the flagged ones added to the feed.
 /trust <indicators> [label] - add them without a VirusTotal check
 /who <indicator> - who is behind it, and what it did here
 /sources [YYYY-MM-DD] - that day's probing sources as a file (default yesterday)
-/status - receiver, last daily check, next re-check, uptime
+/status - receiver, last daily check, next re-check, uptime, last error
 /help - this list"""
 COMMANDS = ("trust", "who", "sources", "status", "help")
 URL_RE = re.compile(r"h(?:tt|xx)ps?://", re.IGNORECASE)  # a URL, defanged or not
