@@ -33,6 +33,7 @@ URLS = {
 SOURCES = {"IP": ("virustotal", "rdap", "internetdb", "greynoise"), "Domain": ("virustotal", "rdap")}
 LABELS = {"virustotal": "VirusTotal", "rdap": "RDAP", "internetdb": "InternetDB", "greynoise": "GreyNoise"}
 LIST_LIMIT = 8  # items of one list in the facts, so a scanner that tried 1,000 ports stays readable
+TEXT_LIMIT = 100  # characters of one string a service sent
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
@@ -108,7 +109,12 @@ def _activity(ioc_type, value, capture_dir, today):
         day = date.fromisoformat(today)
         for back in (1, 0):
             path = Path(capture_dir) / f"spark-{day - timedelta(days=back)}.log"
-            found.extend(entry for entry in _entries(path) if matches(entry))
+            for entry in _entries(path):
+                try:
+                    if matches(entry):
+                        found.append(entry)
+                except ValueError:  # a malformed line (spark_logs._host_name on resource="http://[::1") costs only itself
+                    continue
     received = [entry["received"] for entry in found]
     services = (entry.get("svc") or entry.get("service_id") or "" for entry in found)
     actions = (entry.get("Action", "") for entry in found)
@@ -121,43 +127,80 @@ def _activity(ioc_type, value, capture_dir, today):
     }
 
 
+def _clean(text):
+    """A string a service sent, on one line (every whitespace run becomes one space) and cut to TEXT_LIMIT
+    characters with "…": a registrant controls what RDAP says, and nothing it sends may start a line of its
+    own. None for anything but a string, and for a blank one."""
+    if not isinstance(text, str):
+        return None
+    text = " ".join(text.split())
+    return (text[:TEXT_LIMIT] + "…" if len(text) > TEXT_LIMIT else text) or None
+
+
+def _number(value):
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _flag(value):
+    return value if isinstance(value, bool) else None
+
+
+def _list(value, clean):
+    """The items of the list `value` that `clean` keeps (it returns None for the rest); None for a non-list."""
+    if not isinstance(value, list):
+        return None
+    return [item for item in map(clean, value) if item is not None]
+
+
+# A field of the wrong type is dropped (None) and the rest of its section kept.
 def _virustotal(body):
     attributes = (body.get("data") or {}).get("attributes") or {}
     stats = attributes.get("last_analysis_stats")
+    stats = stats if isinstance(stats, dict) else {}
+    counts = [count for count in map(_number, stats.values()) if count is not None]
+    categories = attributes.get("categories")
     return {
-        "as_owner": attributes.get("as_owner"),
-        "asn": attributes.get("asn"),
-        "country": attributes.get("country"),
-        "malicious": stats.get("malicious") if stats else None,
-        "total": sum(stats.values()) if stats else None,
-        "categories": attributes.get("categories"),
-        "registrar": attributes.get("registrar"),
+        "as_owner": _clean(attributes.get("as_owner")),
+        "asn": _number(attributes.get("asn")),
+        "country": _clean(attributes.get("country")),
+        "malicious": _number(stats.get("malicious")),
+        "total": sum(counts) if counts else None,
+        "categories": ({name: category for name, raw in categories.items() if (category := _clean(raw))}
+                       if isinstance(categories, dict) else None),
+        "registrar": _clean(attributes.get("registrar")),
     }
 
 
 def _abuse_email(entities):
     """The first email of an entity with the abuse role, looking through nested entities too; None without."""
-    for entity in entities or []:
-        if "abuse" in entity.get("roles", []):
-            for item in entity.get("vcardArray", [None, []])[1]:
-                if item[0] == "email" and item[3]:
-                    return item[3]
-        email = _abuse_email(entity.get("entities"))
-        if email:
-            return email
+    for entity in entities if isinstance(entities, list) else ():
+        if not isinstance(entity, dict):
+            continue
+        roles, vcard = entity.get("roles"), entity.get("vcardArray")
+        items = vcard[1] if isinstance(vcard, list) and len(vcard) > 1 and isinstance(vcard[1], list) else ()
+        if isinstance(roles, list) and "abuse" in roles:
+            for item in items:
+                if isinstance(item, list) and len(item) > 3 and item[0] == "email" and (email := _clean(item[3])):
+                    return email
+        nested = _abuse_email(entity.get("entities"))
+        if nested:
+            return nested
     return None
 
 
 def _rdap(body):
-    return {"name": body.get("name"), "handle": body.get("handle"), "abuse": _abuse_email(body.get("entities"))}
+    return {"name": _clean(body.get("name")), "handle": _clean(body.get("handle")),
+            "abuse": _abuse_email(body.get("entities"))}
 
 
 def _internetdb(body):
-    return {"ports": body.get("ports"), "tags": body.get("tags"), "vulns": body.get("vulns")}
+    return {"ports": _list(body.get("ports"), _number), "tags": _list(body.get("tags"), _clean),
+            "vulns": _list(body.get("vulns"), _clean)}
 
 
 def _greynoise(body):
-    return {key: body.get(key) for key in ("classification", "name", "noise", "riot")}
+    return {"classification": _clean(body.get("classification")), "name": _clean(body.get("name")),
+            "noise": _flag(body.get("noise")), "riot": _flag(body.get("riot"))}
 
 
 PARSERS = {"virustotal": _virustotal, "rdap": _rdap, "internetdb": _internetdb, "greynoise": _greynoise}
@@ -230,7 +273,8 @@ def _yes_no(label, value):
 
 def _virustotal_line(vt):
     ratio = None if vt["malicious"] is None else f"{vt['malicious']}/{vt['total']} malicious"
-    owner = " ".join(part for part in (vt["as_owner"], vt["asn"] and f"(AS{vt['asn']})") if part)
+    asn = f"AS{vt['asn']}" if vt["asn"] else None
+    owner = f"{vt['as_owner']} ({asn})" if vt["as_owner"] and asn else vt["as_owner"] or asn
     categories = _listing(dict.fromkeys((vt["categories"] or {}).values()))
     return _join(ratio, _field("owner", owner), _field("country", vt["country"]),
                  _field("categories", categories), _field("registrar", vt["registrar"]))
@@ -241,7 +285,8 @@ def _rdap_line(rdap):
 
 
 def _internetdb_line(db):
-    return _join(*(f"{label} {_listing(db[label]) or 'none'}" for label in ("ports", "tags", "vulns")))
+    return _join(*(f"{label} {'unknown' if db[label] is None else _listing(db[label]) or 'none'}"
+                   for label in ("ports", "tags", "vulns")))
 
 
 def _greynoise_line(grey):
@@ -326,15 +371,16 @@ def _why(error):
 
 def note(indicator, capture_dir, today, *, fetch_json=None, http=None):
     """The facts about `indicator` and, after a blank line, the model's note on them; when the note cannot
-    be had, the facts and a line saying why. Never raises: a note that fails must not stop the next."""
+    be had, the facts and a line saying why (just the line when the facts cannot be had). Never raises for
+    a str indicator, a str or Path capture_dir and a str `today`: a note that fails must not stop the next."""
     fetch_json = fetch_json or default_fetch_json
     http = http or telegram_api.default_http
     try:
         facts = gather(indicator, capture_dir, today, fetch_json, vt_check.api_key(),
                        keychain.item("GREYNOISE_API_KEY"))
-    except ValueError as e:
-        return f"{indicator}: {_unavailable(e)}"
-    text = facts_text(facts)
+        text = facts_text(facts)
+    except Exception as e:
+        return f"{indicator}: {_unavailable(_why(e))}"
     api_key = keychain.item("ANTHROPIC_API_KEY")
     if not api_key:
         return f"{text}\n\n{_unavailable('no ANTHROPIC_API_KEY in the Keychain')}"
