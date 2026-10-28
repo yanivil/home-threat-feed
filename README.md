@@ -102,8 +102,11 @@ is accepted.
 ## Adding indicators from a source you trust (no VirusTotal)
 
 `--trusted` appends indicators without looking them up, for feeds whose publisher you vouch
-for. Rows get CONFIDENCE high and a COMMENT ending in `added without VirusTotal check <date>`;
-`--recheck` never touches them, so prune them by hand when the source retires them.
+for. Rows get CONFIDENCE high and a COMMENT ending in `added without VirusTotal check <date>`.
+They are not exempt from "Keeping the feed fresh" below: 90 days after that date `--recheck`
+looks them up once, keeps the ones VirusTotal flags as ordinary checked rows, and removes the
+rest (hashes are never re-checked). An indicator the source still vouches for after that is
+yours to add again.
 
 ```
 python3 vt_check.py --trusted -f iocs.tsv
@@ -135,7 +138,10 @@ that stream into checked indicators:
    Servers → Configure: UDP, the Mac's LAN address, port 5514, Security logs. Give that Mac a
    DHCP reservation (Users and Objects → Network Objects → Single IP → "Reserve IP address in
    DHCP service for MAC"). `launchd/com.spark-ioc-feed.syslog.plist` keeps the receiver
-   running across reboots; the install steps are in its comment.
+   running across reboots; the install steps are in its comment. The capture grows by a few
+   hundred MB a day, so `syslog_retention.py`, run by the daily check before anything else,
+   gzips a day's file once it is a week old and removes it after 180 days; `spark_logs.py`
+   reads the compressed days like the plain ones.
 2. **`spark_logs.py`** reads the capture and sorts what it finds into two kinds:
    - **outbound**: names (or addresses) that LAN devices connected to. Hits are **reported,
      never added**, with the devices that reached them, because an outbound hit means a
@@ -191,7 +197,13 @@ push when rows were added. `launchd/com.spark-ioc-feed.daily.plist` runs it ever
    launchctl start com.spark-ioc-feed.daily      # run it now instead of waiting for 07:30
    ```
 
-- Everything a run prints goes to `/Users/home/Library/Logs/spark-ioc-feed/daily-check.log`, with a timestamped line for
+3. If the repository lives on an external disk, grant Full Disk Access once to the Command
+   Line Tools' `Python.app` (System Settings → Privacy & Security → Full Disk Access → `+`,
+   then ⌘⇧G and the path in the plist's `ProgramArguments`). Both plists run their job through
+   that binary because macOS denies `/usr/bin/python3` and `/bin/bash` on external volumes
+   without prompting; `docs/system-design.md`, decision D1, has the details.
+
+- Everything a run prints goes to `~/Library/Logs/spark-ioc-feed/daily-check.log`, with a timestamped line for
   each step. **Outbound hits are only reported there**, as
   `OUTBOUND HIT <destination> (<ratio>) reached by <devices>`, and raise a macOS notification
   titled "Spark IoC feed" (allow notifications from Script Editor if macOS asks the first time).
@@ -215,17 +227,21 @@ may by now serve legitimate traffic. `--recheck` re-verifies the rows the script
 
 ```
 python3 vt_check.py --recheck --dry-run      # list what would change, write nothing
-python3 vt_check.py --recheck                # IPs checked 60+ days ago, domains and URLs 180+
+python3 vt_check.py --recheck                # IPs checked 60+ days ago, domains and URLs 180+, unchecked rows 90+
 python3 vt_check.py --recheck --max-age 30   # every type, 30+ days ago (0 = every row)
 git commit -am "Re-verify stale indicators" && git push
 ```
 
-- Only rows whose COMMENT ends in `VT n/m malicious YYYY-MM-DD` (the note the script
-  writes) are looked up, one every 15 s, and only once old enough for their TYPE: IPs after
-  60 days (attacker servers are re-leased within weeks), domains and URLs after 180 (domains
-  drop and get re-registered on a scale of months), hashes never (a malicious file stays
-  malicious, so a hash can never block something legitimate). `--max-age DAYS` applies DAYS
-  to every type, hashes included. Hand-written rows are never touched.
+- Rows are looked up one every 15 s, and only once due for their TYPE, read from the dates
+  in COMMENT: IPs 60 days after their `VT n/m malicious YYYY-MM-DD` note (attacker servers
+  are re-leased within weeks), domains and URLs 180 (domains drop and get re-registered on a
+  scale of months), rows `added without VirusTotal check YYYY-MM-DD` 90 days after that,
+  hashes never (a malicious file stays malicious, so a hash can never block something
+  legitimate). An IP carrying `seen in Spark logs YYYY-MM-DD`, which the daily check writes
+  for every feed IP that probed the WAN, is in addition never due before 180 days after that
+  sighting: a probe of this network is first-hand evidence, and VirusTotal's count for a
+  scanner decays while the scanning goes on. `--max-age DAYS` applies DAYS to every row's own
+  date, hashes included. Rows with no date at all (hand-written ones) are never touched.
 - Rows still flagged by enough engines (3, or 5 for IPs, unless `--min-malicious` says
   otherwise) get a fresh ratio, date and CONFIDENCE in place; rows that fell below are
   removed.
