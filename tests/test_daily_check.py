@@ -6,6 +6,7 @@ import plistlib
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
@@ -16,13 +17,15 @@ PLIST = REPO / "launchd" / "com.spark-ioc-feed.daily.plist"
 HEADER = "# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT\n"
 SEED_ROW = "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,VT 6/86 malicious 2026-07-15\n"
 
-# Stands in for spark_logs.py: records its arguments, appends STUB_ADD rows to the feed
-# beside it, prints STUB_OUTBOUND outbound hits the way the real script does, exits STUB_EXIT.
+# Stands in for spark_logs.py: records its arguments and whether the feed lock is held while it
+# runs, appends STUB_ADD rows to the feed beside it, prints STUB_OUTBOUND outbound hits the way
+# the real script does, exits STUB_EXIT.
 STUB_SPARK_LOGS = """\
 import os, sys
 from pathlib import Path
 here = Path(__file__).resolve().parent
 (here / "argv.txt").write_text(" ".join(sys.argv[1:]))
+(here / "lock_held.txt").write_text(str((here / "syslog" / ".feed-lock").is_dir()))
 with (here / "spark-ioc-feed.csv").open("a") as f:
     for i in range(int(os.environ.get("STUB_ADD", "0"))):
         f.write(f"vt-ip-{i:010},198.51.100.{i},IP,medium,high,AB,Inbound probe of WAN - VT 7/95 malicious 2026-10-21\\n")
@@ -44,6 +47,8 @@ class DailyCheckTest(unittest.TestCase):
         root = Path(self.tmp.name)
         self.repo, self.origin, self.bin = root / "repo", root / "origin.git", root / "bin"
         self.notifications = root / "notifications.txt"
+        self.sleeps = root / "sleeps.txt"
+        self.lock = self.repo / "syslog" / ".feed-lock"
         self.bin.mkdir()
         (self.bin / "osascript").write_text(STUB_OSASCRIPT)
         (self.bin / "osascript").chmod(0o755)
@@ -87,6 +92,19 @@ class DailyCheckTest(unittest.TestCase):
 
     def subject(self):
         return self.git("log", "-1", "--format=%s", cwd=self.repo)
+
+    def hold_lock(self, hours_ago=0):
+        """The lock the Telegram bot takes, made `hours_ago` hours back."""
+        self.lock.parent.mkdir(exist_ok=True)
+        self.lock.mkdir()
+        taken = time.time() - hours_ago * 3600
+        os.utime(self.lock, (taken, taken))
+
+    def stub_sleep(self, then=""):
+        """Replace sleep with a script that records its argument, then runs the shell line `then`."""
+        stub = self.bin / "sleep"
+        stub.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{self.sleeps}'\n{then}\n")
+        stub.chmod(0o755)
 
     def refuse_pushes(self):
         hook = self.origin / "hooks" / "pre-receive"
@@ -218,6 +236,61 @@ class DailyCheckTest(unittest.TestCase):
         self.assertEqual(self.head(self.origin), self.head())
         self.assertIn("exited 1", proc.stdout + proc.stderr)
         self.assertIn("quota", proc.stdout + proc.stderr)
+
+    def test_the_run_holds_the_feed_lock_and_releases_it(self):
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual((self.repo / "lock_held.txt").read_text(), "True")
+        self.assertFalse(self.lock.exists())
+
+    def test_a_stale_lock_does_not_block_the_run(self):
+        self.hold_lock(hours_ago=4)
+        self.stub_sleep()
+
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertFalse(self.sleeps.exists(), "a stale lock is taken over, not waited for")
+        self.assertEqual((self.repo / "lock_held.txt").read_text(), "True")
+        self.assertFalse(self.lock.exists())
+
+    def test_a_lock_the_bot_releases_while_the_run_waits_lets_the_run_go_on(self):
+        self.hold_lock(hours_ago=1)
+        self.stub_sleep(then=f"rmdir '{self.lock}'")
+
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(proc.stdout.count("waiting"), 1)
+        self.assertEqual(self.sleeps.read_text(), "5\n")
+        self.assertEqual((self.repo / "lock_held.txt").read_text(), "True")
+        self.assertFalse(self.lock.exists())
+
+    def test_a_lock_held_for_ten_minutes_fails_the_run_and_is_left_for_its_owner(self):
+        self.hold_lock(hours_ago=1)
+        self.stub_sleep()
+
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("ERROR: the feed is locked by the Telegram bot for over ten minutes", proc.stdout)
+        self.assertEqual(self.sleeps.read_text(), "5\n" * 120)
+        self.assertEqual(proc.stdout.count("waiting"), 1)
+        self.assertFalse((self.repo / "argv.txt").exists(), "the check must not run without the lock")
+        self.assertTrue(self.lock.is_dir(), "the lock is not ours to remove")
+        self.assertEqual(self.notifications.read_text().count("\n"), 1)
+
+    def test_a_run_that_fails_before_the_check_still_releases_the_lock(self):
+        # fail runs while the lock is still held: the osascript stub notes whether it was.
+        (self.bin / "osascript").write_text("#!/bin/sh\n[ -d syslog/.feed-lock ] && touch lock_held_at_failure.txt\n")
+        self.git("remote", "set-url", "origin", str(Path(self.tmp.name) / "gone.git"), cwd=self.repo)
+
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 1, "a failed pull fails the run")
+        self.assertTrue((self.repo / "lock_held_at_failure.txt").exists())
+        self.assertFalse(self.lock.exists())
 
 
 class DailyPlistTest(unittest.TestCase):
