@@ -72,7 +72,16 @@ SUMMARY = {"added": "added", "clean": "clean", "not-found": "unknown to VirusTot
 RUN_START = "Daily check starting"
 RUN_END_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} (?:Daily check done|ERROR: (.*))$", re.M)
 
-Alert = namedtuple("Alert", "kind device indicator action entry")
+# A Threat Prevention row alerts live only with one of these actions (stripped, lower-cased); a blank
+# Action, monitor, accept, inspect and the rest are the morning brief's alone.
+ALERT_ACTIONS = frozenset({"prevent", "drop", "reject", "block", "detect"})
+# The blades whose outbound detection names attacker infrastructure: its alert gets a note on the
+# destination (an IPS/SmartDefense protocol anomaly does not). "Anti Malware" is the Spark's name for
+# the Anti-Virus and Anti-Bot family.
+NOTE_BLADES = frozenset({"Anti-Bot", "Anti Virus", "Threat Emulation", "Anti Malware"})
+
+# `note`: the indicator the alert's attacker-context note is about, None for no note.
+Alert = namedtuple("Alert", "kind device indicator action entry note", defaults=(None,))
 
 
 def log(text, at=None):
@@ -162,23 +171,44 @@ def _protection(entry):
                  if entry.get(key, "").strip()), "")
 
 
+def _address(text):
+    """A capture field that should hold an address: the address when it is one, else the text clean()ed."""
+    ip = spark_logs._ip((text or "").strip())
+    return str(ip) if ip is not None else attacker_context.clean(text) or "?"
+
+
 def _external(entry):
-    """(public address, the other one) of a detection, the source first; None when both are on the LAN."""
+    """(public address, the other end) of a detection, the source first; None when both are on the LAN."""
     src, dst = entry["src"], entry["dst"]
     for public, other in ((src, dst), (dst, src)):
-        ip = spark_logs._ip(public)
+        ip = spark_logs._ip(public.strip())
         if ip is not None and ip.is_global:
-            return public, other
+            return str(ip), _address(other)
+    return None
+
+
+def _note_target(entry, external):
+    """What a detection's note is about: an inbound one's source; an outbound one's destination (the host
+    name the row names, else the address) when a NOTE_BLADES blade made it; else None."""
+    if external == _address(entry["src"]):
+        return external
+    if entry.get("ProductName") in NOTE_BLADES:
+        try:
+            return spark_logs._host_name(entry) or external
+        except ValueError:  # a malformed resource URL
+            return external
     return None
 
 
 class Watcher:
     """Follows today's capture in `capture_dir` and raises an Alert for a LAN device reaching a member
-    of the feed `feed_loader()` returns ("feed") and for a Threat Prevention detection that enforced
-    something on traffic with a public address ("detection"; the monitor-mode and LAN-only ones are
-    left to the morning brief). The same pair is alerted at most once per `cooldown` seconds of
-    `clock`. `alert(alerts)` gets each pass's Alerts in one call, so their texts can all go out
-    before the slower notes."""
+    of the feed `feed_loader()` returns ("feed") and for a Threat Prevention row whose Action is one of
+    ALERT_ACTIONS (prevent, drop, reject, block, detect) on traffic with a public address ("detection";
+    a blank Action, monitor, accept, anything else and the LAN-only rows are left to the morning
+    brief). The same pair is alerted at most once per `cooldown` seconds of `clock`. Each Alert names
+    the indicator its note is about: a feed hit's, an inbound detection's source, an outbound
+    Anti-Bot, Anti-Virus or Threat Emulation detection's destination. `alert(alerts)` gets each pass's
+    Alerts in one call, so their texts can all go out before the slower notes."""
 
     def __init__(self, capture_dir, feed_loader, alert, *, today=None, cooldown=COOLDOWN, clock=time.time):
         self.capture_dir = Path(capture_dir)
@@ -220,20 +250,22 @@ class Watcher:
         """(Alert, cooldown key) when the entry is worth an alert, else None."""
         if "system" in entry:  # the Spark's own programs: never an alert
             return None
-        action = entry.get("Action", "").strip() or "detected"  # the blades log a blank Action
+        action = attacker_context.clean(entry.get("Action")) or ""
         found = spark_logs.candidate(entry)
         if found and found[0] == "outbound":
             _, indicator, device = found
             for target in dict.fromkeys((indicator, entry["dst"])):  # the host name it names, then the address
                 if target in self.feed:
                     self.counts[device, target] += 1
-                    return Alert("feed", device, target, action, entry), ("feed", device, target)
-        if spark_logs.is_tp_detection(entry) and action.lower() != "monitor":  # monitor mode enforced nothing
+                    alert = Alert("feed", device, target, action or "detected", entry, note=target)
+                    return alert, ("feed", device, target)
+        if spark_logs.is_tp_detection(entry) and action.lower() in ALERT_ACTIONS:
             ends = _external(entry)
             if ends:  # a detection between two LAN addresses is left to the brief
                 external, device = ends
                 key = ("detection", entry["src"], entry["dst"], _protection(entry))
-                return Alert("detection", device, external, action, entry), key
+                note = _note_target(entry, external)
+                return Alert("detection", device, external, action.lower(), entry, note), key
         return None
 
     def _due(self, key):
@@ -246,14 +278,17 @@ class Watcher:
     def describe(self, alert):
         """The alert's message."""
         entry = alert.entry
-        at = entry.get("received", "").partition("T")[2][:8]
+        at = attacker_context.clean(entry.get("received", "").partition("T")[2][:8]) or ""
         if alert.kind == "feed":
             label = self.feed.label(alert.indicator) or "in the feed"
             n = self.counts[alert.device, alert.indicator]
             return f"{at} — {alert.device} tried to reach {alert.indicator} ({label}) — {alert.action}; {n}× today"
+        # Every string the capture holds is clean()ed, every address checked: a forged row's text must
+        # not reach the owner's chat as more than one short line.
         blade = spark_brief.BLADE_NAMES.get(entry.get("ProductName"), entry.get("ProductName"))
-        what = " ".join(part for part in (blade, _protection(entry)) if part)
-        return f"{at} — Threat Prevention: {what} from {entry['src']} to {entry['dst']} — {alert.action}"
+        what = " ".join(part for part in map(attacker_context.clean, (blade, _protection(entry))) if part)
+        return (f"{at} — Threat Prevention: {what} from {_address(entry['src'])} to {_address(entry['dst'])}"
+                f" — {alert.action}")
 
     def follow(self, stop_event, poll=WATCH_POLL):
         """Alert on the lines written to today's capture until `stop_event` is set, waiting `poll`
@@ -594,13 +629,13 @@ class Bot:
     # The watcher's alerts, sent from its thread.
 
     def on_alerts(self, alerts):
-        """Send every alert of one pass first, then the attacker-context notes (tens of seconds each): on
-        each feed alert's indicator and each inbound detection's source, the cases with an attacker."""
+        """Send every alert of one pass first, then the attacker-context notes (tens of seconds each) on
+        the indicators the alerts name (Alert.note: the cases with an attacker)."""
         for alert in alerts:
             self.send(self.watcher.describe(alert))
         for alert in alerts:
-            if alert.kind == "feed" or alert.indicator == alert.entry["src"]:
-                note = attacker_context.note(alert.indicator, self.syslog, self.today().isoformat())
+            if alert.note:
+                note = attacker_context.note(alert.note, self.syslog, self.today().isoformat())
                 if note:
                     self.send(note)
 

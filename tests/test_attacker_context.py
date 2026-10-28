@@ -366,6 +366,17 @@ class GatherTest(CaptureTestCase):
         self.assertEqual(activity, {"count": 0, "first": None, "last": None,
                                     "services": Counter(), "actions": Counter()})
 
+    def test_what_the_capture_says_reaches_the_facts_clean(self):
+        # A capture line is text an attacker can shape: it reaches the model's prompt only as clean().
+        self.write_capture("2026-10-27", [])
+        self.write_capture("2026-10-28", [log_line("2026-10-28T03:00:00", ATTACKER, "203.0.113.139",
+                                                   svc="SSH‮​" + "9" * 200, action="drop\x1b[2J")])
+
+        activity = self.gather(vt_key="vt")["activity"]
+
+        self.assertEqual(activity["services"], Counter({"SSH" + "9" * 97 + "…": 1}))
+        self.assertEqual(activity["actions"], Counter({"drop[2J": 1}))
+
     def test_a_capture_dir_given_as_a_string_works(self):
         facts = attacker_context.gather(ATTACKER, str(self.dir), TODAY, self.fetch, vt_key="vt")
 
@@ -378,6 +389,16 @@ class GatherTest(CaptureTestCase):
 
         self.assertEqual(facts["activity"]["count"], 2)
         self.assertEqual(facts["virustotal"]["as_owner"], "Linode")
+
+
+class CleanTest(unittest.TestCase):
+    def test_clean_gives_one_short_line_without_control_or_format_marks(self):
+        self.assertEqual(attacker_context.clean("a\nb\t c\r\n"), "a b c")
+        self.assertEqual(attacker_context.clean("x\x1b[31m‮Y​ \x00z"), "x[31mY z")
+        self.assertEqual(attacker_context.clean("L" * 150), "L" * 100 + "…")
+        for nothing in ("", "  ​ ", None, 5, ["x"]):
+            with self.subTest(nothing=nothing):
+                self.assertIsNone(attacker_context.clean(nothing))
 
 
 class FactsTextTest(unittest.TestCase):

@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import unicodedata
 import unittest
 import urllib.error
 from datetime import date, datetime, timedelta
@@ -44,7 +45,7 @@ OUTBOUND_TO_RANGE = OUTBOUND_TO_C2.replace('dst="104.18.32.47"', 'dst="45.155.20
     'destination_domain_name="c2.example.net" ', "")
 MALFORMED = OUTBOUND_TO_C2.replace('destination_domain_name="c2.example.net"', 'resource="http://[::1"')
 # Threat Prevention rows shaped like spark_logs' INBOUND_PREVENT: a LAN device's request the IPS let
-# through, the same in monitor mode, and one between two LAN addresses.
+# through (accept: the brief's alone), the same detected, in monitor mode, and one between two LAN addresses.
 OUTBOUND_DETECTION = (INBOUND_PREVENT.replace("2026-10-20T20:57:09", "2026-10-28T10:02:11")
                       .replace('Action=" "', 'Action="accept"').replace('src="31.14.32.6"', 'src="10.68.144.121"')
                       .replace('dst="176.230.223.47"', 'dst="104.18.32.47"')
@@ -54,9 +55,29 @@ MONITORED_DETECTION = OUTBOUND_DETECTION.replace('Action="accept"', 'Action="mon
 LAN_DETECTION = (OUTBOUND_DETECTION.replace('src="10.68.144.121"', 'src="10.68.144.100"')
                  .replace('dst="104.18.32.47"', 'dst="10.68.144.1"').replace("Header Spoofing", "Max Ping Size")
                  .replace('Action="accept"', 'Action="drop"'))
+OUTBOUND_DETECTED = OUTBOUND_DETECTION.replace('Action="accept"', 'Action="detect"')
 # The Spark enforces the feed through Anti-Bot, so a feed hit can come as a detection row too.
 FEED_HIT_DETECTED = OUTBOUND_TO_C2.replace('ProductName="VPN-1 & FireWall-1"',
                                            'Protection Name="spark-ioc-feed" ProductName="Anti-Bot"')
+
+# Threat Prevention rows with an explicit action, written with a private LAN device and the documentation
+# WAN address: an inbound one, and outbound ones from each blade (Anti-Bot, Anti-Virus and Threat
+# Emulation get a note on the destination, IPS does not).
+LAN_DEVICE, WAN = "192.168.50.20", "203.0.113.47"
+
+
+def detection(at, action, src, dst, blade, protection, **extra):
+    fields = {"Action": action, "Uuid": "{0x20}", "src": src, "dst": dst, "proto": "6",
+              "Protection Name": protection, "severity": "3", "ProductName": blade, **extra}
+    return f"2026-10-28T{at} " + " ".join(f'{key}="{value}"' for key, value in fields.items())
+
+
+INBOUND_PREVENTED = detection("08:12:40", "Prevent", "185.1.2.66", WAN, "Anti Malware", "Scanner")
+OUTBOUND_BOT = detection("10:20:00", "prevent", LAN_DEVICE, "185.1.2.70", "Anti-Bot", "Trojan.Win32.Agent.C2",
+                         resource="http://c2.example.org/gate.php")
+OUTBOUND_VIRUS = detection("10:21:00", "prevent", LAN_DEVICE, "185.1.2.71", "Anti Virus", "EICAR-Test-File")
+OUTBOUND_EMULATION = detection("10:22:00", "detect", LAN_DEVICE, "185.1.2.72", "Threat Emulation", "Generic.TC.a")
+OUTBOUND_IPS = detection("10:23:00", "drop", LAN_DEVICE, "185.1.2.73", "IPS", "Header Spoofing")
 
 FEED = (HEADER
         + "vt-domain-c2,c2.example.net,Domain,high,high,AB,MuddyWater - VT 9/94 malicious 2026-10-01\n"
@@ -694,26 +715,41 @@ class AlertTest(BotTestCase):
         note.assert_called_once_with("c2.example.net", self.syslog, "2026-10-28")
 
     def test_an_inbound_detection_gets_the_note_on_its_source(self):
-        alerts = self.bot.watcher.scan([INBOUND_PREVENT])
+        alerts = self.bot.watcher.scan([INBOUND_PREVENTED])
+
+        with patch("attacker_context.note", return_value="note") as note:
+            self.bot.on_alerts(alerts)
+
+        self.assertEqual(self.tg.sent, ["08:12:40 — Threat Prevention: Anti-Malware Scanner from 185.1.2.66 to "
+                                        "203.0.113.47 — prevent", "note"])
+        note.assert_called_once_with("185.1.2.66", self.syslog, "2026-10-28")
+
+    def test_an_outbound_ips_detection_gets_its_alert_but_no_note(self):
+        alerts = self.bot.watcher.scan([OUTBOUND_IPS, OUTBOUND_DETECTED])
 
         with patch("attacker_context.note", return_value="note") as note:
             self.bot.on_alerts(alerts)
 
         self.assertEqual(len(self.tg.sent), 2)
-        note.assert_called_once_with("31.14.32.6", self.syslog, "2026-10-28")
-
-    def test_an_outbound_detection_gets_its_alert_but_no_note(self):
-        alerts = self.bot.watcher.scan([OUTBOUND_DETECTION])
-
-        with patch("attacker_context.note", return_value="note") as note:
-            self.bot.on_alerts(alerts)
-
-        self.assertEqual(self.tg.sent, ["10:02:11 — Threat Prevention: SmartDefense Header Spoofing from 10.68.144.121 "
-                                        "to 104.18.32.47 — accept"])
+        self.assertEqual(self.tg.sent[0], "10:23:00 — Threat Prevention: IPS Header Spoofing from 192.168.50.20 to "
+                                          "185.1.2.73 — drop")
+        self.assertIn("Threat Prevention: SmartDefense Header Spoofing", self.tg.sent[1])
         note.assert_not_called()
 
+    def test_outbound_anti_bot_virus_and_emulation_detections_get_a_note_on_the_destination(self):
+        alerts = self.bot.watcher.scan([OUTBOUND_BOT, OUTBOUND_VIRUS, OUTBOUND_EMULATION])
+
+        with patch("attacker_context.note", side_effect=lambda indicator, *a: f"note on {indicator}") as note:
+            self.bot.on_alerts(alerts)
+
+        self.assertEqual(self.tg.sent[3:], ["note on c2.example.org", "note on 185.1.2.71", "note on 185.1.2.72"],
+                         "the host name the row names, else the address")
+        self.assertEqual(self.tg.sent[0], "10:20:00 — Threat Prevention: Anti-Bot Trojan.Win32.Agent.C2 from "
+                                          "192.168.50.20 to 185.1.2.70 — prevent")
+        self.assertEqual(note.call_count, 3)
+
     def test_a_burst_sends_every_alert_before_the_first_note(self):
-        alerts = self.bot.watcher.scan([OUTBOUND_TO_C2, OUTBOUND_TO_FEED_IP, INBOUND_PREVENT])
+        alerts = self.bot.watcher.scan([OUTBOUND_TO_C2, OUTBOUND_TO_FEED_IP, INBOUND_PREVENTED])
 
         with patch("attacker_context.note", side_effect=lambda indicator, *a: f"note on {indicator}"):
             self.bot.on_alerts(alerts)
@@ -721,8 +757,8 @@ class AlertTest(BotTestCase):
         self.assertEqual([text.split(" — ")[1] if " — " in text else text for text in self.tg.sent], [
             "10.68.144.121 tried to reach c2.example.net (MuddyWater - VT 9/94 malicious 2026-10-01)",
             "10.68.144.121 tried to reach 185.1.2.7 (Cyberint - added without VirusTotal check 2026-10-01)",
-            "Threat Prevention: Anti-Malware IP reputation from 31.14.32.6 to 176.230.223.47",
-            "note on c2.example.net", "note on 185.1.2.7", "note on 31.14.32.6"])
+            "Threat Prevention: Anti-Malware Scanner from 185.1.2.66 to 203.0.113.47",
+            "note on c2.example.net", "note on 185.1.2.7", "note on 185.1.2.66"])
 
     def test_an_alert_telegram_refuses_is_logged(self):
         alerts = self.bot.watcher.scan([OUTBOUND_TO_C2])
@@ -823,24 +859,50 @@ class WatcherTest(unittest.TestCase):
         self.assertEqual(self.watcher.scan([probe]), [])
 
     def test_watcher_alerts_threat_prevention_detections_not_statistics(self):
-        alerts = self.watcher.scan([INBOUND_PREVENT, STATS, INBOUND_PREVENT])
+        alerts = self.watcher.scan([INBOUND_PREVENTED, STATS, INBOUND_PREVENTED])
 
-        self.assertEqual(self.summary(alerts), [("detection", "176.230.223.47", "31.14.32.6", "detected")])
+        self.assertEqual(self.summary(alerts), [("detection", WAN, "185.1.2.66", "prevent")])
         self.assertEqual(self.watcher.describe(alerts[0]),
-                         "20:57:09 — Threat Prevention: Anti-Malware IP reputation from 31.14.32.6 to 176.230.223.47"
-                         " — detected")
+                         "08:12:40 — Threat Prevention: Anti-Malware Scanner from 185.1.2.66 to 203.0.113.47 — prevent")
+
+    def test_a_detection_alerts_live_only_with_an_explicit_action(self):
+        for action, alerted in (("prevent", "prevent"), ("Drop", "drop"), ("reject", "reject"), ("block", "block"),
+                                (" Detect ", "detect"), ("", None), (" ", None), ("monitor", None),
+                                ("accept", None), ("inspect", None), ("log", None)):
+            with self.subTest(action=action):
+                self.watcher.alerted.clear()
+                line = INBOUND_PREVENTED.replace('Action="Prevent"', f'Action="{action}"')
+
+                self.assertEqual([a.action for a in self.watcher.scan([line])], [alerted] if alerted else [])
+
+    def test_a_blank_action_detection_is_left_to_the_brief(self):
+        # spark_logs' INBOUND_PREVENT: an IP-reputation row on a probe, logged with a blank Action.
+        self.assertEqual(self.watcher.scan([INBOUND_PREVENT, STATS]), [])
 
     def test_a_detection_of_a_lan_device_reaching_out_alerts(self):
-        self.assertEqual(self.summary(self.watcher.scan([OUTBOUND_DETECTION])),
-                         [("detection", "10.68.144.121", "104.18.32.47", "accept")])
+        self.assertEqual([(a.kind, a.indicator, a.action) for a in self.watcher.scan([OUTBOUND_DETECTED])],
+                         [("detection", "104.18.32.47", "detect")])
+        self.assertEqual(self.summary(self.watcher.scan([OUTBOUND_IPS])),
+                         [("detection", LAN_DEVICE, "185.1.2.73", "drop")])
 
-    def test_monitor_mode_and_lan_only_detections_are_left_to_the_brief(self):
-        self.assertEqual(self.watcher.scan([MONITORED_DETECTION, LAN_DETECTION]), [])
+    def test_monitor_accept_and_lan_only_detections_are_left_to_the_brief(self):
+        self.assertEqual(self.watcher.scan([MONITORED_DETECTION, OUTBOUND_DETECTION, LAN_DETECTION]), [])
 
     def test_two_protections_on_the_same_pair_both_alert(self):
-        other = INBOUND_PREVENT.replace('Protection Type="IP reputation"', 'Protection Type="Scanner"')
+        other = INBOUND_PREVENTED.replace('Protection Name="Scanner"', 'Protection Name="Port Scan"')
 
-        self.assertEqual(len(self.watcher.scan([INBOUND_PREVENT, other])), 2)
+        self.assertEqual(len(self.watcher.scan([INBOUND_PREVENTED, other])), 2)
+
+    def test_text_from_the_capture_reaches_the_alert_on_one_short_clean_line(self):
+        forged = detection("11:00:00", "prevent\u200b", "185.1.2.66", "x\x1b]0;pwn\x07\u202eLAN",
+                           "Anti Malware", "Bad\x1b[2J\u202e" + "P" * 300)
+
+        [alert] = self.watcher.scan([forged])
+        text = self.watcher.describe(alert)
+
+        self.assertEqual(text, "11:00:00 — Threat Prevention: Anti-Malware Bad[2J" + "P" * 94 + "… from 185.1.2.66 "
+                               "to x]0;pwnLAN — prevent")
+        self.assertFalse(any(unicodedata.category(c).startswith("C") for c in text), repr(text))
 
     def test_a_feed_hit_logged_as_a_detection_gives_the_feed_alert_only(self):
         self.assertEqual(self.summary(self.watcher.scan([FEED_HIT_DETECTED])),
@@ -849,7 +911,7 @@ class WatcherTest(unittest.TestCase):
     def test_cooldowns_older_than_the_cooldown_are_dropped_at_midnight(self):
         self.watcher.scan([OUTBOUND_TO_C2])
         self.clock.time += 1800
-        self.watcher.scan([INBOUND_PREVENT])
+        self.watcher.scan([INBOUND_PREVENTED])
         self.clock.time += 1800
         self.day += timedelta(days=1)
 

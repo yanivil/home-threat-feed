@@ -11,6 +11,7 @@ GREYNOISE_API_KEY.
 """
 
 import json
+import unicodedata
 import urllib.error
 import urllib.request
 import zlib
@@ -115,25 +116,28 @@ def _activity(ioc_type, value, capture_dir, today):
                         found.append(entry)
                 except ValueError:  # a malformed line (spark_logs._host_name on resource="http://[::1") costs only itself
                     continue
+    # Every string from the capture goes through clean(): it reaches the facts and the model's prompt.
     received = [entry["received"] for entry in found]
-    services = (entry.get("svc") or entry.get("service_id") or "" for entry in found)
-    actions = (entry.get("Action", "") for entry in found)
+    services = (clean(entry.get("svc") or entry.get("service_id")) for entry in found)
+    actions = (clean(entry.get("Action")) for entry in found)
     return {
         "count": len(found),
-        "first": min(received, default=None),
-        "last": max(received, default=None),
-        "services": Counter(service.strip() for service in services if service.strip()),
-        "actions": Counter(action.strip() for action in actions if action.strip()),
+        "first": clean(min(received, default=None)),
+        "last": clean(max(received, default=None)),
+        "services": Counter(service for service in services if service),
+        "actions": Counter(action for action in actions if action),
     }
 
 
-def _clean(text):
-    """A string a service sent, on one line (every whitespace run becomes one space) and cut to TEXT_LIMIT
-    characters with "…": a registrant controls what RDAP says, and nothing it sends may start a line of its
-    own. None for anything but a string, and for a blank one."""
+def clean(text):
+    """A string a service sent or the capture holds, on one line (every whitespace run becomes one space),
+    without control or format characters (bidi and zero-width marks: Unicode category C) and cut to
+    TEXT_LIMIT characters with "…": a registrant controls what RDAP says, a forger what a capture line
+    says, and nothing either sends may start a line of its own. None for anything but a string, and
+    for a blank one."""
     if not isinstance(text, str):
         return None
-    text = " ".join(text.split())
+    text = " ".join("".join(c for c in text if c.isspace() or not unicodedata.category(c).startswith("C")).split())
     return (text[:TEXT_LIMIT] + "…" if len(text) > TEXT_LIMIT else text) or None
 
 
@@ -160,14 +164,14 @@ def _virustotal(body):
     counts = [count for count in map(_number, stats.values()) if count is not None]
     categories = attributes.get("categories")
     return {
-        "as_owner": _clean(attributes.get("as_owner")),
+        "as_owner": clean(attributes.get("as_owner")),
         "asn": _number(attributes.get("asn")),
-        "country": _clean(attributes.get("country")),
+        "country": clean(attributes.get("country")),
         "malicious": _number(stats.get("malicious")),
         "total": sum(counts) if counts else None,
-        "categories": ({name: category for name, raw in categories.items() if (category := _clean(raw))}
+        "categories": ({name: category for name, raw in categories.items() if (category := clean(raw))}
                        if isinstance(categories, dict) else None),
-        "registrar": _clean(attributes.get("registrar")),
+        "registrar": clean(attributes.get("registrar")),
     }
 
 
@@ -180,7 +184,7 @@ def _abuse_email(entities):
         items = vcard[1] if isinstance(vcard, list) and len(vcard) > 1 and isinstance(vcard[1], list) else ()
         if isinstance(roles, list) and "abuse" in roles:
             for item in items:
-                if isinstance(item, list) and len(item) > 3 and item[0] == "email" and (email := _clean(item[3])):
+                if isinstance(item, list) and len(item) > 3 and item[0] == "email" and (email := clean(item[3])):
                     return email
         nested = _abuse_email(entity.get("entities"))
         if nested:
@@ -189,17 +193,17 @@ def _abuse_email(entities):
 
 
 def _rdap(body):
-    return {"name": _clean(body.get("name")), "handle": _clean(body.get("handle")),
+    return {"name": clean(body.get("name")), "handle": clean(body.get("handle")),
             "abuse": _abuse_email(body.get("entities"))}
 
 
 def _internetdb(body):
-    return {"ports": _list(body.get("ports"), _number), "tags": _list(body.get("tags"), _clean),
-            "vulns": _list(body.get("vulns"), _clean)}
+    return {"ports": _list(body.get("ports"), _number), "tags": _list(body.get("tags"), clean),
+            "vulns": _list(body.get("vulns"), clean)}
 
 
 def _greynoise(body):
-    return {"classification": _clean(body.get("classification")), "name": _clean(body.get("name")),
+    return {"classification": clean(body.get("classification")), "name": clean(body.get("name")),
             "noise": _flag(body.get("noise")), "riot": _flag(body.get("riot"))}
 
 
