@@ -328,16 +328,17 @@ class DailyCheckTest(unittest.TestCase):
         self.assertEqual((self.repo / "lock_held.txt").read_text(), "True")
         self.assertFalse(self.lock.exists())
 
-    def test_a_lock_held_for_ten_minutes_fails_the_run_and_is_left_for_its_owner(self):
+    def test_a_lock_held_for_twenty_minutes_fails_the_run_and_is_left_for_its_owner(self):
+        # Twenty, not ten: a 50-indicator check from the bot holds the lock about 13 minutes.
         self.hold_lock(hours_ago=1)
         self.stub_sleep()
 
         proc = self.run_script()
 
         self.assertEqual(proc.returncode, 1)
-        self.assertIn("ERROR: the feed is locked by the Telegram bot for over ten minutes", proc.stdout)
-        self.assertEqual(self.sleeps.read_text(), "5\n" * 120)
-        self.assertEqual(proc.stdout.count("waiting"), 1)
+        self.assertIn("ERROR: the feed is locked by the Telegram bot for over twenty minutes", proc.stdout)
+        self.assertEqual(self.sleeps.read_text(), "5\n" * 240)
+        self.assertEqual(proc.stdout.count("waiting up to twenty minutes"), 1)
         self.assertFalse((self.repo / "argv.txt").exists(), "the check must not run without the lock")
         self.assertTrue(self.lock.is_dir(), "the lock is not ours to remove")
         self.assertEqual(self.notifications.read_text().count("\n"), 1)

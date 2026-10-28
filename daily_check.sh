@@ -3,7 +3,7 @@
 #   0. syslog_retention.py gzip captures older than a week, drop those older than 180 days; runs
 #                          first so that a failed pull never skips it, and never fails the run
 #   1. feed lock           take syslog/.feed-lock, the directory the Telegram bot also holds while it
-#                          adds rows (feed_lock.py); wait up to ten minutes for the bot, take over a
+#                          adds rows (feed_lock.py); wait up to twenty minutes for the bot, take over a
 #                          lock older than three hours, release it when the script exits
 #   2. git pull            bring in rows committed elsewhere (GitHub web edits, the monthly re-check)
 #   3. spark_logs.py       mine the last two daily captures, look new indicators up on VirusTotal
@@ -53,10 +53,10 @@ while ! mkdir "$lock" 2>/dev/null; do
         rmdir "$lock" 2>/dev/null
         continue
     fi
-    [ "$waited" -eq 0 ] && log "The feed is locked, probably by the Telegram bot adding a row; waiting up to ten minutes"
+    [ "$waited" -eq 0 ] && log "The feed is locked, probably by the Telegram bot adding a row; waiting up to twenty minutes"
     sleep 5
     waited=$((waited + 5))
-    [ "$waited" -ge 600 ] && fail "the feed is locked by the Telegram bot for over ten minutes"
+    [ "$waited" -ge 1200 ] && fail "the feed is locked by the Telegram bot for over twenty minutes"
 done
 trap 'rmdir "$lock" 2>/dev/null' EXIT
 
