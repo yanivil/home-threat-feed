@@ -130,10 +130,12 @@ class FakeTelegram:
 
 class FakeGit:
     """Stands in for subprocess.run on git: records each argument list and whether the feed lock was
-    held then; the subcommands in `failing` exit 1."""
+    held then; the subcommands in `failing` exit 128, git's fatal error. `diff --quiet` and `diff --numstat` compare the
+    feed at `feed_path` with what it held at the last commit (at the start, what it holds then)."""
 
-    def __init__(self, lock_path):
-        self.lock_path = lock_path
+    def __init__(self, lock_path, feed_path):
+        self.lock_path, self.feed_path = lock_path, feed_path
+        self.committed = feed_path.read_text()
         self.calls, self.kwargs, self.locked = [], [], []
         self.failing = set()
 
@@ -141,8 +143,22 @@ class FakeGit:
         self.calls.append(args)
         self.kwargs.append(kwargs)
         self.locked.append(self.lock_path.exists())
-        fails = args[1] in self.failing
-        return subprocess.CompletedProcess(args, 1 if fails else 0, "", f"fatal: {args[1]} refused" if fails else "")
+        if args[1] in self.failing:
+            return subprocess.CompletedProcess(args, 128, "", f"fatal: {args[1]} refused")
+        now = self.feed_path.read_text()
+        if args[1:3] == ["diff", "--quiet"]:
+            return subprocess.CompletedProcess(args, int(now != self.committed), "", "")
+        if args[1:3] == ["diff", "--numstat"]:
+            before, after = self.committed.splitlines(), now.splitlines()
+            added = sum(1 for line in after if line not in before)
+            removed = sum(1 for line in before if line not in after)
+            return subprocess.CompletedProcess(args, 0, f"{added}\t{removed}\tspark-ioc-feed.csv\n", "")
+        if args[1] == "commit":
+            self.committed = now
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    def commands(self):
+        return [args[1] for args in self.calls]
 
 
 class Clock:
@@ -221,6 +237,13 @@ class ParseMessageTest(unittest.TestCase):
         self.assertEqual(telegram_bot.parse_message("a.example, b.example, Campaign"),
                          ("check", ["a.example", "b.example"], "Campaign"))
 
+    def test_indicators_may_be_listed_with_commas_with_or_without_spaces(self):
+        for text in ("a.example,b.example", "a.example , b.example", "a.example ,b.example,", "a.example,,b.example"):
+            with self.subTest(text=text):
+                self.assertEqual(telegram_bot.parse_message(text), ("check", ["a.example", "b.example"], ""))
+        self.assertEqual(telegram_bot.parse_message("185.1.2.9,evil[.]com,Unit 42 report"),
+                         ("check", ["185.1.2.9", "evil.com"], "Unit 42 report"))
+
     def test_a_url_with_a_comma_is_not_shortened_into_another_url(self):
         verb, indicators, label = telegram_bot.parse_message("hxxps://bad[.]example/a?x=1,2 Campaign")
 
@@ -270,7 +293,7 @@ class BotTestCase(unittest.TestCase):
             vt_check.api_path("Domain", "evil.com"): vt_object("domain", "evil.com", 11, undetected=23),
             vt_check.api_path("IP", "185.1.2.9"): vt_object("ip_address", "185.1.2.9", 1, undetected=33),
         })
-        self.git = FakeGit(self.lock)
+        self.git = FakeGit(self.lock, self.feed)
         self.clock = Clock()
         self.daily_log = self.repo / "daily-check.log"
         self.err = quiet(self)
@@ -297,7 +320,9 @@ class AddTest(BotTestCase):
         self.bot.run_once()
         self.assertIn("evil.com: added (Domain 11/94 malicious)", self.tg.sent[-1])
         self.assertIn("185.1.2.9: clean (IP 1/94 malicious)", self.tg.sent[-1])
-        self.assertEqual([c[:3] for c in self.git.calls], [["git", "pull", "--rebase"], ["git", "add", "spark-ioc-feed.csv"], ["git", "commit", "-m"], ["git", "push", "--quiet"]])
+        self.assertEqual([c[:3] for c in self.git.calls], [["git", "pull", "--rebase"], ["git", "diff", "--quiet"],
+                                                           ["git", "diff", "--numstat"], ["git", "add", "spark-ioc-feed.csv"],
+                                                           ["git", "commit", "-m"], ["git", "push", "--quiet"]])
         self.assertIn("MuddyWater - Unit 42", self.feed.read_text())
         self.assertFalse((self.repo / "syslog" / ".feed-lock").exists())
 
@@ -306,7 +331,7 @@ class AddTest(BotTestCase):
 
         self.assertTrue(self.feed.read_text().endswith(
             ",evil.com,Domain,high,high,AB,MuddyWater - Unit 42 - sent from Telegram - VT 11/94 malicious 2026-10-28\n"))
-        commit = self.git.calls[2]
+        commit = self.git.calls[4]
         self.assertEqual(commit, ["git", "commit", "-m", "Add 1 indicator sent from Telegram: MuddyWater - Unit 42",
                                   "--", "spark-ioc-feed.csv"])
         self.assertEqual(self.git.calls[0], ["git", "pull", "--rebase", "--autostash", "--quiet"])
@@ -324,7 +349,7 @@ class AddTest(BotTestCase):
         self.send("evil.com")
 
         self.assertIn(",AB,sent from Telegram - VT 11/94 malicious 2026-10-28\n", self.feed.read_text())
-        self.assertEqual(self.git.calls[2][3], "Add 1 indicator sent from Telegram")
+        self.assertEqual(self.git.calls[4][3], "Add 1 indicator sent from Telegram")
 
     def test_trust_adds_without_a_lookup(self):
         self.send("/trust 185.1.2.10 Cyberint")
@@ -333,18 +358,48 @@ class AddTest(BotTestCase):
         row = self.feed.read_text().splitlines()[-1]
         self.assertTrue(row.endswith(",185.1.2.10,IP,high,high,AB,Cyberint - sent from Telegram - "
                                      "added without VirusTotal check 2026-10-28"), row)
-        self.assertEqual([c[1] for c in self.git.calls], ["pull", "add", "commit", "push"])
+        self.assertEqual(self.git.commands(), ["pull", "diff", "diff", "add", "commit", "push"])
         self.assertEqual(self.tg.sent[-1].splitlines()[-2:], ["1 added, 0 already in the feed", "Committed and pushed."])
 
     def test_nothing_added_means_no_commit_and_no_push(self):
         self.send("185.1.2.9 93.152.221.36")
 
-        self.assertEqual([c[1] for c in self.git.calls], ["pull"])
+        self.assertEqual(self.git.commands(), ["pull", "diff"])
         self.assertEqual(self.feed.read_text(), FEED)
         self.assertIn("93.152.221.36: in-feed", self.tg.sent[-1])
         self.assertEqual(self.tg.sent[-1].splitlines()[-2:],
                          ["0 added, 1 clean, 0 unknown to VirusTotal, 1 already in the feed",
                           "Nothing added, nothing committed."])
+
+    def test_rows_an_interrupted_check_left_are_committed_by_the_next_one(self):
+        # A SIGTERM after the rows were written and before the commit: the replayed message finds them in-feed.
+        with self.feed.open("a") as f:
+            f.write("vt-domain-1,evil.com,Domain,high,high,AB,sent from Telegram - VT 11/94 malicious 2026-10-28\n")
+
+        self.send("evil.com")
+
+        self.assertEqual(self.tg.sent[-1].splitlines()[-2:], ["0 added, 0 clean, 0 unknown to VirusTotal, "
+                                                              "1 already in the feed", "Committed and pushed."])
+        self.assertEqual(self.git.calls[4][3], "Add 1 indicator sent from Telegram",
+                         "the commit counts what git says was added, not what this check added")
+        self.assertEqual(self.vt.calls, [])
+
+    def test_a_git_diff_that_fails_says_the_rows_are_not_committed(self):
+        self.git.failing = {"diff"}
+
+        self.send("evil.com")
+
+        self.assertIn("git diff failed, the rows are in the feed file but not committed: fatal: diff refused",
+                      self.tg.sent[-1])
+        self.assertEqual(self.git.commands(), ["pull", "diff"])
+
+    def test_a_systemexit_while_the_check_is_announced_still_releases_the_lock(self):
+        self.tg.send_message = lambda text: (_ for _ in ()).throw(SystemExit(0))  # launchd's SIGTERM, then
+
+        with self.assertRaises(SystemExit):
+            self.bot.add(["evil.com"], "", trusted=False)
+
+        self.assertFalse(self.lock.exists())
 
     def test_at_most_fifty_indicators_per_message(self):
         self.send(" ".join(f"185.2.0.{i}" for i in range(1, 61)))
@@ -359,7 +414,7 @@ class AddTest(BotTestCase):
         reply = self.bot.add(["185.1.2.10"], 'x" ; rm -rf / \n y\r', trusted=True)
 
         self.assertIn("Committed and pushed.", reply)
-        commit = self.git.calls[2]
+        commit = self.git.calls[4]
         self.assertIsInstance(commit, list)
         self.assertEqual(commit[:3], ["git", "commit", "-m"])
         self.assertEqual(commit[3], 'Add 1 indicator sent from Telegram: x" ; rm -rf / y')
@@ -370,9 +425,9 @@ class AddTest(BotTestCase):
 
         row = self.feed.read_text().splitlines()[-1]
         self.assertEqual(row.split(",")[6], "Unit 42 - sent from Telegram - added without VirusTotal check 2026-10-28")
-        self.assertEqual(self.git.calls[2], ["git", "commit", "-m", "Add 1 indicator sent from Telegram: Unit 42",
+        self.assertEqual(self.git.calls[4], ["git", "commit", "-m", "Add 1 indicator sent from Telegram: Unit 42",
                                              "--", "spark-ioc-feed.csv"])
-        for text in (row, self.git.calls[2][3]):
+        for text in (row, self.git.calls[4][3]):
             self.assertFalse(any(c in text for c in '"\x1b‮​'), repr(text))
 
     def test_trust_refuses_what_must_never_be_blocked(self):
@@ -403,7 +458,7 @@ class AddTest(BotTestCase):
         def git(args, **kwargs):
             if args[1] == "commit":
                 raise ValueError("embedded null byte")
-            return subprocess.CompletedProcess(args, 0, "", "")
+            return self.git(args, **kwargs)
 
         reply = self.make_bot(git=git).add(["185.1.2.10"], "Unit 42", trusted=True)
 
@@ -417,7 +472,7 @@ class AddTest(BotTestCase):
         bot.add(["evil.com"], "", trusted=False)
 
         self.assertEqual(seen, [True])
-        self.assertEqual(self.git.locked, [True] * 4)
+        self.assertEqual(self.git.locked, [True] * 6)
         self.assertFalse(self.lock.exists())
 
     def test_a_lock_held_by_the_daily_check_turns_the_indicators_away_after_a_minute(self):
@@ -459,7 +514,7 @@ class AddTest(BotTestCase):
 
         self.send("evil.com")
 
-        self.assertEqual([c[1] for c in self.git.calls], ["pull", "add", "commit"])
+        self.assertEqual(self.git.commands(), ["pull", "diff", "diff", "add", "commit"])
         self.assertIn("git commit failed", self.tg.sent[-1])
 
     def test_a_refused_virustotal_key_stops_the_check_and_still_commits_what_was_added(self):
@@ -472,7 +527,7 @@ class AddTest(BotTestCase):
             "stopped: VirusTotal refused the API key: HTTP 401 WrongCredentialsError",
             "1 added, 0 clean, 0 unknown to VirusTotal, 0 already in the feed",
             "Committed and pushed."])
-        self.assertEqual([c[1] for c in self.git.calls], ["pull", "add", "commit", "push"])
+        self.assertEqual(self.git.commands(), ["pull", "diff", "diff", "add", "commit", "push"])
 
     def test_a_network_error_mid_check_keeps_and_commits_what_was_added(self):
         def fetch(path):
@@ -490,7 +545,7 @@ class AddTest(BotTestCase):
             "Committed and pushed."])
         self.assertIn(",evil.com,Domain,high,high,AB,sent from Telegram - VT 11/94 malicious 2026-10-28\n",
                       self.feed.read_text())
-        self.assertEqual(self.git.calls[2][3], "Add 1 indicator sent from Telegram")
+        self.assertEqual(self.git.calls[4][3], "Add 1 indicator sent from Telegram")
         self.assertFalse(self.lock.exists())
         self.assertRegex(bot.status().splitlines()[-1],
                          r"^last error: \d{4}-\d{2}-\d{2} \d{2}:\d{2} .*stopped: <urlopen error timed out>$")
@@ -576,6 +631,17 @@ class UpdatesTest(BotTestCase):
 
         self.assertEqual(self.tg.sent, ["status failed: disk gone", telegram_bot.HELP])
         self.assertIn("disk gone", self.err.getvalue())
+
+    def test_an_update_that_cannot_be_handled_is_logged_and_skipped(self):
+        # Replayed for ever otherwise: the offset would never move past it.
+        self.updates([{"update_id": 1, "message": "not an object"}, {"update_id": 2, "message": ["x"]},
+                      message("/help", update_id=3)])
+
+        self.assertEqual(self.bot.run_once(), 3)
+
+        self.assertEqual(self.tg.sent, [telegram_bot.HELP])
+        self.assertEqual(self.bot.offset, 4)
+        self.assertIn("an update could not be handled: AttributeError", self.bot.status().splitlines()[-1])
 
     def test_a_reply_telegram_refuses_is_logged(self):
         self.tg.send_message = lambda text: (_ for _ in ()).throw(telegram_api.TelegramError("Forbidden"))

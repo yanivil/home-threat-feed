@@ -67,6 +67,7 @@ They are checked on VirusTotal and the flagged ones added to the feed.
 /status - receiver, last daily check, next re-check, uptime
 /help - this list"""
 COMMANDS = ("trust", "who", "sources", "status", "help")
+URL_RE = re.compile(r"h(?:tt|xx)ps?://", re.IGNORECASE)  # a URL, defanged or not
 STATUS_RE = re.compile(r"\S+: (\S+)")  # vt_check's "<indicator>: <status> (<detail>)"
 SUMMARY = {"added": "added", "clean": "clean", "not-found": "unknown to VirusTotal", "in-feed": "already in the feed"}
 RUN_START = "Daily check starting"
@@ -78,25 +79,38 @@ def _hidden(char):
     return char == '"' or unicodedata.category(char).startswith("C")
 
 
+def _tokens(words):
+    """The words cut at their commas, empty pieces dropped ("a.example,b.example", "a , b"); a URL is
+    kept whole but for trailing commas (one with a comma inside is no indicator: the label starts there)."""
+    tokens = []
+    for word in words:
+        if URL_RE.match(word):
+            tokens.append(word.rstrip(","))
+        else:
+            tokens += [piece for piece in word.split(",") if piece]
+    return tokens
+
+
 def parse_message(text):
     """(verb, indicators, label) of a message: verb "check" for bare text, else the command
     (an unknown one is "help"); the indicators are the leading words vt_check.classify accepts,
-    normalised, a comma after one allowed; the label is the rest, without quotes or hidden
+    normalised, commas between them allowed; the label is the rest, without quotes or hidden
     characters (_hidden), commas and line breaks made spaces, at most LABEL_LIMIT characters."""
     words = text.split()
     verb = "check"
     if words and words[0].startswith("/"):
         command = words.pop(0)[1:].split("@")[0].lower()
         verb = command if command in COMMANDS else "help"
+    tokens = _tokens(words)
     indicators = []
-    for word in words:
-        if any(map(_hidden, word)):
+    for token in tokens:
+        if any(map(_hidden, token)):
             break
         try:
-            indicators.append(vt_check.classify(word.rstrip(","))[1])
+            indicators.append(vt_check.classify(token)[1])
         except ValueError:
             break
-    label = "".join(c for c in " ".join(words[len(indicators):]) if not _hidden(c))
+    label = "".join(c for c in " ".join(tokens[len(indicators):]) if not _hidden(c))
     return verb, indicators, " ".join(label.replace(",", " ").split())[:LABEL_LIMIT].rstrip()
 
 
@@ -151,7 +165,10 @@ class Bot:
         each, so a restart neither loses nor repeats one."""
         updates = self.telegram.get_updates(self.offset, timeout=timeout)
         for update in updates:
-            self.handle(update)
+            try:
+                self.handle(update)
+            except Exception as e:  # an update this code cannot read would otherwise come back for ever
+                self.error(f"an update could not be handled: {e!r}")
             self.offset = update["update_id"] + 1
             self.syslog.mkdir(exist_ok=True)
             (self.syslog / OFFSET_NAME).write_text(json.dumps({"offset": self.offset}) + "\n")
@@ -262,11 +279,11 @@ class Bot:
                 held = 0
             return (f"The daily check has been writing the feed for {spark_brief._count(held, 'minute')}; "
                     "send the indicators again later.")
-        if not trusted:
-            minutes = max(1, math.ceil((len(taken) - 1) * vt_check.FREE_API_DELAY / 60))
-            self.send(f"Checking {spark_brief._count(len(taken), 'indicator')} on VirusTotal, "
-                      f"about {spark_brief._count(minutes, 'minute')}.")
-        try:
+        try:  # from here on, whatever happens (SIGTERM included), the lock is given back
+            if not trusted:
+                minutes = max(1, math.ceil((len(taken) - 1) * vt_check.FREE_API_DELAY / 60))
+                self.send(f"Checking {spark_brief._count(len(taken), 'indicator')} on VirusTotal, "
+                          f"about {spark_brief._count(minutes, 'minute')}.")
             lines = self._write(taken, label, fetch)
         finally:
             lock.release()
@@ -292,7 +309,7 @@ class Bot:
 
     def _write(self, indicators, label, fetch):
         """The reply lines of an addition made under the lock: pull, add (looked up through `fetch`,
-        or trusted when it is None), commit, push."""
+        or trusted when it is None), commit and push whatever the feed now holds that git does not."""
         ok, output = self._git("pull", "--rebase", "--autostash", "--quiet")
         if not ok:
             self.error(f"git pull failed: {output}")
@@ -314,10 +331,22 @@ class Bot:
         if stopped:
             lines.append(stopped)
         lines.append(summary(statuses, trusted=fetch is None))
-        lines.append(self._commit(statuses["added"], label) if statuses["added"] else "Nothing added, nothing committed.")
+        lines.append(self._commit(label))
         return lines
 
-    def _commit(self, added, label):
+    def _commit(self, label):
+        """Commit and push the feed whenever git sees it changed: the rows this check added, and any an
+        interrupted one left behind (they would otherwise go out under the daily check's message). The
+        message counts the rows git says were added. Returns the reply's last line."""
+        status, _, said = self._run_git("diff", "--quiet", "--", FEED_NAME)
+        if status == 0:
+            return "Nothing added, nothing committed."
+        if status == 1:
+            status, stdout, said = self._run_git("diff", "--numstat", "--", FEED_NAME)
+        if status != 0:
+            self.error(f"git diff failed: {said}")
+            return f"git diff failed, the rows are in the feed file but not committed: {said}"
+        added = int(stdout.split()[0]) if stdout.split() and stdout.split()[0].isdigit() else 0
         message = f"Add {spark_brief._count(added, 'indicator')} sent from Telegram" + (f": {label}" if label else "")
         message = " ".join(message.split())  # one line, whatever the label holds
         for args in (("add", FEED_NAME), ("commit", "-m", message, "--", FEED_NAME)):
@@ -333,11 +362,17 @@ class Bot:
 
     def _git(self, *args):
         """(whether git succeeded, what it said) for one git command in the repository."""
+        status, _, said = self._run_git(*args)
+        return status == 0, said
+
+    def _run_git(self, *args):
+        """(exit status, standard output, what it said) of one git command in the repository; the status
+        is None when git could not run."""
         try:
             proc = self.git(["git", *args], cwd=self.repo, capture_output=True, text=True, timeout=GIT_TIMEOUT)
         except (OSError, subprocess.SubprocessError, ValueError) as e:  # ValueError: a NUL in an argument
-            return False, str(e)
-        return proc.returncode == 0, (proc.stderr or proc.stdout or "").strip()
+            return None, "", str(e)
+        return proc.returncode, proc.stdout or "", (proc.stderr or proc.stdout or "").strip()
 
     def who(self, indicator):
         return attacker_context.note(indicator, self.syslog, self.today().isoformat())
