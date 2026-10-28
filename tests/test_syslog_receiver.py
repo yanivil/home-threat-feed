@@ -12,10 +12,10 @@ T1 = datetime(2026, 10, 20, 20, 57, 5)
 T2 = datetime(2026, 10, 20, 20, 57, 9)
 
 # A Spark security log exactly as it arrives: BSD-style envelope with no tag, then key="value" pairs.
-SPARK = (b'<85>Oct 20 20:57:05 Bernhard-Hod Action="accept" Uuid="{0x6ad7ab6f,0x1,0x2a32bd3e,0xf4cba862}" '
-         b'resource="dns.quad9.net" src="10.45.60.100" dst="9.9.9.9" proto="17"')
+SPARK = (b'<85>Oct 20 20:57:05 Home-Spark Action="accept" Uuid="{0x6ad7ab6f,0x1,0x2a32bd3e,0xf4cba862}" '
+         b'resource="dns.quad9.net" src="192.168.1.100" dst="9.9.9.9" proto="17"')
 # Long entries are split over several datagrams; the continuations carry no envelope.
-PART1 = b'<85>Oct 20 20:57:09 Bernhard-Hod Action="drop" src="109.205.211.205" dst="176.230.223.47" rule_name="Block'
+PART1 = b'<85>Oct 20 20:57:09 Home-Spark Action="drop" src="109.205.211.205" dst="185.1.3.47" rule_name="Block'
 PART2 = b' QUIC" ROW_END="0" UP_match_table="TABLE_END" svc="443"'
 
 
@@ -35,7 +35,7 @@ class CollectorTest(unittest.TestCase):
 
         self.assertEqual(self.lines(), [
             '2026-10-20T20:57:05 Action="accept" Uuid="{0x6ad7ab6f,0x1,0x2a32bd3e,0xf4cba862}" '
-            'resource="dns.quad9.net" src="10.45.60.100" dst="9.9.9.9" proto="17"',
+            'resource="dns.quad9.net" src="192.168.1.100" dst="9.9.9.9" proto="17"',
         ])
 
     def test_continuation_datagrams_are_joined_to_their_entry(self):
@@ -45,10 +45,10 @@ class CollectorTest(unittest.TestCase):
         self.collector.flush()
 
         self.assertEqual(self.lines(), [
-            '2026-10-20T20:57:09 Action="drop" src="109.205.211.205" dst="176.230.223.47" '
+            '2026-10-20T20:57:09 Action="drop" src="109.205.211.205" dst="185.1.3.47" '
             'rule_name="Block QUIC" ROW_END="0" UP_match_table="TABLE_END" svc="443"',
             '2026-10-20T20:57:09 Action="accept" Uuid="{0x6ad7ab6f,0x1,0x2a32bd3e,0xf4cba862}" '
-            'resource="dns.quad9.net" src="10.45.60.100" dst="9.9.9.9" proto="17"',
+            'resource="dns.quad9.net" src="192.168.1.100" dst="9.9.9.9" proto="17"',
         ])
 
     def test_entry_is_written_only_once_complete_or_flushed(self):
@@ -65,7 +65,7 @@ class CollectorTest(unittest.TestCase):
         self.assertEqual(self.lines(), ['2026-10-20T20:57:05 Action="accept" src="1.2.3.4"'])
 
     def test_undecodable_bytes_do_not_lose_the_entry(self):
-        self.collector.feed(b'<85>Oct 20 20:57:05 Bernhard-Hod Action="accept" x="\xff"', now=T1)
+        self.collector.feed(b'<85>Oct 20 20:57:05 Home-Spark Action="accept" x="\xff"', now=T1)
         self.collector.flush()
 
         self.assertEqual(self.lines(), ['2026-10-20T20:57:05 Action="accept" x="�"'])
@@ -81,7 +81,7 @@ class CollectorTest(unittest.TestCase):
 
     def test_one_datagram_is_one_capture_line_whatever_it_holds(self):
         # A forged datagram must not become a second, made-up entry in the capture.
-        self.collector.feed(b'<85>Oct 20 20:57:05 Bernhard-Hod Action="accept" src="192.0.2.5"\r\n'
+        self.collector.feed(b'<85>Oct 20 20:57:05 Home-Spark Action="accept" src="192.0.2.5"\r\n'
                             b'2026-10-20T20:57:05 Action="drop" Protection Name="forged"\rx="1"\r\n', now=T1)
         self.collector.feed(b'\nAction="drop"\n', now=T1)  # a continuation, joined to its entry
         self.collector.flush()

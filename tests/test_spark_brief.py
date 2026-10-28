@@ -34,7 +34,7 @@ FEED = HEADER + (f"vt-ip-0a1b2c3d4e,{HEAVY},IP,high,high,AB,"
 RUN_LOG = """2026-10-29 07:30:01 Daily check starting: last 2 day(s)
 47.79.34.208: added (IP 11/94 malicious)
 118.69.26.133: clean (IP 1/94 malicious)
-OUTBOUND HIT  c2.example.net  (Domain 9/94 malicious)  reached by 10.68.144.121  <- check these devices
+OUTBOUND HIT  c2.example.net  (Domain 9/94 malicious)  reached by 192.168.2.121  <- check these devices
 Added to the feed: 1  clean: 1  unknown to VirusTotal: 0  left for another day: 0
 """
 
@@ -167,7 +167,7 @@ class ParseRunLogTest(unittest.TestCase):
         run = spark_brief.parse_run_log(RUN_LOG)
 
         self.assertEqual(run["added"], [(NEW, "IP 11/94 malicious")])
-        self.assertEqual(run["outbound_hits"], [("c2.example.net", "Domain 9/94 malicious", ["10.68.144.121"])])
+        self.assertEqual(run["outbound_hits"], [("c2.example.net", "Domain 9/94 malicious", ["192.168.2.121"])])
         self.assertEqual((run["lookups"], run["errors"]), (2, []))
 
     def test_an_outbound_hit_lists_every_device(self):
@@ -314,7 +314,7 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(text.splitlines()[0], "Spark brief — Wed 2026-10-28")
         self.assertIn("Probes dropped: 4 from 2 sources · TP detections: 1 · Sent to block: 1 · Outbound hits: 1", text)
         self.assertIn("  47.79.34.208     VT 11/94   probed 20×   →  added", text)
-        self.assertIn("10.68.144.121 reached c2.example.net (VT 9/94)", text)
+        self.assertIn("192.168.2.121 reached c2.example.net (VT 9/94)", text)
         self.assertIn("INDICATORS ENTERED: 1 from the Spark's logs · 0 from news · 0 by hand", text)
         self.assertIn("Lookups: 2 of 500 · next re-check 2026-12-18 · no errors", text)
 
@@ -323,7 +323,7 @@ class RenderTest(unittest.TestCase):
         attack = sample_attack(top=[(HEAVY, 312, True), (LIGHT, 9, False)], sources=3912, dropped=41207,
                                detections=detections)
         run = {"added": [(NEW, "IP 11/94 malicious")], "lookups": 45, "errors": [],
-               "outbound_hits": [("c2.example.net", "Domain 9/94 malicious", ["10.68.144.121"])]}
+               "outbound_hits": [("c2.example.net", "Domain 9/94 malicious", ["192.168.2.121"])]}
 
         text = spark_brief.render(DAY, attack, run, {"logs": 3, "news": 5, "hand": 0, "other": 0},
                                   Counter({NEW: 20}), date(2026, 12, 18))
@@ -335,7 +335,7 @@ class RenderTest(unittest.TestCase):
             "SENT TO BLOCK (passed the firewall, VirusTotal flags them)",
             "  47.79.34.208     VT 11/94   probed 20×   →  added",
             "OUTBOUND HIT — look at this device",
-            "  10.68.144.121 reached c2.example.net (VT 9/94)",
+            "  192.168.2.121 reached c2.example.net (VT 9/94)",
             "THREAT PREVENTION",
             "  Anti-Malware: 1 ·  IPS: 1",
             "TOP PROBING SOURCES (all dropped)",

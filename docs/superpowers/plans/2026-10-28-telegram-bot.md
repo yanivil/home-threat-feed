@@ -146,7 +146,7 @@ def test_from_keychain_needs_both_items(self):
 RUN_LOG = """2026-10-29 07:30:01 Daily check starting: last 2 day(s)
 47.79.34.208: added (IP 11/94 malicious)
 118.69.26.133: clean (IP 1/94 malicious)
-OUTBOUND HIT  c2.example.net  (Domain 9/94 malicious)  reached by 10.68.144.121  <- check these devices
+OUTBOUND HIT  c2.example.net  (Domain 9/94 malicious)  reached by 192.168.2.121  <- check these devices
 Added to the feed: 1  clean: 1  unknown to VirusTotal: 0  left for another day: 0
 """
 
@@ -159,7 +159,7 @@ def test_attacks_count_external_drops_and_rejects_and_rank_sources(self):
 def test_run_log_yields_added_hits_lookups_and_errors(self):
     run = spark_brief.parse_run_log(RUN_LOG)
     self.assertEqual(run["added"], [("47.79.34.208", "IP 11/94 malicious")])
-    self.assertEqual(run["outbound_hits"], [("c2.example.net", "Domain 9/94 malicious", ["10.68.144.121"])])
+    self.assertEqual(run["outbound_hits"], [("c2.example.net", "Domain 9/94 malicious", ["192.168.2.121"])])
     self.assertEqual((run["lookups"], run["errors"]), (2, []))
 
 def test_render_matches_the_approved_layout(self):
@@ -167,7 +167,7 @@ def test_render_matches_the_approved_layout(self):
     self.assertEqual(text.splitlines()[0], "Spark brief — Wed 2026-10-29")
     self.assertIn("Probes dropped: 4 from 2 sources · TP detections: 1 · Sent to block: 1 · Outbound hits: 1", text)
     self.assertIn("  47.79.34.208     VT 11/94   probed 20×   →  added", text)
-    self.assertIn("10.68.144.121 reached c2.example.net (VT 9/94)", text)
+    self.assertIn("192.168.2.121 reached c2.example.net (VT 9/94)", text)
     self.assertIn("INDICATORS ENTERED: 1 from the Spark's logs · 0 from news · 0 by hand", text)
     self.assertIn("Lookups: 2 of 500 · next re-check 2026-12-18 · no errors", text)
 
@@ -258,7 +258,7 @@ def test_who_sends_the_context_note(self): ... "/who 93.152.221.36" → attacker
 
 def test_watcher_alerts_a_device_reaching_a_feed_member_once_an_hour(self):
     alerts = self.watcher.scan([OUTBOUND_TO_C2, OUTBOUND_TO_C2])   # dst_domain_name c2.example.net, in the feed
-    self.assertEqual([(a.kind, a.device, a.indicator, a.action) for a in alerts], [("feed", "10.68.144.121", "c2.example.net", "drop")])
+    self.assertEqual([(a.kind, a.device, a.indicator, a.action) for a in alerts], [("feed", "192.168.2.121", "c2.example.net", "drop")])
 def test_watcher_matches_the_address_when_the_feed_holds_the_ip(self): ... entry with dst 203.0.113.7 (in feed) and a name not in the feed → alert on the address
 def test_watcher_alerts_threat_prevention_detections_not_statistics(self): ... INBOUND_PREVENT → ("detection", ...); a stats row → nothing
 def test_watcher_waits_for_a_missing_capture(self): ... follow() with no file: after the file appears with one matching line, alert called; stop_event ends the loop

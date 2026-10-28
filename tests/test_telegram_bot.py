@@ -35,7 +35,7 @@ OWNER = 42
 
 # A LAN device reaching a feed member by name, shaped like spark_logs' OUTBOUND_DOMAIN.
 OUTBOUND_TO_C2 = ('2026-10-28T09:15:02 Action="drop" Uuid="{0x3}" inzone="Internal" outzone="External" '
-                  'service_id="HTTPS" src="10.68.144.121" dst="104.18.32.47" proto="6" xlatesrc="176.230.223.47" '
+                  'service_id="HTTPS" src="192.168.2.121" dst="104.18.32.47" proto="6" xlatesrc="185.1.3.47" '
                   'dst_domain_name="*.example.net" destination_domain_name="c2.example.net" '
                   'ProductName="VPN-1 & FireWall-1"')
 # The same device reaching a feed address under a name the feed does not hold.
@@ -47,13 +47,13 @@ MALFORMED = OUTBOUND_TO_C2.replace('destination_domain_name="c2.example.net"', '
 # Threat Prevention rows shaped like spark_logs' INBOUND_PREVENT: a LAN device's request the IPS let
 # through (accept: the brief's alone), the same detected, in monitor mode, and one between two LAN addresses.
 OUTBOUND_DETECTION = (INBOUND_PREVENT.replace("2026-10-20T20:57:09", "2026-10-28T10:02:11")
-                      .replace('Action=" "', 'Action="accept"').replace('src="31.14.32.6"', 'src="10.68.144.121"')
-                      .replace('dst="176.230.223.47"', 'dst="104.18.32.47"')
+                      .replace('Action=" "', 'Action="accept"').replace('src="31.14.32.6"', 'src="192.168.2.121"')
+                      .replace('dst="185.1.3.47"', 'dst="104.18.32.47"')
                       .replace('Protection Name=""', 'Protection Name="Header Spoofing"')
                       .replace('ProductName="Anti Malware"', 'ProductName="SmartDefense"'))
 MONITORED_DETECTION = OUTBOUND_DETECTION.replace('Action="accept"', 'Action="monitor"')
-LAN_DETECTION = (OUTBOUND_DETECTION.replace('src="10.68.144.121"', 'src="10.68.144.100"')
-                 .replace('dst="104.18.32.47"', 'dst="10.68.144.1"').replace("Header Spoofing", "Max Ping Size")
+LAN_DETECTION = (OUTBOUND_DETECTION.replace('src="192.168.2.121"', 'src="192.168.2.100"')
+                 .replace('dst="104.18.32.47"', 'dst="192.168.2.1"').replace("Header Spoofing", "Max Ping Size")
                  .replace('Action="accept"', 'Action="drop"'))
 OUTBOUND_DETECTED = OUTBOUND_DETECTION.replace('Action="accept"', 'Action="detect"')
 # The Spark enforces the feed through Anti-Bot, so a feed hit can come as a detection row too.
@@ -880,7 +880,7 @@ class AlertTest(BotTestCase):
         with patch("attacker_context.note", return_value="note on c2") as note:
             self.deliver(alerts)
 
-        self.assertEqual(self.tg.sent, ["09:15:02 — 10.68.144.121 tried to reach c2.example.net "
+        self.assertEqual(self.tg.sent, ["09:15:02 — 192.168.2.121 tried to reach c2.example.net "
                                         "(MuddyWater - VT 9/94 malicious 2026-10-01) — drop; 1× today", "note on c2"])
         note.assert_called_once_with("c2.example.net", self.syslog, "2026-10-28", report=telegram_bot.log)
 
@@ -925,8 +925,8 @@ class AlertTest(BotTestCase):
             self.deliver(alerts)
 
         self.assertEqual([text.split(" — ")[1] if " — " in text else text for text in self.tg.sent], [
-            "10.68.144.121 tried to reach c2.example.net (MuddyWater - VT 9/94 malicious 2026-10-01)",
-            "10.68.144.121 tried to reach 185.1.2.7 (Cyberint - added without VirusTotal check 2026-10-01)",
+            "192.168.2.121 tried to reach c2.example.net (MuddyWater - VT 9/94 malicious 2026-10-01)",
+            "192.168.2.121 tried to reach 185.1.2.7 (Cyberint - added without VirusTotal check 2026-10-01)",
             "Threat Prevention: Anti-Malware Scanner from 185.1.2.66 to 203.0.113.47",
             "note on c2.example.net", "note on 185.1.2.7", "note on 185.1.2.66"])
 

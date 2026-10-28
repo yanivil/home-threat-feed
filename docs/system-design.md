@@ -16,10 +16,10 @@ the owner when something on the LAN reached a known-bad destination.
 ## 2. Components and data flow (as built on 2026-10-28)
 
 ```
-Spark 1595 (10.45.60.1)                         GitHub: yanivil/spark-ioc-feed
+Spark 1595 (the LAN gateway)                    GitHub: yanivil/spark-ioc-feed
    | security logs, syslog over UDP 5514              ^            |
    v                                                  | push       | the Spark pulls
-iMac "home-server" (10.45.60.100), user home-server   |            v  spark-ioc-feed.csv
+iMac "home-server" (on the LAN), user home-server     |            v  spark-ioc-feed.csv
    |                                                  |
    +-- syslog_receiver.py  (LaunchAgent com.spark-ioc-feed.syslog, always on)
    |      -> syslog/spark-YYYY-MM-DD.log   one entry per line, one file per day
@@ -380,7 +380,7 @@ Probes dropped: 41,207 from 3,912 sources · TP detections: 2 · Sent to block: 
 SENT TO BLOCK (passed the firewall, VirusTotal flags them)
   47.79.34.208     VT 11/94   probed 20×   →  added
 OUTBOUND HIT — look at this device
-  10.68.144.121 reached c2.example.net (VT 9/94)
+  192.168.2.121 reached c2.example.net (VT 9/94)
 THREAT PREVENTION
   Anti-Malware: 1 ·  IPS: 1
 TOP PROBING SOURCES (all dropped)
@@ -542,7 +542,7 @@ them; the morning brief already recognises that convention.
   unavailable: …)` names its reason, such as a missing `ANTHROPIC_API_KEY`.
 - After a reboot: unlock FileVault; nothing else to do.
 - The gateway's side: Logs & Monitoring → External Log Servers → Syslog Servers must point at
-  `10.45.60.100`, UDP 5514, Security logs; the address has a DHCP reservation.
+  this Mac's LAN address, UDP 5514, Security logs; the address has a DHCP reservation.
 
 ## 6. Open items
 
