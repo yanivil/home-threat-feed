@@ -4,22 +4,25 @@ log and the feed, and posted to Telegram (or printed when there is no bot token)
 import contextlib
 import gzip
 import io
+import json
 import os
 import subprocess
 import sys
 import tempfile
+import traceback
 import types
 import unittest
 from collections import Counter
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
 import spark_brief
 import spark_logs
 import telegram_api
-from tests.test_spark_logs import INBOUND_DROP, INBOUND_PREVENT, OUTBOUND_DOMAIN, OUTBOUND_IP_ONLY, STATS
-from tests.test_vt_check import HEADER, aged, cli_env
+import vt_check
+from tests.test_spark_logs import INBOUND_DROP, INBOUND_PREVENT, OUTBOUND_DOMAIN, OUTBOUND_IP_ONLY, OUTBOUND_URL, STATS
+from tests.test_vt_check import HEADER, FakeVT, aged, cli_env, vt_error, vt_object
 
 REPO = Path(__file__).resolve().parent.parent
 DAY = date(2026, 10, 28)  # a Wednesday: the day the brief reports, sent on the morning of the 29th
@@ -47,6 +50,44 @@ CAPTURE = [drop(HEAVY), drop(HEAVY), drop(LIGHT), drop(HEAVY, "reject"), INBOUND
 
 def entries(*lines):
     return [spark_logs.parse_entry(line) for line in lines]
+
+
+def check_output(responses):
+    """What `spark_logs.py --check` prints for the daily run's $run_log, against a VirusTotal that
+    answers `responses`: one outbound name and one inbound source to look up. A crash adds its
+    traceback after the output, as the script's 2>&1 does."""
+    out = io.StringIO()
+    with tempfile.TemporaryDirectory() as tmp:
+        write_capture(tmp, date(2026, 10, 20), [OUTBOUND_URL] + [INBOUND_DROP] * 5)
+        feed = Path(tmp, "feed.csv")
+        feed.write_text(HEADER)
+        with patch.object(vt_check, "make_fetch", return_value=FakeVT(responses)), \
+                patch.dict(os.environ, cli_env("k"), clear=True), contextlib.redirect_stdout(out):
+            try:
+                spark_logs.main(["--dir", tmp, "--check", "--today", "2026-10-20", "--feed", str(feed), "--delay", "0"])
+            except Exception:
+                out.write(traceback.format_exc())
+    return out.getvalue()
+
+
+GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
+           "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
+           "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com"}
+
+
+def git(repo, *args, when=None):
+    env = dict(GIT_ENV)
+    if when:
+        env["GIT_AUTHOR_DATE"] = env["GIT_COMMITTER_DATE"] = when
+    return subprocess.run(["git", *args], cwd=repo, env=env, check=True, capture_output=True, text=True).stdout
+
+
+def commit_feed(repo, text, when=None):
+    """Write the feed in the repository at `repo` and commit it; the new HEAD."""
+    Path(repo, "spark-ioc-feed.csv").write_text(text)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "feed", when=when)
+    return git(repo, "rev-parse", "HEAD").strip()
 
 
 def write_capture(directory, day, lines, gz=False):
@@ -134,6 +175,41 @@ class ParseRunLogTest(unittest.TestCase):
         run = spark_brief.parse_run_log("ok\n2026-10-29 07:31:00 ERROR: git push failed\nERROR VT refused the key\n")
 
         self.assertEqual(run["errors"], ["2026-10-29 07:31:00 ERROR: git push failed", "ERROR VT refused the key"])
+
+    def test_a_quota_stop_reads_as_errors_in_the_producers_own_words(self):
+        log = check_output({"/domains/evil.example": vt_error(500, "InternalError"),
+                            "/ip_addresses/109.205.211.205": vt_error(429, "QuotaExceededError")})
+
+        self.assertEqual(spark_brief.parse_run_log(log)["errors"], [
+            "evil.example: error (HTTP 500 InternalError)",
+            "109.205.211.205: quota (QuotaExceededError - stopping)",
+            "VirusTotal quota reached; rerun tomorrow for the rest.",
+        ])
+
+    def test_a_crash_reads_as_its_exception_line(self):
+        log = check_output({"/domains/evil.example": vt_error(401, "WrongCredentialsError")})
+
+        self.assertIn("Traceback (most recent call last):", log)
+        self.assertEqual(spark_brief.parse_run_log(log)["errors"],
+                         ["vt_check.VTError: VirusTotal refused the API key: HTTP 401 WrongCredentialsError"])
+
+    def test_a_chained_crash_gives_each_exception_once(self):
+        try:
+            try:
+                raise KeyError("a")
+            except KeyError:
+                raise RuntimeError("ERROR in b")
+        except RuntimeError:
+            log = "ok\n" + traceback.format_exc()
+
+        self.assertEqual(spark_brief.parse_run_log(log)["errors"], ["KeyError: 'a'", "RuntimeError: ERROR in b"])
+
+    def test_an_ordinary_run_has_no_errors(self):
+        log = check_output({"/domains/evil.example": vt_object("domain", "evil.example", malicious=0)})
+
+        self.assertIn("evil.example: clean", log)
+        self.assertIn("109.205.211.205: not-found", log)
+        self.assertEqual(spark_brief.parse_run_log(log)["errors"], [])
 
     def test_an_empty_log_yields_nothing(self):
         self.assertEqual(spark_brief.parse_run_log(""),
@@ -351,6 +427,29 @@ class ComposeTest(unittest.TestCase):
         self.assertNotIn("TOP PROBING SOURCES", text)
         self.assertIn("  47.79.34.208     VT 11/94   →  added", text)
 
+    def test_a_day_without_a_capture_says_so_among_the_errors(self):
+        text = self.compose()
+
+        self.assertIn("ERRORS\n  no syslog capture for 2026-10-28\n", text)
+        self.assertTrue(text.endswith("· 1 error"), text)
+
+    def test_a_day_with_a_capture_is_not_an_error(self):
+        write_capture(self.dir, DAY, CAPTURE, gz=True)
+
+        self.assertNotIn("no syslog capture", self.compose())
+
+    def test_a_quota_morning_shows_its_errors_and_counts_them(self):
+        write_capture(self.dir, DAY, CAPTURE)
+        run_log = check_output({"/domains/evil.example": vt_error(500, "InternalError"),
+                                "/ip_addresses/109.205.211.205": vt_error(429, "QuotaExceededError")})
+
+        text = self.compose(run_log=run_log)
+
+        self.assertIn("ERRORS\n  evil.example: error (HTTP 500 InternalError)\n"
+                      "  109.205.211.205: quota (QuotaExceededError - stopping)\n"
+                      "  VirusTotal quota reached; rerun tomorrow for the rest.\n", text)
+        self.assertTrue(text.endswith("· 3 errors"), text)
+
     def test_yesterdays_gzipped_capture_is_read(self):
         write_capture(self.dir, DAY, CAPTURE, gz=True)
 
@@ -362,6 +461,8 @@ class ComposeTest(unittest.TestCase):
         self.assertIn("Probes dropped: 1 from 1 source", self.compose())
 
     def test_error_lines_in_the_run_log_show_up(self):
+        write_capture(self.dir, DAY, CAPTURE)
+
         text = self.compose(run_log="ERROR: spark_logs.py crashed\n")
 
         self.assertIn("ERRORS\n  ERROR: spark_logs.py crashed\n", text)
@@ -369,28 +470,17 @@ class ComposeTest(unittest.TestCase):
 
 
 class AddedRowsTest(unittest.TestCase):
-    """committed_rows(): the feed rows the last 36 hours of commits added, read from git."""
+    """committed_rows(): the feed rows added since the last brief, or in the last 36 hours, read from git."""
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.repo = Path(tmp.name)
         self.feed = self.repo / "spark-ioc-feed.csv"
-        self.env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
-                    "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
-                    "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com"}
-        self.git("init", "-q", "-b", "main")
-
-    def git(self, *args, when=None):
-        env = dict(self.env)
-        if when:
-            env["GIT_AUTHOR_DATE"] = env["GIT_COMMITTER_DATE"] = when
-        return subprocess.run(["git", *args], cwd=self.repo, env=env, check=True, capture_output=True, text=True).stdout
+        git(self.repo, "init", "-q", "-b", "main")
 
     def commit(self, text, when=None):
-        self.feed.write_text(text)
-        self.git("add", "-A")
-        self.git("commit", "-q", "-m", "feed", when=when)
+        return commit_feed(self.repo, text, when=when)
 
     def row(self, n, comment="Inbound probe of WAN - Spark syslog 2026-10-29"):
         return f"vt-ip-{n},198.51.100.{n},IP,medium,high,AB,{comment}"
@@ -414,21 +504,62 @@ class AddedRowsTest(unittest.TestCase):
 
         self.assertEqual(spark_brief.committed_rows(self.feed), [self.row(2)])
 
-    def test_every_commit_in_the_window_counts_and_a_commit_not_touching_the_feed_does_not(self):
+    def test_without_a_last_brief_every_commit_in_the_window_counts_and_one_not_touching_the_feed_does_not(self):
         self.commit(HEADER + self.row(1) + "\n", when="2026-01-01T07:30:00")
         self.commit(HEADER + self.row(1) + "\n" + self.row(2) + "\n")
         (self.repo / "other.txt").write_text("x\n")
-        self.git("add", "-A")
-        self.git("commit", "-q", "-m", "other")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "other")
         self.commit(HEADER + self.row(1) + "\n" + self.row(2) + "\n" + self.row(3) + "\n")
 
         self.assertEqual(spark_brief.committed_rows(self.feed), [self.row(2), self.row(3)])
 
+    def test_after_a_delivered_brief_only_the_commits_since_it_count(self):
+        self.commit(HEADER + self.row(1) + "\n")
+        covered = self.commit(HEADER + self.row(1) + "\n" + self.row(2) + "\n")
+        head = self.commit(HEADER + self.row(1) + "\n" + self.row(2) + "\n" + self.row(3) + "\n")
+
+        self.assertEqual(spark_brief.committed_rows(self.feed, since=covered), [self.row(3)])
+        self.assertEqual(spark_brief.committed_rows(self.feed, since=head), [])
+
+    def test_the_last_brief_not_the_window_decides_how_far_back_to_look(self):
+        covered = self.commit(HEADER, when="2026-01-01T07:30:00")
+        self.commit(HEADER + self.row(1) + "\n", when="2026-01-02T07:30:00")  # a day whose brief was refused
+
+        self.assertEqual(spark_brief.committed_rows(self.feed, since=covered), [self.row(1)])
+        self.assertEqual(spark_brief.committed_rows(self.feed), [])
+
+    def test_a_last_brief_the_repository_does_not_know_falls_back_to_the_window(self):
+        self.commit(HEADER + self.row(1) + "\n", when="2026-01-01T07:30:00")
+        self.commit(HEADER + self.row(1) + "\n" + self.row(2) + "\n")
+
+        for unknown in ("0" * 40, "not a commit", "--output=" + str(self.repo / "oops")):
+            with self.subTest(since=unknown):
+                self.assertEqual(spark_brief.committed_rows(self.feed, since=unknown), [self.row(2)])
+        self.assertFalse((self.repo / "oops").exists(), "the marker is never handed to git as an option")
+
     def test_a_row_rewritten_in_place_is_not_an_entry(self):
         self.commit(HEADER + self.row(1) + "\n", when="2026-01-01T07:30:00")
-        self.commit(HEADER + self.row(1, "Spark syslog - seen in Spark logs 2026-10-29") + "\n" + self.row(2) + "\n")
+        rewritten = self.commit(HEADER + self.row(1, "Spark syslog - seen in Spark logs 2026-10-29") + "\n" + self.row(2) + "\n")
 
         self.assertEqual(spark_brief.committed_rows(self.feed), [self.row(2)])
+        self.assertEqual(spark_brief.committed_rows(self.feed, since=git(self.repo, "rev-parse", rewritten + "^").strip()),
+                         [self.row(2)])
+
+    def test_the_users_diff_settings_do_not_change_what_is_read(self):
+        git(self.repo, "config", "color.ui", "always")
+        git(self.repo, "config", "diff.external", "true")
+        self.commit(HEADER + self.row(1) + "\n" + self.row(2) + "\n")
+
+        self.assertEqual(spark_brief.committed_rows(self.feed), [self.row(1), self.row(2)])
+
+    def test_head_commit_is_the_commit_the_feed_is_at_or_none_outside_a_repository(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(spark_brief.head_commit(Path(tmp, "spark-ioc-feed.csv")))
+        self.assertIsNone(spark_brief.head_commit(self.feed))
+        head = self.commit(HEADER)
+
+        self.assertEqual(spark_brief.head_commit(self.feed), head)
 
 
 class CommandLineTest(unittest.TestCase):
@@ -479,13 +610,17 @@ class CommandLineTest(unittest.TestCase):
 class SendTest(unittest.TestCase):
     """--send: the brief to Telegram, then an attacker-context note per indicator sent to block."""
 
+    MISSING = object()
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.dir = Path(tmp.name)
-        (self.dir / "spark-ioc-feed.csv").write_text(FEED)
+        git(self.dir, "init", "-q", "-b", "main")
+        self.head = commit_feed(self.dir, FEED)
         (self.dir / "run.log").write_text(RUN_LOG + "198.51.100.9: added (IP 7/94 malicious)\n")
         write_capture(self.dir, DAY, CAPTURE)
+        self.marker = self.dir / "last-brief.json"
         self.sent, self.notes = [], []
         self.refuse = lambda text: False
 
@@ -505,13 +640,14 @@ class SendTest(unittest.TestCase):
         module.note = note
         return module
 
-    def main(self, telegram=True, context=None):
+    def main(self, telegram=True, context=None, send=True):
         argv = ["--dir", str(self.dir), "--feed", str(self.dir / "spark-ioc-feed.csv"), "--date", DAY.isoformat(),
-                "--run-log", str(self.dir / "run.log"), "--send"]
+                "--run-log", str(self.dir / "run.log")] + (["--send"] if send else [])
         bot = telegram_api.Telegram("T", 1, http=self.http) if telegram else None
+        module = None if context is self.MISSING else context or self.attacker_context()
         out, err = io.StringIO(), io.StringIO()
         with patch("telegram_api.from_keychain", return_value=bot), \
-                patch.dict(sys.modules, {"attacker_context": context or self.attacker_context()}), \
+                patch.dict(sys.modules, {"attacker_context": module}), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = spark_brief.main(argv)
         return code, out.getvalue(), err.getvalue()
@@ -524,7 +660,11 @@ class SendTest(unittest.TestCase):
         self.assertTrue(self.sent[0].startswith("Spark brief — Wed 2026-10-28\n"))
         self.assertEqual(self.sent[1:], ["note on 47.79.34.208", "note on 198.51.100.9"])
         self.assertEqual(self.notes, [(NEW, self.dir, "2026-10-28"), ("198.51.100.9", self.dir, "2026-10-28")])
-        self.assertEqual(out, "", "a brief that was sent is not also printed")
+
+    def test_a_sent_brief_leaves_one_line_in_the_log_and_is_not_printed(self):
+        code, out, err = self.main()
+
+        self.assertEqual(out, "Brief sent to Telegram\n")
 
     def test_without_a_token_the_brief_is_printed_and_no_note_is_made(self):
         code, out, err = self.main(telegram=False)
@@ -561,14 +701,80 @@ class SendTest(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertEqual(len(self.sent), 1)
 
-    def test_a_note_that_cannot_be_sent_does_not_stop_the_next(self):
+    def test_a_note_that_cannot_be_sent_does_not_stop_the_next_and_exits_2_because_the_brief_went_out(self):
         self.refuse = lambda text: text == "note on 47.79.34.208"
 
         code, out, err = self.main()
 
-        self.assertEqual(code, 1)
+        self.assertEqual(code, 2)
         self.assertIn("47.79.34.208", err)
         self.assertEqual(self.sent[-1], "note on 198.51.100.9")
+        self.assertTrue(self.sent[0].startswith("Spark brief"))
+        self.assertTrue(self.marker.exists(), "the brief was delivered, whatever happened to the notes")
+
+    def test_a_missing_attacker_context_module_exits_2_after_the_brief_went_out(self):
+        code, out, err = self.main(context=self.MISSING)
+
+        self.assertEqual(code, 2)
+        self.assertIn("attacker_context", err)
+        self.assertEqual(len(self.sent), 1)
+
+    # The marker syslog/last-brief.json: the commit the last delivered brief covered, so that the next
+    # one counts the rows committed since and no row is counted in two briefs.
+    def test_a_delivered_brief_records_the_commit_it_covered(self):
+        self.main()
+
+        marker = json.loads(self.marker.read_text())
+        self.assertEqual(marker["commit"], self.head)
+        self.assertIsInstance(datetime.fromisoformat(marker["delivered"]), datetime)
+
+    def test_the_next_brief_counts_only_the_rows_added_since_the_last(self):
+        self.main()
+        first = self.sent[0]
+        self.sent.clear()
+        commit_feed(self.dir, FEED + "x,198.51.100.77,IP,high,high,AB,Cousin - sent from Telegram - VT 9/94 malicious 2026-10-29\n")
+
+        self.main()
+
+        self.assertIn("INDICATORS ENTERED: 1 from the Spark's logs · 0 from news · 0 by hand\n", first)
+        self.assertIn("INDICATORS ENTERED: 0 from the Spark's logs · 0 from news · 1 by hand\n", self.sent[0])
+
+    def test_a_brief_printed_for_want_of_a_token_counts_as_delivered(self):
+        self.main(telegram=False)
+
+        self.assertEqual(json.loads(self.marker.read_text())["commit"], self.head)
+
+    def test_a_brief_that_was_only_printed_on_request_does_not(self):
+        self.main(send=False)
+
+        self.assertFalse(self.marker.exists())
+
+    def test_a_refused_brief_leaves_the_marker_alone_so_the_next_covers_both_days(self):
+        self.marker.write_text('{"commit": "' + "a" * 40 + '", "delivered": "2026-10-27T07:31:00"}\n')
+        before = self.marker.read_text()
+        self.refuse = lambda text: text.startswith("Spark brief")
+
+        self.main()
+
+        self.assertEqual(self.marker.read_text(), before)
+
+    def test_a_marker_that_is_not_json_is_ignored_and_replaced(self):
+        self.marker.write_text("not json")
+
+        code, out, err = self.main()
+
+        self.assertEqual(code, 0, err)
+        self.assertIn("INDICATORS ENTERED: 1 from the Spark's logs", self.sent[0], "the 36-hour window stood in")
+        self.assertEqual(json.loads(self.marker.read_text())["commit"], self.head)
+
+    def test_a_marker_that_cannot_be_written_is_a_warning_and_the_brief_still_went_out(self):
+        self.marker.mkdir()
+
+        code, out, err = self.main()
+
+        self.assertEqual(code, 0)
+        self.assertEqual(len(self.sent), 3)
+        self.assertIn("last-brief.json", err)
 
 
 if __name__ == "__main__":

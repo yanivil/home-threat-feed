@@ -11,14 +11,19 @@ Reads the day's capture (syslog/spark-YYYY-MM-DD.log, plain or gzipped), the dai
 and the feed's git history. --send posts the brief with the bot in the Keychain (telegram_api),
 then one attacker-context note per source the check sent to block; without --send, or without a
 bot token, the brief is printed. The layout is the one approved in docs/system-design.md, D6.
+
+A delivered brief (sent, or printed for want of a token, with --send) records the feed's commit in
+syslog/last-brief.json, so the next brief counts the rows committed since and none twice. Exit
+status: 0 the brief went out (or was printed), 1 it did not, 2 it went out but a note did not.
 """
 
 import argparse
+import json
 import re
 import subprocess
 import sys
 from collections import Counter
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import spark_logs
@@ -27,18 +32,26 @@ import vt_check
 
 LOOKUPS_QUOTA = 500  # the free VirusTotal key's lookups a day
 TOP = 10
-ADDED_WINDOW = "36 hours ago"  # how far back the feed's commits count as this brief's additions
+MARKER_NAME = "last-brief.json"  # in the capture directory, beside checked.json
+ADDED_WINDOW = "36 hours ago"  # how far back the feed's commits count when no earlier brief is on record
 BLADE_NAMES = {"Anti Malware": "Anti-Malware", "Anti Virus": "Anti-Virus"}
+SHA_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 ADDED_RE = re.compile(r"(\S+): added \(([^)]*)\)$")
 HIT_RE = re.compile(r"OUTBOUND HIT  (\S+)  \((.*?)\)  reached by (.*?)  <- check these devices")
 LOOKUPS_RE = re.compile(r"Added to the feed: (\d+)  clean: (\d+)  unknown to VirusTotal: (\d+)")
+# What the run log says when something went wrong: vt_check.run prints "<x>: error (HTTP ...)" and
+# "<x>: quota (... - stopping)", spark_logs.py "VirusTotal quota reached; ..." on a quota stop.
+PROBLEMS = ("ERROR", ": error (", ": quota ", "VirusTotal quota reached")
+TRACEBACK = "Traceback (most recent call last):"
 
 
 def read_entries(path):
-    """The parsed entries of the capture at `path`, plain or gzipped; none when the day has no file."""
+    """The parsed entries of the capture at `path`, plain or gzipped; None when the day has no file."""
     f = spark_logs._open_capture(Path(path))
-    if f is None:
-        return
+    return None if f is None else _parse_lines(f)
+
+
+def _parse_lines(f):
     with f:
         for line in f:
             if line.strip():
@@ -68,9 +81,19 @@ def attacks(entries, feed):
 def parse_run_log(text):
     """What the daily check's output says: `added` as (indicator, ratio), `outbound_hits` as
     (indicator, ratio, devices), `lookups` used (added, clean and unknown to VirusTotal) and the
-    `errors`, the lines that contain ERROR."""
+    `errors`: the lines that say something went wrong (PROBLEMS) and the last line, the exception,
+    of each traceback."""
     run = {"added": [], "outbound_hits": [], "lookups": 0, "errors": []}
+    in_traceback = False
     for line in text.splitlines():
+        if in_traceback:
+            if line.strip() and not line[0].isspace():  # the frames are indented; the exception is not
+                run["errors"].append(line)
+                in_traceback = False
+            continue
+        if line.startswith(TRACEBACK):
+            in_traceback = True
+            continue
         added, hit, totals = ADDED_RE.match(line), HIT_RE.match(line), LOOKUPS_RE.match(line)
         if added:
             run["added"].append(added.groups())
@@ -78,7 +101,7 @@ def parse_run_log(text):
             run["outbound_hits"].append((hit.group(1), hit.group(2), hit.group(3).split(", ")))
         elif totals:
             run["lookups"] = sum(int(n) for n in totals.groups())
-        if "ERROR" in line:
+        if any(problem in line for problem in PROBLEMS):
             run["errors"].append(line)
     return run
 
@@ -167,35 +190,53 @@ def render(day, attack, run, entered, probes, next_due, lookups_quota=LOOKUPS_QU
 def compose(day, capture_dir, feed_path, run_log_text, added_rows, today):
     """The brief for `day`, written on the morning of `today`, from the capture in `capture_dir`,
     the feed, the daily check's output and the feed rows added since the last brief. A day with
-    no capture gives a brief without attack sections."""
+    no capture gives a brief without attack sections, and an error that says so: all quiet and a
+    receiver that was down must not look alike."""
     feed_text = Path(feed_path).read_text()
     feed = spark_logs.feed_members(feed_text)
-    attack = attacks(read_entries(capture_path(capture_dir, day)), feed)
+    run = parse_run_log(run_log_text)
+    entries = read_entries(capture_path(capture_dir, day))
+    if entries is None:
+        run["errors"].append(f"no syslog capture for {day.isoformat()}")
+    attack = attacks(entries or (), feed)
     # The check read the day and the morning of the run, so the probes it saw span both.
-    probes = attack["sources"] + attacks(read_entries(capture_path(capture_dir, today)), feed)["sources"]
-    return render(day, attack, parse_run_log(run_log_text), entered(added_rows), probes,
-                  next_recheck(feed_text, today))
+    probes = attack["sources"] + attacks(read_entries(capture_path(capture_dir, today)) or (), feed)["sources"]
+    return render(day, attack, run, entered(added_rows), probes, next_recheck(feed_text, today))
 
 
-def committed_rows(feed_path):
-    """The rows the feed's commits of the last 36 hours added, as written. A row that was only
-    rewritten in place (a re-check, a sighting note) is not an addition; outside a repository,
-    or with no such commit, there are none."""
+def _git(directory, *args):
+    """git's output in `directory`; None when git fails or is not there."""
+    try:
+        proc = subprocess.run(["git", *args], cwd=directory, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def head_commit(feed_path):
+    """The commit the feed's repository is at; None outside a repository."""
+    return (_git(Path(feed_path).parent, "rev-parse", "HEAD") or "").strip() or None
+
+
+def committed_rows(feed_path, since=None):
+    """The rows the feed gained since the commit `since`, the one the last brief covered. Without it,
+    or when the repository does not know it (first run, rewritten history), the rows of the commits
+    within ADDED_WINDOW. A row that was only rewritten in place (a re-check, a sighting note) is not
+    an addition; outside a repository, or with no new commit, there are none."""
     feed_path = Path(feed_path)
-
-    def git(*args):
-        try:
-            proc = subprocess.run(["git", *args], cwd=feed_path.parent, capture_output=True, text=True, timeout=60)
-        except (OSError, subprocess.SubprocessError):
-            return None
-        return proc.stdout if proc.returncode == 0 else None
-
-    commits = (git("log", f"--since={ADDED_WINDOW}", "--format=%H", "--", feed_path.name) or "").split()
-    if not commits:
-        return []
-    # The oldest commit's parent; the empty tree when it is the root commit.
-    parent = git("rev-parse", "--verify", "--quiet", commits[-1] + "^") or git("hash-object", "-t", "tree", "/dev/null")
-    diff = git("diff", parent.strip(), "HEAD", "--", feed_path.name) if parent else None
+    directory, name = feed_path.parent, feed_path.name
+    known = (isinstance(since, str) and SHA_RE.fullmatch(since)
+             and _git(directory, "cat-file", "-e", f"{since}^{{commit}}") is not None)
+    if known:
+        base = since
+    else:
+        commits = (_git(directory, "log", f"--since={ADDED_WINDOW}", "--format=%H", "--", name) or "").split()
+        if not commits:
+            return []
+        # The oldest commit's parent; the empty tree when it is the root commit.
+        base = (_git(directory, "rev-parse", "--verify", "--quiet", commits[-1] + "^")
+                or _git(directory, "hash-object", "-t", "tree", "/dev/null") or "").strip()
+    diff = _git(directory, "diff", "--no-color", "--no-ext-diff", base, "HEAD", "--", name) if base else None
     added, removed = [], set()
     for line in (diff or "").splitlines():
         fields = _fields(line[1:])
@@ -208,12 +249,38 @@ def committed_rows(feed_path):
     return [row for row in added if row.split(",")[1] not in removed]
 
 
+def read_marker(path):
+    """The commit the last delivered brief covered; None without a readable marker."""
+    try:
+        marker = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+    commit = marker.get("commit") if isinstance(marker, dict) else None
+    return commit if isinstance(commit, str) else None
+
+
+def record_delivery(path, commit):
+    """Note in the marker that a brief covering the feed up to `commit` was delivered."""
+    if commit is None:
+        return
+    marker = {"commit": commit, "delivered": datetime.now().isoformat(timespec="seconds")}
+    try:
+        Path(path).write_text(json.dumps(marker, indent=1) + "\n")
+    except OSError as e:
+        print(f"warning: could not record the brief in {path}: {e}", file=sys.stderr)
+
+
 def send_notes(telegram, indicators, capture_dir, day):
-    """Send the attacker-context note of each indicator as a message of its own; 1 if any could
-    not be sent, else 0. A note that fails does not stop the next."""
+    """Send the attacker-context note of each indicator as a message of its own. Returns 0, or 2 when
+    a note (or the module that writes them) failed: the brief itself is out by then. A note that
+    fails does not stop the next."""
     if not indicators:
         return 0
-    import attacker_context  # only a sent brief needs it, and it brings the network clients with it
+    try:
+        import attacker_context  # only a sent brief needs it, and it brings the network clients with it
+    except ImportError as e:
+        print(f"error: no attacker notes: {e}", file=sys.stderr)
+        return 2
     status = 0
     for indicator in indicators:
         try:
@@ -222,7 +289,7 @@ def send_notes(telegram, indicators, capture_dir, day):
                 telegram.send_message(note)
         except (telegram_api.TelegramError, OSError) as e:
             print(f"error: the note on {indicator} was not sent: {e}", file=sys.stderr)
-            status = 1
+            status = 2
     return status
 
 
@@ -232,19 +299,24 @@ def main(argv=None):
                         help="the day to report (default yesterday); the brief is taken to be written the morning after")
     parser.add_argument("--run-log", type=Path, help="the daily check's output: rows added, outbound hits, lookups, errors")
     parser.add_argument("--send", action="store_true",
-                        help="post the brief to Telegram, then a note per source sent to block, instead of printing it")
+                        help="post the brief to Telegram, then a note per source sent to block, instead of printing it; "
+                             f"the delivery is recorded in {MARKER_NAME}")
     parser.add_argument("--dir", type=Path, default=spark_logs.DEFAULT_DIR, help="syslog capture directory")
     parser.add_argument("--feed", type=Path, default=vt_check.FEED, help="the feed CSV")
     args = parser.parse_args(argv)
 
     day = args.date or date.today() - timedelta(days=1)
     run_log = args.run_log.read_text() if args.run_log else ""
-    brief = compose(day, args.dir, args.feed, run_log, committed_rows(args.feed), day + timedelta(days=1))
+    marker, head = args.dir / MARKER_NAME, head_commit(args.feed)
+    rows = committed_rows(args.feed, read_marker(marker))
+    brief = compose(day, args.dir, args.feed, run_log, rows, day + timedelta(days=1))
     telegram = telegram_api.from_keychain() if args.send else None
     if telegram is None:
         if args.send:
             print("no Telegram bot token and chat id in the Keychain; printing the brief instead", file=sys.stderr)
         print(brief)
+        if args.send:
+            record_delivery(marker, head)
         return 0
 
     try:
@@ -253,6 +325,8 @@ def main(argv=None):
         print(brief)
         print(f"error: the brief was not sent: {e}", file=sys.stderr)
         return 1
+    print("Brief sent to Telegram")
+    record_delivery(marker, head)
     return send_notes(telegram, [indicator for indicator, _ in parse_run_log(run_log)["added"]], args.dir, day)
 
 

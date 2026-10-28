@@ -248,15 +248,28 @@ class DailyCheckTest(unittest.TestCase):
         self.assertIn("Spark brief —", proc.stdout)
         self.assertLess(proc.stdout.index("Spark brief —"), proc.stdout.index("exited 1"))
 
-    def test_a_brief_that_cannot_be_made_is_a_warning_not_a_failed_run(self):
-        (self.repo / "spark_brief.py").write_text("import sys\nprint('brief broke', file=sys.stderr)\nsys.exit(1)\n")
+    def test_a_brief_or_a_note_that_cannot_be_sent_is_a_warning_not_a_failed_run(self):
+        # 1: the brief was not sent; 2: it was, an attacker note was not.
+        for status in (1, 2):
+            with self.subTest(status=status):
+                (self.repo / "spark_brief.py").write_text(f"import sys\nprint('brief broke', file=sys.stderr)\nsys.exit({status})\n")
 
-        proc = self.run_script()
+                proc = self.run_script()
 
-        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("brief broke", proc.stdout)
-        self.assertIn("WARNING: the brief was not sent (see above)", proc.stdout)
-        self.assertIn("Daily check done", proc.stdout)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertIn("brief broke", proc.stdout)
+                self.assertIn(f"WARNING: spark_brief.py exited {status}: the brief or an attacker note was not sent (see above)",
+                              proc.stdout)
+                self.assertIn("Daily check done", proc.stdout)
+
+    def test_consecutive_briefs_do_not_count_a_row_twice(self):
+        first = self.run_script(STUB_ADD=1)
+        second = self.run_script(STUB_ADD=1)
+
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        self.assertIn("INDICATORS ENTERED: 1 from the Spark's logs · 0 from news · 0 by hand\n", second.stdout)
+        self.assertIn("INDICATORS ENTERED: 1 from the Spark's logs", first.stdout)
+        self.assertTrue((self.repo / "syslog" / "last-brief.json").exists())
 
     def test_old_captures_are_compressed_before_anything_else(self):
         old = self.repo / "syslog" / f"spark-{date.today() - timedelta(days=10):%Y-%m-%d}.log"

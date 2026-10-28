@@ -94,9 +94,12 @@ fi
 
 # The brief reports what this run did, so it is composed from the run's own output ($run_log) and
 # the feed as pushed. It goes out before the check's status is judged: a morning that stopped at the
-# VirusTotal quota still reports what it added, and a quiet morning still shows the system ran. A
-# brief that cannot be sent (no token, Telegram down) is a warning, never the run's failure.
-python3 spark_brief.py --send --run-log "$run_log" 2>&1 || log "WARNING: the brief was not sent (see above)"
+# VirusTotal quota still reports what it added (and lists the quota stop among its errors), and a
+# quiet morning still shows the system ran. With no bot token the brief is printed here and the
+# step succeeds; it logs "Brief sent to Telegram" when it was sent. A non-zero exit (1: Telegram
+# refused the brief, 2: it went out but an attacker note did not) is a warning, never the run's failure.
+python3 spark_brief.py --send --run-log "$run_log" 2>&1 \
+    || log "WARNING: spark_brief.py exited $?: the brief or an attacker note was not sent (see above)"
 
 if [ "$check_status" -ne 0 ]; then
     fail "spark_logs.py exited $check_status (1 = VirusTotal quota reached, rows done so far are in; else see above)"
