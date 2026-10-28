@@ -493,12 +493,15 @@ capture for a LAN device reaching a feed indicator raises an alert within a minu
 context note behind it; `/who`, `/sources` and `/status` answer; the bot comes back after
 a kill like the receiver does.
 
-Outcome: built 2026-10-28 on branch worktree-telegram-bot (commits 837f97d..9e48b22, 403
-tests); awaiting the owner's end-to-end check (README, "Setting it up"). Record the result here.
-A fix wave after the whole-branch review (the receiver's source filter, the caps, the note
-thread, the saved watcher position, explicit alert actions, the daily check's failure message,
-the private-chat rule and the never-block list, among others) followed on the same branch
-before that check.
+Outcome: built 2026-10-28 on branch worktree-telegram-bot (499 tests); awaiting the owner's
+end-to-end check (README, "Setting it up"). Record the result here. A fix wave after the
+whole-branch review (the receiver's source filter, the caps, the note thread, the saved watcher
+position, explicit alert actions, the daily check's failure message, the private-chat rule and
+the never-block list, among others) followed on the same branch before that check, and its
+re-review was clean. Known limitation left for the first week of alerts: a Threat Prevention
+row whose source is a public address is read as inbound and its note describes that source; if
+the Spark ever logs such a row after NAT with the line's own WAN address as the source, the note
+would describe the owner's own address.
 
 ### D7. A daily news-sourcing agent (requested 2026-10-28, design pending)
 

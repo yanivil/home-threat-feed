@@ -271,7 +271,8 @@ checklist, once:
    python3 telegram_bot.py --pair
    ```
    It waits up to 50 seconds, then lists every chat that wrote to the bot with its type and
-   sender, `private chat <id> from @<username> (<first name>)`, refuses a group (`group chat
+   sender, `private chat <id> from @<username> (<first name>)` (an account without a username
+   shows as `from first name "<first name>" (no username)`), refuses a group (`group chat
    from …: refused — send /start to the bot from your own account, not from a group`, without
    its id), and prints the private chat's id with the command that stores it:
    ```

@@ -384,6 +384,16 @@ class AddTest(BotTestCase):
                          "the commit counts what git says was added, not what this check added")
         self.assertEqual(self.vt.calls, [])
 
+    def test_a_removed_row_pending_in_the_feed_is_committed_as_an_update(self):
+        # A hand edit on the Mac that was never committed: the commit says what git saw, not "Add 0".
+        rows = self.feed.read_text().splitlines()
+        self.feed.write_text("\n".join(rows[:-1]) + "\n")
+
+        self.send("evil.com")
+
+        self.assertEqual(self.git.calls[4][3], "Update the feed on a Telegram check (+1/-1 lines)")
+        self.assertEqual(self.tg.sent[-1].splitlines()[-1], "Committed and pushed.")
+
     def test_a_git_diff_that_fails_says_the_rows_are_not_committed(self):
         self.git.failing = {"diff"}
 
@@ -1151,7 +1161,7 @@ class MainTest(unittest.TestCase):
 
         self.assertEqual(code, 0, err)
         self.assertIn("group chat from @member (M): refused", out)
-        self.assertEqual(out.count("private chat 4242 from Owner"), 1)
+        self.assertEqual(out.count('private chat 4242 from first name "Owner" (no username)'), 1)
         self.assertNotIn("100123", out)
         self.assertIn("-w '4242' -U", out)
 
@@ -1166,6 +1176,20 @@ class MainTest(unittest.TestCase):
         self.assertIn("-w '<the id of your own account>' -U", out)
         self.assertNotIn("-w '4242'", out)
 
+    def test_pair_labels_a_nameless_sender_so_it_cannot_pose_as_the_owner(self):
+        # Anyone can write to a bot. A sender without a username is printed as such, in quotes, and
+        # control characters in a name never reach the owner's terminal.
+        code, out, err, sleep = self.pair(
+            message("/start", chat=4242, update_id=1, sender={"id": 4242, "username": "owner_handle", "first_name": "Owner"}),
+            message("hi", chat=5151, update_id=2, sender={"id": 5151, "first_name": "@owner_handle (Owner)\x1b[2K"}))
+
+        self.assertEqual(code, 0, err)
+        self.assertIn("private chat 4242 from @owner_handle (Owner)", out)
+        self.assertIn('private chat 5151 from first name "@owner_handle (Owner)[2K" (no username)', out,
+                      "the escape byte is dropped, its printable tail may stay")
+        self.assertNotIn("private chat 5151 from @owner_handle", out)
+        self.assertNotIn("\x1b", out)
+
     def test_pair_before_any_message_asks_for_one(self):
         code, out, err, sleep = self.main(["--pair"], stored={"TELEGRAM_BOT_TOKEN": "123456:SECRET-token"})
 
@@ -1177,6 +1201,7 @@ class MainTest(unittest.TestCase):
 
         self.assertEqual(code, 1)
         self.assertIn("BotFather", out)
+        self.assertIn("send the bot /start from your own account", out)
         self.assertIn("security add-generic-password -s spark-ioc-feed -a TELEGRAM_BOT_TOKEN -w '<token>' -U", out)
         self.assertEqual(self.tg.polls, [])
 

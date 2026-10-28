@@ -345,7 +345,9 @@ class Bot:
     def _commit(self, label):
         """Commit and push the feed whenever git sees it changed: the rows this check added, and any an
         interrupted one left behind (they would otherwise go out under the daily check's message). The
-        message counts the rows git says were added. Returns the reply's last line."""
+        message counts the rows git says were added; when git also saw rows removed (a hand edit on the
+        Mac that was never committed) it says `+a/-r lines` like the daily check. Returns the reply's
+        last line."""
         status, _, said = self._run_git("diff", "--quiet", "--", FEED_NAME)
         if status == 0:
             return "Nothing added, nothing committed."
@@ -354,8 +356,14 @@ class Bot:
         if status != 0:
             self.error(f"git diff failed: {said}")
             return f"git diff failed, the rows are in the feed file but not committed: {said}"
-        added = int(stdout.split()[0]) if stdout.split() and stdout.split()[0].isdigit() else 0
-        message = f"Add {spark_brief._count(added, 'indicator')} sent from Telegram" + (f": {label}" if label else "")
+        fields = stdout.split()  # "added<TAB>removed<TAB>file"; "-" for a binary file
+        added = int(fields[0]) if len(fields) > 1 and fields[0].isdigit() else 0
+        removed = int(fields[1]) if len(fields) > 1 and fields[1].isdigit() else 0
+        if removed:
+            message = f"Update the feed on a Telegram check (+{added}/-{removed} lines)"
+        else:
+            message = f"Add {spark_brief._count(added, 'indicator')} sent from Telegram"
+        message += f": {label}" if label else ""
         message = " ".join(message.split())  # one line, whatever the label holds
         for args in (("add", FEED_NAME), ("commit", "-m", message, "--", FEED_NAME)):
             ok, output = self._git(*args)
@@ -483,7 +491,7 @@ BOTFATHER_HELP = f"""No bot token in the Keychain. To create the bot:
   1. In Telegram, open BotFather, send /newbot and answer its questions; it replies with the bot's token.
   2. Store the token:
        security add-generic-password -s {keychain.SERVICE} -a TELEGRAM_BOT_TOKEN -w '<token>' -U
-  3. Run python3 telegram_bot.py --pair again and send the bot any message."""
+  3. Run python3 telegram_bot.py --pair again and send the bot /start from your own account, not from a group."""
 
 
 GROUP_REFUSAL = "send /start to the bot from your own account, not from a group"
@@ -491,13 +499,18 @@ STORE_CHAT_ID = f"security add-generic-password -s {keychain.SERVICE} -a TELEGRA
 
 
 def _sender(message):
-    """Who sent `message`: "@username (first name)", or what Telegram gives of the two."""
+    """Who sent `message`: "@username (first name)" when Telegram gives a username, otherwise
+    'first name "…" (no username)', so that a sender without a username cannot pose as one with it.
+    Anyone can write to a bot, so both strings are cleaned of control and format characters before
+    they reach the owner's terminal, and a quote in a first name becomes an apostrophe."""
     sender = message.get("from") or {}
-    username, first = sender.get("username"), sender.get("first_name")
-    name = " ".join(str(first).split()) if first else ""
+    username = attacker_context.clean(sender.get("username"))
+    name = attacker_context.clean(sender.get("first_name"))
     if username:
         return f"@{username} ({name})" if name else f"@{username}"
-    return name or "an unknown sender"
+    if name:
+        return f'first name "{name.replace(chr(34), chr(39))}" (no username)'
+    return "an unknown sender"
 
 
 def pair():
