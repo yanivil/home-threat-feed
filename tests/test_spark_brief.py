@@ -743,6 +743,36 @@ class SendTest(unittest.TestCase):
         self.assertEqual(self.sent[1:], ["note on 47.79.34.208", "note on 198.51.100.9"])
         self.assertEqual(self.notes, [(NEW, self.dir, "2026-10-28"), ("198.51.100.9", self.dir, "2026-10-28")])
 
+    def notice(self, text, telegram=True):
+        bot = telegram_api.Telegram("T", 1, http=self.http) if telegram else None
+        out, err = io.StringIO(), io.StringIO()
+        with patch("telegram_api.from_keychain", return_value=bot), \
+                patch.dict(sys.modules, {"attacker_context": self.attacker_context()}), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = spark_brief.main(["--dir", str(self.dir), "--feed", str(self.dir / "spark-ioc-feed.csv"),
+                                     "--send", "--notice", text])
+        return code, out.getvalue(), err.getvalue()
+
+    def test_a_notice_goes_out_alone(self):
+        # What daily_check.sh sends when it fails before there is a run to brief on.
+        code, out, err = self.notice("Daily check failed: git pull failed")
+
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.sent, ["Daily check failed: git pull failed"])
+        self.assertEqual(self.notes, [])
+        self.assertFalse(self.marker.exists(), "a notice is no brief")
+        self.assertEqual(out, "Notice sent to Telegram\n")
+
+    def test_a_notice_without_a_bot_is_printed_and_one_telegram_refuses_says_so(self):
+        code, out, err = self.notice("Daily check failed: x", telegram=False)
+
+        self.assertEqual((code, out), (0, "Daily check failed: x\n"))
+        self.refuse = lambda text: True
+        code, out, err = self.notice("Daily check failed: y")
+        self.assertEqual(code, 1)
+        self.assertIn("Daily check failed: y", out)
+        self.assertIn("error: the notice was not sent: Bad Request: chat not found", err)
+
     def test_a_chat_id_that_is_not_a_number_prints_the_brief_and_never_its_value(self):
         stored = {"TELEGRAM_BOT_TOKEN": "T", "TELEGRAM_CHAT_ID": "abc-123-secret"}
         argv = ["--dir", str(self.dir), "--feed", str(self.dir / "spark-ioc-feed.csv"), "--date", DAY.isoformat(),

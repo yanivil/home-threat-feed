@@ -1,6 +1,7 @@
 """daily_check.sh and its LaunchAgent: the once-a-day run that mines the syslog capture,
 commits the feed when rows were added and pushes to main."""
 
+import json
 import os
 import plistlib
 import shutil
@@ -48,6 +49,25 @@ def main():
 
 if __name__ == "__main__":
     main()
+"""
+
+# Stands in for spark_brief.py: records each call (its arguments, the run log it was given, whether the
+# feed lock was held) in brief_calls.jsonl beside it; a brief (--run-log) exits STUB_BRIEF_EXIT, and with
+# STUB_BRIEF_LOCK it takes the feed lock the way the bot would while it runs.
+STUB_BRIEF = """\
+import json, os, sys
+from pathlib import Path
+here = Path(__file__).resolve().parent
+args = sys.argv[1:]
+call = {"args": args, "locked": (here / "syslog" / ".feed-lock").is_dir()}
+if "--run-log" in args:
+    call["run_log"] = Path(args[args.index("--run-log") + 1]).read_text()
+with (here / "brief_calls.jsonl").open("a") as f:
+    f.write(json.dumps(call) + "\\n")
+print("stub brief:", " ".join(args))
+if "--run-log" in args and os.environ.get("STUB_BRIEF_LOCK"):
+    (here / "syslog" / ".feed-lock").mkdir()
+sys.exit(int(os.environ.get("STUB_BRIEF_EXIT", "0")) if "--run-log" in args else 0)
 """
 
 # Stands in for osascript: appends its arguments to the file STUB_NOTIFICATIONS names.
@@ -102,7 +122,14 @@ class DailyCheckTest(unittest.TestCase):
         env = {**self.env, **{k: str(v) for k, v in stub.items()}}
         # From another directory: the script must find the repo it lives in by itself.
         return subprocess.run(["bash", str(self.repo / "daily_check.sh")], cwd=self.tmp.name,
-                              env=env, capture_output=True, text=True)
+                              env=env, capture_output=True, text=True, timeout=120)
+
+    def stub_brief(self):
+        (self.repo / "spark_brief.py").write_text(STUB_BRIEF)
+
+    def brief_calls(self):
+        path = self.repo / "brief_calls.jsonl"
+        return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
 
     def head(self, where=None):
         return self.git("rev-parse", "HEAD" if where is None else "main", cwd=where or self.repo)
@@ -342,6 +369,109 @@ class DailyCheckTest(unittest.TestCase):
         self.assertFalse((self.repo / "argv.txt").exists(), "the check must not run without the lock")
         self.assertTrue(self.lock.is_dir(), "the lock is not ours to remove")
         self.assertEqual(self.notifications.read_text().count("\n"), 1)
+
+    def test_a_failed_pull_sends_a_one_line_notice(self):
+        self.stub_brief()
+        self.git("remote", "set-url", "origin", str(Path(self.tmp.name) / "gone.git"), cwd=self.repo)
+
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 1)
+        [call] = self.brief_calls()
+        self.assertEqual(call["args"][:2], ["--send", "--notice"])
+        self.assertTrue(call["args"][2].startswith("Daily check failed: git pull failed; the feed was not checked"),
+                        call["args"])
+        self.assertFalse(call["locked"], "the lock is given back before the notice")
+        self.assertEqual(self.notifications.read_text().count("\n"), 1, "the macOS notification stays")
+
+    def test_a_lock_that_stays_held_sends_the_notice_and_leaves_the_lock(self):
+        self.hold_lock(hours_ago=1)
+        self.stub_sleep()
+        self.stub_brief()
+
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 1)
+        [call] = self.brief_calls()
+        self.assertEqual(call["args"], ["--send", "--notice", "Daily check failed: the feed is locked by the Telegram "
+                                                             "bot for over twenty minutes"])
+        self.assertTrue(self.lock.is_dir(), "the bot's lock")
+
+    def test_a_failed_push_sends_the_brief_with_the_failure_among_its_errors(self):
+        self.refuse_pushes()
+
+        proc = self.run_script(STUB_ADD=1)
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(proc.stdout.count("Spark brief —"), 1, proc.stdout)
+        self.assertIn("\nERRORS\n", proc.stdout)
+        self.assertIn("  ERROR: git push failed; the commit stays local and the next run will push it\n", proc.stdout)
+        self.assertNotIn("Daily check failed:", proc.stdout, "the brief is the one message")
+
+    def test_a_brief_that_cannot_be_sent_is_followed_by_the_notice(self):
+        self.stub_brief()
+
+        proc = self.run_script(STUB_BRIEF_EXIT=1)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        calls = self.brief_calls()
+        self.assertEqual([call["args"][1] for call in calls], ["--run-log", "--notice"])
+        self.assertEqual(calls[1]["args"][2],
+                         "Daily check failed: the morning brief was not sent (spark_brief.py exited 1)")
+
+    def test_a_brief_whose_note_failed_needs_no_notice(self):
+        self.stub_brief()
+
+        self.run_script(STUB_BRIEF_EXIT=2)
+
+        self.assertEqual([call["args"][1] for call in self.brief_calls()], ["--run-log"])
+
+    def test_a_quota_stop_sends_the_brief_alone(self):
+        self.stub_brief()
+
+        proc = self.run_script(STUB_ADD=1, STUB_EXIT=1)
+
+        self.assertEqual(proc.returncode, 1)
+        [call] = self.brief_calls()
+        self.assertEqual(call["args"][:2], ["--send", "--run-log"])
+        self.assertIn("Added to the feed:", call["run_log"])
+
+    def test_the_lock_is_given_back_before_the_brief_and_one_taken_since_is_left_alone(self):
+        # The brief's attacker notes skip VirusTotal while the lock exists; the bot may take it meanwhile.
+        self.stub_brief()
+
+        proc = self.run_script(STUB_ADD=1, STUB_BRIEF_LOCK=1)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual((self.repo / "lock_held.txt").read_text(), "True", "held through the check")
+        self.assertFalse(self.brief_calls()[0]["locked"])
+        self.assertTrue(self.lock.is_dir(), "the lock the bot took during the brief is not the script's to remove")
+
+    def test_a_stale_lock_that_cannot_be_removed_is_waited_for_not_spun_on(self):
+        self.hold_lock(hours_ago=4)
+        (self.lock / "left-behind").write_text("rmdir cannot remove a directory that is not empty\n")
+        taken = time.time() - 4 * 3600  # writing in it made it new again
+        os.utime(self.lock, (taken, taken))
+        self.stub_sleep()
+        self.stub_brief()
+
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("ERROR: the feed is locked by the Telegram bot for over twenty minutes", proc.stdout)
+        self.assertEqual(self.sleeps.read_text(), "5\n" * 240)
+
+    def test_a_capture_directory_that_cannot_be_made_fails_the_run_at_once(self):
+        (self.repo / "syslog").write_text("a file where the directory should be\n")
+        self.stub_sleep()
+        self.stub_brief()
+
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("ERROR: cannot create syslog/", proc.stdout)
+        self.assertFalse(self.sleeps.exists(), "no wait for a lock that can never be taken")
+        self.assertEqual(self.brief_calls()[0]["args"], ["--send", "--notice", "Daily check failed: cannot create syslog/"])
 
     def test_a_run_that_fails_before_the_check_still_releases_the_lock(self):
         # fail runs while the lock is still held: the osascript stub notes whether it was.

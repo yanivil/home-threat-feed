@@ -5,6 +5,7 @@ what the daily check just added to the feed, and on the system's health.
     python3 spark_brief.py                        # print yesterday's brief
     python3 spark_brief.py --date 2026-10-28      # print the brief for that day
     python3 spark_brief.py --send --run-log LOG   # what daily_check.sh runs: post it to Telegram
+    python3 spark_brief.py --send --notice TEXT   # daily_check.sh's one-line notice when it fails early
 
 Reads the day's capture (syslog/spark-YYYY-MM-DD.log, plain or gzipped), the daily check's output
 (--run-log: the rows it added, its outbound hits, the lookups it used, its ERROR lines), the feed
@@ -319,6 +320,30 @@ def send_notes(telegram, indicators, capture_dir, day):
     return status
 
 
+def send_notice(text, send):
+    """--notice: `text` alone, posted with the bot in the Keychain under --send, else (or without a bot)
+    printed. 0 when it went out or was printed, 1 when Telegram did not take it."""
+    try:
+        telegram = telegram_api.from_keychain() if send else None
+    except telegram_api.TelegramError as e:  # a chat id that is not a number; the message never carries it
+        telegram, problem = None, e
+    else:
+        problem = None
+    if telegram is not None:
+        try:
+            telegram.send_message(text)
+        except (telegram_api.TelegramError, OSError) as e:
+            problem = e
+        else:
+            print("Notice sent to Telegram")
+            return 0
+    print(text)
+    if problem:
+        print(f"error: the notice was not sent: {problem}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Compose the morning brief on the Spark's attack attempts and the feed.")
     parser.add_argument("--date", type=date.fromisoformat, metavar="YYYY-MM-DD",
@@ -329,7 +354,12 @@ def main(argv=None):
                              f"the delivery is recorded in {MARKER_NAME}")
     parser.add_argument("--dir", type=Path, default=spark_logs.DEFAULT_DIR, help="syslog capture directory")
     parser.add_argument("--feed", type=Path, default=vt_check.FEED, help="the feed CSV")
+    parser.add_argument("--notice", metavar="TEXT",
+                        help="send (with --send) or print TEXT alone instead of a brief: the daily check's "
+                             "word when it failed before it had a run to brief on")
     args = parser.parse_args(argv)
+    if args.notice is not None:
+        return send_notice(args.notice, args.send)
 
     day = args.date or date.today() - timedelta(days=1)
     run_log = args.run_log.read_text() if args.run_log else ""
