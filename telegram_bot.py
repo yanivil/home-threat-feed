@@ -474,6 +474,7 @@ class Bot:
                 vt_check.run(pairs, self.feed, fetch, sleep=self.sleep, today=today, out=lines.append)
         except Exception as e:  # a refused key, the network, an odd answer: commit the rows already written
             stopped = f"stopped: {e}"
+            self.error(f"the check of {len(indicators)} indicator(s) {stopped}")
         statuses = Counter(m.group(1) for m in map(STATUS_RE.match, lines) if m)  # vt_check's lines only
         if stopped:
             lines.append(stopped)

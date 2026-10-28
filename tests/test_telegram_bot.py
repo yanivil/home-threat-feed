@@ -391,7 +391,8 @@ class AddTest(BotTestCase):
                 raise urllib.error.URLError("timed out")
             return self.vt(path)
 
-        reply = self.make_bot(fetch=fetch).add(["evil.com", "185.1.2.9"], "", trusted=False)
+        bot = self.make_bot(fetch=fetch)
+        reply = bot.add(["evil.com", "185.1.2.9"], "", trusted=False)
 
         self.assertEqual(reply.splitlines(), [
             "evil.com: added (Domain 11/94 malicious)",
@@ -402,6 +403,8 @@ class AddTest(BotTestCase):
                       self.feed.read_text())
         self.assertEqual(self.git.calls[2][3], "Add 1 indicator sent from Telegram")
         self.assertFalse(self.lock.exists())
+        self.assertRegex(bot.status().splitlines()[-1],
+                         r"^last error: \d{4}-\d{2}-\d{2} \d{2}:\d{2} .*stopped: <urlopen error timed out>$")
 
     def test_a_systemexit_mid_check_still_releases_the_lock(self):
         def fetch(path):
