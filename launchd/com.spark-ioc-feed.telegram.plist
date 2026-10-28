@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Keeps telegram_bot.py running: the command loop the owner talks to and the live watcher
+         of today's capture. The program is the same Python.app binary as the receiver's (see
+         com.spark-ioc-feed.syslog.plist for why: Full Disk Access on the external disk). The bot
+         token and the owner's chat id must be in the login Keychain first (docs/system-design.md,
+         D6, "First-time setup"); without them the job logs what is missing and exits after five
+         minutes, and launchd starts it again.
+         Install: edit the paths below if the repository or the user's home lives elsewhere, then
+           cp launchd/com.spark-ioc-feed.telegram.plist ~/Library/LaunchAgents/
+           launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.spark-ioc-feed.telegram.plist
+         Log:   /Users/home-server/Library/Logs/spark-ioc-feed/telegram-bot.log
+         Stop:  launchctl bootout gui/$(id -u)/com.spark-ioc-feed.telegram -->
+    <key>Label</key>
+    <string>com.spark-ioc-feed.telegram</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/Current/Resources/Python.app/Contents/MacOS/Python</string>
+        <string>/Volumes/eDisk_2TB/Projects/Personal Security Agent/spark-ioc-feed/telegram_bot.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Volumes/eDisk_2TB/Projects/Personal Security Agent/spark-ioc-feed</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/home-server/Library/Logs/spark-ioc-feed/telegram-bot.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/home-server/Library/Logs/spark-ioc-feed/telegram-bot.log</string>
+</dict>
+</plist>
