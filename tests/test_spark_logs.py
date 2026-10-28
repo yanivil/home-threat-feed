@@ -50,6 +50,33 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(entry["ProductName"], "Anti Malware")
 
 
+class DetectionTest(unittest.TestCase):
+    def test_a_threat_prevention_row_with_a_protection_and_addresses_is_a_detection(self):
+        self.assertTrue(spark_logs.is_tp_detection(spark_logs.parse_entry(INBOUND_PREVENT)))
+
+    def test_statistics_rows_are_not_detections(self):
+        self.assertFalse(spark_logs.is_tp_detection(spark_logs.parse_entry(STATS)))
+
+    def test_a_blade_row_without_addresses_or_a_protection_is_not_a_detection(self):
+        no_addresses = STATS.replace("malware_detected", 'Protection Name="Bad" malware_detected')
+        no_protection = INBOUND_PREVENT.replace('Protection Type="IP reputation"', 'Protection Type=" "')
+
+        for line in (no_addresses, no_protection):
+            with self.subTest(line=line[20:70]):
+                self.assertFalse(spark_logs.is_tp_detection(spark_logs.parse_entry(line)))
+
+    def test_other_products_are_not_detections_even_with_a_protection(self):
+        firewall = INBOUND_PREVENT.replace('ProductName="Anti Malware"', 'ProductName="VPN-1 & FireWall-1"')
+
+        self.assertFalse(spark_logs.is_tp_detection(spark_logs.parse_entry(firewall)))
+
+    def test_every_threat_prevention_blade_counts(self):
+        for blade in spark_logs.TP_BLADES:
+            with self.subTest(blade=blade):
+                line = INBOUND_PREVENT.replace('ProductName="Anti Malware"', f'ProductName="{blade}"')
+                self.assertTrue(spark_logs.is_tp_detection(spark_logs.parse_entry(line)))
+
+
 class ClassifyTest(unittest.TestCase):
     def candidate(self, line):
         return spark_logs.candidate(spark_logs.parse_entry(line), wan_ip="176.230.223.47")

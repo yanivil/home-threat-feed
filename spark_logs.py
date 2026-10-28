@@ -38,6 +38,8 @@ PAIR_RE = re.compile(r'(?:^|\s)(?P<key>[A-Za-z][A-Za-z0-9_ .-]*?)="(?P<value>[^"
 NAME_KEYS = ("resource", "destination_domain_name", "tls_server_host_name", "sni")
 RATIO_RE = re.compile(r"(\d+)/(\d+) malicious")
 ALLOW_NAME = "allow.txt"
+# The Spark's Threat Prevention blades, as they name themselves in ProductName.
+TP_BLADES = ("Anti Malware", "Anti-Bot", "IPS", "SmartDefense", "Threat Emulation", "Anti Virus")
 # Vendor apex domains whose hosts LAN devices reach all day; looking them up would only burn quota.
 # syslog/allow.txt (one suffix per line, git-ignored) extends this list.
 ALLOWED_SUFFIXES = frozenset({
@@ -102,6 +104,14 @@ def parse_entry(line):
     for m in PAIR_RE.finditer(rest):
         entry[m.group("key").strip()] = m.group("value")
     return entry
+
+
+def is_tp_detection(entry):
+    """True for a Threat Prevention row that names a protection or an attack between a source and a
+    destination. The statistics rows the blades emit every minute (counters, no addresses) are not."""
+    return (entry.get("ProductName") in TP_BLADES
+            and bool(entry.get("src", "").strip()) and bool(entry.get("dst", "").strip())
+            and any(entry.get(key, "").strip() for key in ("Protection Name", "attack", "malware_action", "Protection Type")))
 
 
 def _ip(text):

@@ -645,6 +645,40 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(self.statuses(results), {"157.230.234.35": "verified", "203.0.113.7": "refreshed"})
 
 
+class RowDueTest(unittest.TestCase):
+    """row_due(): the day a feed row's COMMENT says it comes up for re-verification."""
+
+    def due(self, ioc_type, comment, max_age=None):
+        return vt_check.row_due(ioc_type, comment, max_age)
+
+    def test_a_checked_row_is_due_when_its_types_clock_has_run(self):
+        self.assertEqual(self.due("IP", f"VT 6/86 malicious {aged(50)}"), date.fromisoformat(aged(50 - 60)))
+        self.assertEqual(self.due("Domain", f"APT28 - VT 12/93 malicious {aged(100)}"), date.fromisoformat(aged(100 - 180)))
+        self.assertEqual(self.due("URL", f"VT 9/90 malicious {aged(10)}"), date.fromisoformat(aged(10 - 180)))
+
+    def test_a_row_added_without_a_check_is_due_after_90_days(self):
+        self.assertEqual(self.due("Domain", f"Qilin - Cyberint export - added without VirusTotal check {aged(20)}"),
+                         date.fromisoformat(aged(20 - 90)))
+
+    def test_an_ip_seen_in_the_logs_is_not_due_before_180_days_from_the_sighting(self):
+        comment = f"Inbound probe of WAN - seen in Spark logs {aged(5)} - VT 6/86 malicious {aged(70)}"
+
+        self.assertEqual(self.due("IP", comment), date.fromisoformat(aged(5 - 180)))
+
+    def test_max_age_replaces_the_clocks_and_reaches_hashes(self):
+        self.assertEqual(self.due("IP", f"VT 6/86 malicious {aged(50)}", max_age=10), date.fromisoformat(aged(50 - 10)))
+        self.assertEqual(self.due("SHA256", f"VT 60/65 malicious {aged(50)}", max_age=10), date.fromisoformat(aged(50 - 10)))
+
+    def test_rows_that_are_never_rechecked_are_not_due(self):
+        self.assertIsNone(self.due("SHA256", f"VT 60/65 malicious {aged(500)}"))
+        self.assertIsNone(self.due("IP Range", f"Modat - VT 6/86 malicious {aged(500)}"))
+
+    def test_a_comment_with_no_date_is_not_due(self):
+        self.assertIsNone(self.due("IP", "Modat"))
+        self.assertIsNone(self.due("IP", "VT 6/86 malicious 2026-13-45"))
+        self.assertIsNone(self.due("IP", "", max_age=10))
+
+
 class StampSeenTest(unittest.TestCase):
     """stamp_seen(): the daily check marks feed IPs that probed the network with the date."""
 

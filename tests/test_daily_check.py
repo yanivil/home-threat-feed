@@ -19,21 +19,35 @@ SEED_ROW = "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,VT 6/86 malicious 202
 
 # Stands in for spark_logs.py: records its arguments and whether the feed lock is held while it
 # runs, appends STUB_ADD rows to the feed beside it, prints STUB_OUTBOUND outbound hits the way
-# the real script does, exits STUB_EXIT.
+# the real script does, exits STUB_EXIT. Only its command line is stubbed: it re-exports the real
+# module (copied beside it as spark_logs_real.py) so spark_brief.py, which imports spark_logs,
+# gets the real functions.
 STUB_SPARK_LOGS = """\
-import os, sys
+import importlib.util, os, sys
 from pathlib import Path
 here = Path(__file__).resolve().parent
-(here / "argv.txt").write_text(" ".join(sys.argv[1:]))
-(here / "lock_held.txt").write_text(str((here / "syslog" / ".feed-lock").is_dir()))
-with (here / "spark-ioc-feed.csv").open("a") as f:
-    for i in range(int(os.environ.get("STUB_ADD", "0"))):
-        f.write(f"vt-ip-{i:010},198.51.100.{i},IP,medium,high,AB,Inbound probe of WAN - VT 7/95 malicious 2026-10-21\\n")
-print("3 inbound sources and 2 outbound destinations in the last 2 day(s); 3 and 2 still to check")
-for i in range(int(os.environ.get("STUB_OUTBOUND", "0"))):
-    print(f"OUTBOUND HIT  bad{i}.example  (Domain 7/94 malicious)  reached by 10.0.0.{i}  <- check these devices")
-print("Added to the feed: 0  clean: 1  unknown to VirusTotal: 0  left for another day: 0")
-sys.exit(int(os.environ.get("STUB_EXIT", "0")))
+_spec = importlib.util.spec_from_file_location("spark_logs_real", here / "spark_logs_real.py")
+_real = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_real)
+globals().update({k: v for k, v in vars(_real).items() if not k.startswith("__")})
+
+
+def main():
+    (here / "argv.txt").write_text(" ".join(sys.argv[1:]))
+    (here / "lock_held.txt").write_text(str((here / "syslog" / ".feed-lock").is_dir()))
+    with (here / "spark-ioc-feed.csv").open("a") as f:
+        for i in range(int(os.environ.get("STUB_ADD", "0"))):
+            f.write(f"vt-ip-{i:010},198.51.100.{i},IP,medium,high,AB,"
+                    "Inbound probe of WAN - Spark syslog 2026-10-21 - VT 7/95 malicious 2026-10-21\\n")
+    print("3 inbound sources and 2 outbound destinations in the last 2 day(s); 3 and 2 still to check")
+    for i in range(int(os.environ.get("STUB_OUTBOUND", "0"))):
+        print(f"OUTBOUND HIT  bad{i}.example  (Domain 7/94 malicious)  reached by 10.0.0.{i}  <- check these devices")
+    print("Added to the feed: 0  clean: 1  unknown to VirusTotal: 0  left for another day: 0")
+    sys.exit(int(os.environ.get("STUB_EXIT", "0")))
+
+
+if __name__ == "__main__":
+    main()
 """
 
 # Stands in for osascript: appends its arguments to the file STUB_NOTIFICATIONS names.
@@ -67,6 +81,12 @@ class DailyCheckTest(unittest.TestCase):
         (self.repo / "spark_logs.py").write_text(STUB_SPARK_LOGS)
         shutil.copy(SCRIPT, self.repo / "daily_check.sh")
         shutil.copy(REPO / "syslog_retention.py", self.repo / "syslog_retention.py")  # the real one: no network, no key
+        # The brief is the real one, over the real spark_logs functions; no Keychain item exists, so it prints.
+        for module in ("spark_brief.py", "telegram_api.py", "keychain.py", "vt_check.py"):
+            shutil.copy(REPO / module, self.repo / module)
+        shutil.copy(REPO / "spark_logs.py", self.repo / "spark_logs_real.py")
+        (self.repo / "attacker_context.py").write_text('note = lambda *a, **k: ""\n')
+        shutil.copy(REPO / "tests" / "stubs" / "security", self.bin / "security")
         self.git("init", "-q", "-b", "main", cwd=self.repo)
         self.git("add", "-A", cwd=self.repo)
         self.git("commit", "-q", "-m", "seed", cwd=self.repo)
@@ -209,6 +229,34 @@ class DailyCheckTest(unittest.TestCase):
         self.assertIn("display notification", notified)
         self.assertIn("2 outbound", notified)
         self.assertIn(os.path.expanduser("~/Library/Logs/spark-ioc-feed/daily-check.log"), notified)
+
+    def test_the_brief_is_composed_after_the_run(self):
+        proc = self.run_script(STUB_ADD=1, STUB_OUTBOUND=1)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("Spark brief —", proc.stdout)
+        self.assertLess(proc.stdout.index("Pushed to"), proc.stdout.index("Spark brief —"))
+        self.assertLess(proc.stdout.index("Spark brief —"), proc.stdout.index("Daily check done"))
+        self.assertIn("Outbound hits: 1", proc.stdout, "the brief reads the run's own output")
+        self.assertIn("10.0.0.0 reached bad0.example (VT 7/94)", proc.stdout)
+        self.assertIn("INDICATORS ENTERED: 1 from the Spark's logs", proc.stdout, "and the rows git says were added")
+
+    def test_the_brief_is_sent_even_when_the_check_stopped_at_the_quota(self):
+        proc = self.run_script(STUB_ADD=1, STUB_EXIT=1)
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("Spark brief —", proc.stdout)
+        self.assertLess(proc.stdout.index("Spark brief —"), proc.stdout.index("exited 1"))
+
+    def test_a_brief_that_cannot_be_made_is_a_warning_not_a_failed_run(self):
+        (self.repo / "spark_brief.py").write_text("import sys\nprint('brief broke', file=sys.stderr)\nsys.exit(1)\n")
+
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("brief broke", proc.stdout)
+        self.assertIn("WARNING: the brief was not sent (see above)", proc.stdout)
+        self.assertIn("Daily check done", proc.stdout)
 
     def test_old_captures_are_compressed_before_anything_else(self):
         old = self.repo / "syslog" / f"spark-{date.today() - timedelta(days=10):%Y-%m-%d}.log"

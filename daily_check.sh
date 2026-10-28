@@ -10,6 +10,9 @@
 #                          (outbound names first, then recurring outbound addresses, then persistent
 #                          inbound sources; see its --help for the thresholds)
 #   4. git commit + push   spark-ioc-feed.csv only, when the check added rows
+#   5. spark_brief.py      send the morning brief to Telegram: yesterday's attack attempts, the rows
+#                          this run added, the system's health (it is printed here when there is no
+#                          bot token); sent even when the check stopped early, never fails the run
 # The VirusTotal key comes from VT_API_KEY or the login Keychain (see vt_check.api_key). Everything
 # is printed with a timestamp; the LaunchAgent sends it to ~/Library/Logs/spark-ioc-feed/daily-check.log.
 # Outbound hits are only reported there (plus a macOS notification), never added to the feed.
@@ -88,6 +91,13 @@ if [ "$hits" -gt 0 ]; then
     log "$hits outbound hit(s) above: a LAN device reached a flagged destination"
     notify "$hits outbound hit(s): a LAN device reached a flagged destination. See $LOG_FILE"
 fi
+
+# The brief reports what this run did, so it is composed from the run's own output ($run_log) and
+# the feed as pushed. It goes out before the check's status is judged: a morning that stopped at the
+# VirusTotal quota still reports what it added, and a quiet morning still shows the system ran. A
+# brief that cannot be sent (no token, Telegram down) is a warning, never the run's failure.
+python3 spark_brief.py --send --run-log "$run_log" 2>&1 || log "WARNING: the brief was not sent (see above)"
+
 if [ "$check_status" -ne 0 ]; then
     fail "spark_logs.py exited $check_status (1 = VirusTotal quota reached, rows done so far are in; else see above)"
 fi

@@ -322,6 +322,25 @@ def recheck_due(ioc_type, checked, trusted, last_seen, max_age=None):
     return max(dues)
 
 
+def _closing_note(comment):
+    """(VirusTotal note, unchecked note) matches of the note that closes `comment`; the one it
+    does not end with is None."""
+    note = VT_NOTE_RE.search(comment)
+    return note, None if note else TRUSTED_NOTE_RE.search(comment)
+
+
+def row_due(ioc_type, comment, max_age=None):
+    """The day the feed row with this TYPE and COMMENT comes up for re-verification (see
+    recheck_due), or None when it never does: a TYPE --recheck skips, or a COMMENT with no
+    VirusTotal, unchecked or sighting date."""
+    note, trusted = _closing_note(comment)
+    checked = _note_date(note, 3) if note else _note_date(trusted)
+    last_seen = _note_date(SEEN_NOTE_RE.search(comment))
+    if ioc_type not in RECHECK_TYPES or (checked is None and last_seen is None):
+        return None
+    return recheck_due(ioc_type, checked, trusted is not None, last_seen, max_age)
+
+
 def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False,
             delay=FREE_API_DELAY, sleep=time.sleep, today=None, out=print):
     """Look up again the feed rows that are due for their type (see recheck_due).
@@ -356,16 +375,9 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False
         if line.startswith("#") or len(fields) != 7:
             continue
         value, ioc_type, comment = fields[1], fields[2], fields[6]
-        note = VT_NOTE_RE.search(comment)
-        trusted = None if note else TRUSTED_NOTE_RE.search(comment)
-        checked = _note_date(note, 3) if note else _note_date(trusted)
-        last_seen = _note_date(SEEN_NOTE_RE.search(comment))
-        if ioc_type not in RECHECK_TYPES or (checked is None and last_seen is None):
-            record(value, "kept", "no VirusTotal date", quiet=True)
-            continue
-        due = recheck_due(ioc_type, checked, trusted is not None, last_seen, max_age)
+        due = row_due(ioc_type, comment, max_age)
         if due is None:
-            record(value, "kept", f"{ioc_type} rows are not rechecked", quiet=True)
+            record(value, "kept", "no due date", quiet=True)
             continue
         if due > today_date:
             record(value, "kept", f"due {due}", quiet=True)
@@ -384,6 +396,7 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False
             continue
         malicious = stats.get("malicious", 0)
         total = sum(stats.values())
+        note, trusted = _closing_note(comment)
         before = f"{note.group(1)}/{note.group(2)}" if note else "unchecked"
         change = f"{ioc_type} {before} -> {malicious}/{total} malicious"
         if malicious < min_for(ioc_type, min_malicious):
