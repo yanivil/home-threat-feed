@@ -40,15 +40,35 @@ class FeedLintTest(unittest.TestCase):
         feed = Path(__file__).resolve().parent.parent / "spark-ioc-feed.csv"
         self.assertEqual(problems(feed.read_text()), [])
 
-    def test_the_header_must_be_exact(self):
-        self.assertEqual(problems(GOOD.replace("# UNIQ-NAME", "#UNIQ-NAME", 1)), [HEADER_PROBLEM])
-        self.assertEqual(problems(ROWS), [HEADER_PROBLEM])
-        self.assertEqual(problems(""), [HEADER_PROBLEM])
+    def test_the_header_must_be_exact_and_the_message_shows_what_was_found(self):
+        self.assertEqual(problems(GOOD.replace("# UNIQ-NAME", "#UNIQ-NAME", 1)),
+                         [HEADER_PROBLEM + ", not '#UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT'"])
+        self.assertEqual(problems(ROWS), [HEADER_PROBLEM + ", not " + repr(ROWS.split("\n")[0])])
+        self.assertEqual(problems(""), [HEADER_PROBLEM + ", not ''"])
+        # A byte-order mark or a trailing space looks exactly like the header; the repr shows it.
+        self.assertEqual(problems("﻿" + GOOD),
+                         [HEADER_PROBLEM + ", not '\\ufeff# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT'"])
+        self.assertEqual(problems(GOOD.replace("COMMENT\n", "COMMENT \n", 1)),
+                         [HEADER_PROBLEM + ", not '# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT '"])
 
     def test_every_row_has_seven_fields(self):
         text = GOOD + "x-1,bad.example,Domain,high,high,AB,a comment, with a comma\n"
         self.assertEqual(problems(text), ["line 9: 8 fields, expected 7 (a comma in the COMMENT?)"])
         self.assertEqual(problems(GOOD + "x-1,bad.example,Domain,high,high,AB\n"), ["line 9: 6 fields, expected 7"])
+        self.assertEqual(problems(GOOD + "justonefield\n"), ["line 9: 1 field, expected 7"])
+
+    def test_an_empty_field_is_named(self):
+        self.assertEqual(problems(GOOD + "x-1,other.example,Domain,,,,c\n"), [
+            "line 9: CONFIDENCE is empty: use low, medium, high or critical",
+            "line 9: SEVERITY is empty: use low, medium, high or critical",
+            "line 9: PRODUCT is empty: use AB for an IP, IP Range, Domain or URL, AV for a hash",
+        ])
+        self.assertEqual(problems(GOOD + "x-1,,,high,high,AB,c\n"), [
+            "line 9: VALUE is empty",
+            "line 9: TYPE is empty: use one of IP, IP Range, Domain, URL, MD5, SHA1, SHA256",
+        ])
+        self.assertEqual(problems(GOOD + "x-1,,Domain,high,high,AB,c\n" + "x-2,,Domain,high,high,AB,c\n"),
+                         ["line 9: VALUE is empty", "line 10: VALUE is empty"])
 
     def test_the_value_must_be_of_its_type_and_normalised(self):
         cases = [
@@ -78,6 +98,8 @@ class FeedLintTest(unittest.TestCase):
              "line 9: VALUE 185.1.2.9-185.1.2.1: the range ends before it starts"),
             ("x-1,10.0.0.1-10.0.0.9,IP Range,high,medium,AB,c",
              "line 9: VALUE 10.0.0.1-10.0.0.9: not a public IP address"),
+            ("x-1,185.1.2.9-2606:4700::1111,IP Range,high,medium,AB,c",
+             "line 9: VALUE 185.1.2.9-2606:4700::1111: an IPv4 and an IPv6 address do not make a range"),
         ]
         for row, expected in cases:
             with self.subTest(row=row):
@@ -92,6 +114,17 @@ class FeedLintTest(unittest.TestCase):
                 self.assertEqual(problems(GOOD + row),
                                  [f"line 9: VALUE {value} is a host this system needs (never block)"])
 
+    def test_a_domain_that_covers_a_needed_host_is_refused(self):
+        # If the gateway matches a Domain row against subdomains too, the parent blocks the host.
+        for value, needed in [("githubusercontent.com", "raw.githubusercontent.com"),
+                              ("telegram.org", "api.telegram.org"), ("anthropic.com", "api.anthropic.com"),
+                              ("virustotal.com", "www.virustotal.com")]:
+            with self.subTest(value=value):
+                self.assertEqual(problems(GOOD + f"x-1,{value},Domain,high,high,AB,c\n"),
+                                 [f"line 9: VALUE {value} would block {needed}, a host this system needs (never block)"])
+        # A URL on such a parent blocks one page, not the host.
+        self.assertEqual(problems(GOOD + "x-1,https://telegram.org/malware.exe,URL,high,high,AB,c\n"), [])
+
     def test_a_value_appears_once_whatever_its_case(self):
         self.assertEqual(problems(GOOD + "x-1,evil.example,Domain,high,high,AB,c\n"),
                          ["line 9: VALUE evil.example repeats line 2"])
@@ -103,13 +136,20 @@ class FeedLintTest(unittest.TestCase):
                          ["line 9: UNIQ-NAME vt-domain-1a2b3c4d5e repeats line 2"])
         self.assertEqual(problems(GOOD + ",other.example,Domain,high,high,AB,c\n"), ["line 9: UNIQ-NAME is empty"])
 
-    def test_hidden_characters_are_refused(self):
-        self.assertEqual(problems(GOOD + "x-1,other.example,Domain,high,high,AB,a label\x1b[2K\n"),
-                         ["line 9: hidden character U+001B"])
-        self.assertEqual(problems(GOOD + "x-1,other.example,Domain,high,high,AB,zero​width\n"),
-                         ["line 9: hidden character U+200B"])
-        self.assertEqual(problems(GOOD + "x-1,other.example,Domain,high,high,AB,a\ttab\n"),
-                         ["line 9: hidden character U+0009"])
+    def test_hidden_characters_are_refused_and_named_with_their_column(self):
+        row = "x-1,other.example,Domain,high,high,AB,a label"
+        column = len(row) + 1
+        cases = [
+            ("\x1b[2K", "U+001B (escape)"),
+            ("​wide", "U+200B (ZERO WIDTH SPACE)"),
+            ("\ttab", "U+0009 (tab)"),
+            ("\r", "U+000D (carriage return: a Windows line ending)"),
+            (" more", "U+2028 (LINE SEPARATOR)"),  # not category C, but splitlines() breaks on it
+        ]
+        for tail, named in cases:
+            with self.subTest(named=named):
+                self.assertEqual(problems(GOOD + row + tail + "\n"),
+                                 [f"line 9: hidden character {named} at column {column}"])
 
     def test_confidence_severity_product_and_type_take_the_gateways_values(self):
         cases = [
@@ -139,7 +179,8 @@ class FeedLintTest(unittest.TestCase):
             "line 9: SEVERITY Urgent is not one of low, medium, high, critical",
             "line 9: PRODUCT AV for a Domain, expected AB",
         ])
-        self.assertEqual(problems(GOOD + "x-1,other.example,Hostname,High,high\x1b,AB\n"), ["line 9: hidden character U+001B"])
+        self.assertEqual(problems(GOOD + "x-1,other.example,Hostname,High,high\x1b,AB\n"),
+                         ["line 9: hidden character U+001B (escape) at column 37"])
         self.assertEqual(problems(GOOD + "x-1,other.example,Hostname,High,high\n"), ["line 9: 5 fields, expected 7"])
 
 

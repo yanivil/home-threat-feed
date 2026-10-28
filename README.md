@@ -54,20 +54,23 @@ Check Point indicator CSV. Header line must stay exactly as is:
 | UNIQ-NAME  | any unique text |
 | VALUE      | the indicator |
 | TYPE       | IP, IP Range (`a.b.c.d-a.b.c.e`), Domain, URL, MD5, SHA1, SHA256 |
-| CONFIDENCE | low / medium / high / critical (optional, default high) |
-| SEVERITY   | low / medium / high / critical (optional, default high) |
-| PRODUCT    | AB for IP/Domain/URL, AV for hashes (optional, default AV) |
+| CONFIDENCE | low / medium / high / critical (optional to the gateway, default high; required here) |
+| SEVERITY   | low / medium / high / critical (optional to the gateway, default high; required here) |
+| PRODUCT    | AB for IP / IP Range / Domain / URL, AV for hashes (optional to the gateway, default AV, which is wrong for an address or a name; required here) |
 | COMMENT    | free text (optional) |
 
 The gateway re-fetches the file every 30 minutes (configurable under IoC Feeds → Settings).
 
 `feed_lint.py` holds the file to this format and refuses the rest: the header exactly as above,
-seven fields in every row, a VALUE of its TYPE and normalised (lower-case domains and hashes,
-public addresses, ranges as `a.b.c.d-a.b.c.e`), no VALUE or UNIQ-NAME twice, no hidden character,
-and none of the hosts this system itself needs (github.com, raw.githubusercontent.com,
-api.telegram.org, api.anthropic.com, www.virustotal.com). Every writer runs it before committing:
-the daily check (after its pull and again before its commit), the Telegram bot and the monthly
-re-check. `python3 feed_lint.py` runs it by hand and lists the problems as `line N: …`.
+seven fields in every row with all but the COMMENT filled in (the gateway's defaults never apply
+by accident), a VALUE of its TYPE and normalised (lower-case domains and hashes, public
+addresses, ranges as `a.b.c.d-a.b.c.e`), no VALUE or UNIQ-NAME twice, no hidden character, and
+none of the hosts this system itself needs (github.com, raw.githubusercontent.com,
+api.telegram.org, api.anthropic.com, www.virustotal.com) nor a Domain that covers one of them.
+Every writer runs it before committing: the daily check (after its pull and again before its
+commit), the Telegram bot and the monthly re-check; a hand edit is committed the same way
+(`python3 feed_lint.py && git commit …`, as in the recipes below). By hand, `python3 feed_lint.py`
+lists the problems as `line N: …`, each naming the field to fix.
 
 ## Adding an indicator
 
@@ -89,7 +92,7 @@ export VT_API_KEY=your-key
 python3 vt_check.py evil.com 203.0.113.7 https://bad.example/x 275a021b...fd0f
 python3 vt_check.py -f iocs.txt --dry-run      # preview, change nothing
 python3 vt_check.py -f iocs.txt
-git commit -am "Add VirusTotal-confirmed indicators" && git push
+python3 feed_lint.py && git commit -am "Add VirusTotal-confirmed indicators" && git push
 ```
 
 In an indicators file, each line holds one indicator, optionally followed by whitespace and
@@ -568,7 +571,7 @@ may by now serve legitimate traffic. `--recheck` re-verifies the rows the script
 python3 vt_check.py --recheck --dry-run      # list what would change, write nothing
 python3 vt_check.py --recheck                # IPs checked 60+ days ago, domains and URLs 180+, unchecked rows 90+
 python3 vt_check.py --recheck --max-age 30   # every type, 30+ days ago (0 = every row)
-git commit -am "Re-verify stale indicators" && git push
+python3 feed_lint.py && git commit -am "Re-verify stale indicators" && git push
 ```
 
 - Rows are looked up one every 15 s, and only once due for their TYPE, read from the dates

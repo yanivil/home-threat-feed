@@ -513,7 +513,7 @@ unchanged. Sources, caps and cost are the open design questions. Rows from the n
 will carry a COMMENT starting with `News`, so the brief's origin count ("from news") can show
 them; the morning brief already recognises that convention.
 
-### D8. The public repository names nothing of the owner's network, lints the feed before every commit and pins its workflow (decided and built 2026-10-28)
+### D8. The public repository names nothing of the owner's network, lints the feed before every commit and pins its workflow (decided 2026-10-28, built 2026-10-28/29)
 
 Decision: the repository is public and the gateway reads the feed from it as is, so three rules.
 (1) No address, hostname or handle of the owner's network appears in it. Fixtures copied from real
@@ -526,11 +526,17 @@ of the feed, in all three writers: the daily check after its pull (a bad web edi
 the run, with the problem in the morning message) and again before its commit; the Telegram bot
 before its commit (a failing file is left for the owner and the reply says what is wrong); the
 monthly re-check before its commit. It holds the file to the gateway's format: the exact header,
-seven fields, a VALUE of its TYPE and normalised, no VALUE or UNIQ-NAME twice, no hidden
-character, none of the hosts the system itself needs (that list moved from the bot into the
-lint). (3) `actions/checkout` is pinned to a commit, and the repository's Actions settings are to
-require SHA pinning once the pinned workflow is on main, so a moved tag cannot change what runs
-with write access to the feed.
+seven fields with all but the COMMENT filled in (the gateway would default an empty CONFIDENCE or
+SEVERITY to high and an empty PRODUCT to AV, wrong for an address or a name), a VALUE of its TYPE
+and normalised, no VALUE or UNIQ-NAME twice, no hidden character, none of the hosts the system
+itself needs nor a Domain that covers one of them (that list moved from the bot into the lint).
+Each problem names its line, its field and what to use instead, because the owner reads it in a
+Telegram notice, not in a log. A feed that fails after the pull stops the whole daily run, not
+only its commit: the check would otherwise write rows into a broken file and fail the second lint
+anyway, and the two-day window makes up the skipped day once the file is fixed. (3)
+`actions/checkout` is pinned to a commit, and the repository's Actions settings are to require
+SHA pinning once the pinned workflow is on main, so a moved tag cannot change what runs with write
+access to the feed.
 
 Why: the file is written by three unattended jobs and now and then by hand in a web editor, and
 whatever reaches main is on the gateway within half an hour and on the public internet at once.
@@ -539,13 +545,19 @@ edit nor a stray real address in a fixture. Rewriting the published history to r
 addresses already public was declined: they are DHCP addresses that rotate, and a force-push is
 what the ruleset on main forbids.
 
-Outcome: built 2026-10-28 on branch `worktree-repo-hardening`, test-first, after the GitHub side
-was set the same day by hand: a ruleset on main that refuses force-pushes and deletion, Actions
-limited to GitHub's and verified creators', secret scanning with push protection, the owner's
-no-reply identity on every new commit. Still the owner's: two-factor authentication, the scope
-and expiry of the token the Mac pushes with, the e-mail privacy toggles, BotFather's
-`/setjoingroups`, and whether the vendor exports named in the feed's COMMENT column may be
-republished.
+Outcome: built 2026-10-28/29 on branch `worktree-repo-hardening`, test-first and reviewed by a
+fresh reader, after the GitHub side was set on 2026-10-28 by hand: a ruleset on main that refuses
+force-pushes and deletion, Actions limited to GitHub's and verified creators', secret scanning
+with push protection, the owner's no-reply identity on every new commit. The commits pushed with
+this work carried, in their history, three more private LAN addresses on the subnets already
+public; by rule (1)'s reasoning they were scrubbed forward, not rewritten. Known limits: the
+lint's verdict follows the Python it runs under (3.9 on the Mac, newer on Actions: a character
+assigned after Unicode 13 counts as hidden on the Mac only, and `is_global` differs for a few
+IPv6 blocks, of which the feed has none); `vt_check.refang` runs once, so a doubly defanged value
+typed by hand is reported as not normalised rather than repaired. Still the owner's: two-factor
+authentication, the scope and expiry of the token the Mac pushes with, the e-mail privacy
+toggles, BotFather's `/setjoingroups`, and whether the vendor exports named in the feed's COMMENT
+column may be republished.
 
 ## 5. Operating it
 

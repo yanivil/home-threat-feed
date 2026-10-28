@@ -66,6 +66,19 @@ notice() {
 # The morning brief from the run's own output; its exit status is spark_brief.py's: 0 sent (or printed
 # for want of a token), 1 not sent, 2 sent but an attacker note was not.
 brief() { python3 spark_brief.py --send --run-log "$run_log" 2>&1; }
+# feed_lint.py on the feed, its output printed. When it fails, lint_problem holds the first problem
+# (and how many more) for the failure message: the Telegram notice shows no log.
+lint_problem=
+lint() {
+    local out status more
+    out=$(python3 feed_lint.py "$FEED" 2>&1); status=$?
+    printf '%s\n' "$out"
+    lint_problem=$(printf '%s\n' "$out" | grep '^line ' | head -n 1 | tr '"' "'")
+    more=$(printf '%s\n' "$out" | grep -c '^line ')
+    [ "$more" -le 1 ] || lint_problem="$lint_problem and $((more - 1)) more"
+    [ -n "$lint_problem" ] || lint_problem="feed_lint.py itself failed (see $LOG_FILE)"
+    return "$status"
+}
 fail() {
     log "ERROR: $1"
     notify "$1"
@@ -108,7 +121,13 @@ locked=1
 trap 'remove_run_log; release_lock' EXIT
 
 git pull --rebase --autostash --quiet || fail "git pull failed; the feed was not checked (see $LOG_FILE)"
-python3 feed_lint.py "$FEED" 2>&1 || fail "the feed on main fails its lint: fix $FEED (see above); nothing was checked"
+# A row typed into GitHub's web editor reached main unchecked, or a hand edit the bot refused to
+# commit is still here: either way nothing runs until the file is fixed, and the notice says where.
+if ! lint; then
+    where="on main"
+    git diff --quiet -- "$FEED" || where="on this Mac (uncommitted changes)"
+    fail "the feed $where fails its lint, nothing was checked: $lint_problem; fix $FEED"
+fi
 
 run_log=$(mktemp -t spark-daily-check) || { run_log=; fail "cannot create the run log"; }
 python3 spark_logs.py --days "$DAYS" --check ${MAX_LOOKUPS:+--max-lookups "$MAX_LOOKUPS"} 2>&1 | tee "$run_log"
@@ -118,7 +137,7 @@ hits=$(grep -c '^OUTBOUND HIT' "$run_log")
 if git diff --quiet -- "$FEED"; then
     log "Feed unchanged"
 else
-    python3 feed_lint.py "$FEED" 2>&1 || fail "the feed failed its lint after the check; its rows stay uncommitted in $FEED (see above)"
+    lint || fail "the rows the check added fail the lint and stay uncommitted in $FEED: $lint_problem"
     read -r added removed _ < <(git diff --numstat -- "$FEED")
     if [ "$removed" -eq 0 ]; then
         plural=s; [ "$added" -eq 1 ] && plural=

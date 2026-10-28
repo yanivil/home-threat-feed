@@ -15,8 +15,15 @@ All notable changes to this feed are recorded here.
   on VirusTotal and added. Only the owner's private chat is served, and values the gateway must
   never block (GitHub, Telegram, Anthropic, VirusTotal and the vendor list) are refused. See the
   README, "Telegram", and `docs/system-design.md`, D6.
+- `feed_lint.py`: the checks the feed passes before any commit (the exact header, seven fields
+  with all but the COMMENT filled in, a VALUE of its TYPE and normalised, no duplicates, no
+  hidden characters, none of the hosts this system needs). The daily check, the Telegram bot and
+  the monthly re-check run it and commit nothing while it fails; the morning notice or the bot's
+  reply names the line to fix. See the README, "Format", and `docs/system-design.md`, D8.
 
 ### Changed
+- The repository names nothing of the owner's network: fixtures and docs use stand-in addresses
+  and a stand-in gateway name. `actions/checkout` is pinned to a commit (v4.4.0).
 - `syslog_receiver.py` keeps only the gateway's datagrams (`--source`, by default the default
   route's gateway) and writes one capture line per datagram.
 - The Spark's system log lines, now forwarded with the security logs, are recognised and never

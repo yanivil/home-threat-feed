@@ -31,17 +31,17 @@ def log_line(received, src, dst, svc="22", action="drop", **extra):
 
 
 YESTERDAY_LINES = [
-    log_line("2026-10-27T23:58:00", ATTACKER, "203.0.113.139"),
-    log_line("2026-10-27T12:00:00", "198.51.100.7", "203.0.113.139", svc="23"),
+    log_line("2026-10-27T23:58:00", ATTACKER, "203.0.113.10"),
+    log_line("2026-10-27T12:00:00", "198.51.100.7", "203.0.113.10", svc="23"),
 ]
 TODAY_LINES = [
-    log_line("2026-10-28T03:00:00", ATTACKER, "203.0.113.139"),
+    log_line("2026-10-28T03:00:00", ATTACKER, "203.0.113.10"),
     "",
     "not a log line",
-    log_line("2026-10-28T04:00:00", "198.51.100.7", "203.0.113.139", svc="23"),
+    log_line("2026-10-28T04:00:00", "198.51.100.7", "203.0.113.10", svc="23"),
     log_line("2026-10-28T09:30:00", "10.0.0.5", ATTACKER, action="accept"),
 ]
-THE_DAY_BEFORE_LINES = [log_line("2026-10-26T01:00:00", ATTACKER, "203.0.113.139", svc="2222")]
+THE_DAY_BEFORE_LINES = [log_line("2026-10-26T01:00:00", ATTACKER, "203.0.113.10", svc="2222")]
 
 VT_IP = {"data": {"attributes": {
     "as_owner": "Linode", "asn": 63949, "country": "US",
@@ -367,7 +367,7 @@ class GatherTest(CaptureTestCase):
 
     def test_the_service_id_stands_in_for_a_missing_svc(self):
         self.write_capture("2026-10-27", [])
-        self.write_capture("2026-10-28", [log_line("2026-10-28T03:00:00", ATTACKER, "203.0.113.139", svc=None)])
+        self.write_capture("2026-10-28", [log_line("2026-10-28T03:00:00", ATTACKER, "203.0.113.10", svc=None)])
 
         self.assertEqual(self.gather(vt_key="vt")["activity"]["services"], Counter({"Any_TCP": 1}))
 
@@ -383,7 +383,7 @@ class GatherTest(CaptureTestCase):
     def test_what_the_capture_says_reaches_the_facts_clean(self):
         # A capture line is text an attacker can shape: it reaches the model's prompt only as clean().
         self.write_capture("2026-10-27", [])
-        self.write_capture("2026-10-28", [log_line("2026-10-28T03:00:00", ATTACKER, "203.0.113.139",
+        self.write_capture("2026-10-28", [log_line("2026-10-28T03:00:00", ATTACKER, "203.0.113.10",
                                                    svc="SSH‮​" + "9" * 200, action="drop\x1b[2J")])
 
         activity = self.gather(vt_key="vt")["activity"]

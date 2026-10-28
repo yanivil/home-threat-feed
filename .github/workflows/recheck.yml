@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180  # 15 s per stale row; the free key allows 500 lookups a day
     steps:
-      # Pinned to a commit, not a tag: the repository's Actions settings require it, so a moved
-      # tag cannot change what runs here. Bump the SHA and the comment together.
+      # Pinned to a commit, not a tag, so a moved tag cannot change what runs here and the
+      # repository's Actions settings can require SHA pinning. Bump the SHA and the comment together.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: Re-verify stale rows on VirusTotal

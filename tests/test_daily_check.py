@@ -217,6 +217,7 @@ class DailyCheckTest(unittest.TestCase):
         self.stub_brief()
         with (self.repo / "spark-ioc-feed.csv").open("a") as f:
             f.write("web-edit,github.com,Domain,high,high,AB,typed in the GitHub web editor\n")
+            f.write("web-edit-2,api.telegram.org,Domain,high,high,AB,and another\n")
         self.git("commit", "-q", "-am", "web edit", cwd=self.repo)
         self.git("push", "-q", cwd=self.repo)
         before = self.head()
@@ -224,14 +225,31 @@ class DailyCheckTest(unittest.TestCase):
         proc = self.run_script(STUB_ADD=1)
 
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
-        self.assertIn("line 3: VALUE github.com is a host this system needs (never block)", proc.stdout)
-        self.assertIn("ERROR: the feed on main fails its lint: fix spark-ioc-feed.csv (see above); nothing was checked",
-                      proc.stdout)
+        self.assertIn("line 4: VALUE api.telegram.org is a host this system needs (never block)", proc.stdout)
+        # The notice shows no log, so it carries the first problem itself.
+        reason = ("the feed on main fails its lint, nothing was checked: line 3: VALUE github.com is a host "
+                  "this system needs (never block) and 1 more; fix spark-ioc-feed.csv")
+        self.assertIn(f"ERROR: {reason}", proc.stdout)
         self.assertFalse((self.repo / "argv.txt").exists())  # the check did not run
         self.assertEqual(self.head(), before)
         calls = self.brief_calls()
         self.assertEqual([c["args"][:2] for c in calls], [["--send", "--notice"]])
-        self.assertIn("Daily check failed: the feed on main fails its lint", calls[0]["args"][2])
+        self.assertEqual(calls[0]["args"][2], f"Daily check failed: {reason}")
+        self.assertFalse(self.lock.exists())
+
+    def test_a_bad_row_left_on_this_mac_is_told_apart_from_main(self):
+        # The bot refused to commit a hand edit: the file here differs from main, and main is fine.
+        self.stub_brief()
+        with (self.repo / "spark-ioc-feed.csv").open("a") as f:
+            f.write("hand-edit,github.com,Domain,high,high,AB,typed into the file\n")
+
+        proc = self.run_script()
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("ERROR: the feed on this Mac (uncommitted changes) fails its lint, nothing was checked: "
+                      "line 3: VALUE github.com is a host this system needs (never block); fix spark-ioc-feed.csv",
+                      proc.stdout)
+        self.assertIn("github.com", (self.repo / "spark-ioc-feed.csv").read_text())  # left for the fix
         self.assertFalse(self.lock.exists())
 
     def test_rows_the_check_wrote_that_fail_the_lint_are_not_committed(self):
@@ -241,12 +259,12 @@ class DailyCheckTest(unittest.TestCase):
         proc = self.run_script(STUB_ADD=1, STUB_BAD_ROW=1)
 
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
-        self.assertIn("line 4: VALUE github.com is a host this system needs (never block)", proc.stdout)
-        self.assertIn("ERROR: the feed failed its lint after the check; its rows stay uncommitted in spark-ioc-feed.csv",
-                      proc.stdout)
+        reason = ("the rows the check added fail the lint and stay uncommitted in spark-ioc-feed.csv: "
+                  "line 4: VALUE github.com is a host this system needs (never block)")
+        self.assertIn(f"ERROR: {reason}", proc.stdout)
         self.assertEqual(self.head(), before)
         self.assertIn("github.com", (self.repo / "spark-ioc-feed.csv").read_text())  # left for the fix
-        self.assertIn("ERROR: the feed failed its lint", self.brief_calls()[-1]["run_log"])
+        self.assertIn(f"ERROR: {reason}", self.brief_calls()[-1]["run_log"])  # the brief's ERRORS line
         self.assertFalse(self.lock.exists())
 
     def test_log_lines_carry_a_timestamp_and_the_check_output(self):
