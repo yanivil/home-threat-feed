@@ -29,6 +29,7 @@ ALERT_LIMIT, ALERT_WINDOW = 10, 600  # alerts sent in any sliding ten minutes
 NOTES_PER_HOUR, NOTES_PER_DAY = 6, 30  # attacker-context notes: each one is a paid model call
 NOTE_REPEAT = 86400  # seconds before the same indicator gets another note
 CAP_REACHED = "Alert cap reached: further alerts in the next 10 minutes are counted, not sent"
+SUPPRESSED_LISTED = 10  # (device → indicator, action) pairs the suppression summary names
 
 # A Threat Prevention row alerts live only with one of these actions (stripped, lower-cased); a blank
 # Action, monitor, accept, inspect and the rest are the morning brief's alone.
@@ -129,36 +130,47 @@ def _note_target(entry, external):
 class AlertCap:
     """At most `limit` alerts in any sliding `window` seconds. The first alert over the limit starts
     a suppression of `window` seconds: it and the ones after it are counted, not sent, and tick()
-    reports the count once the suppression is over."""
+    reports them once the suppression is over, naming what they were: the morning brief never
+    counts a feed hit the gateway logged only as a firewall row, so the summary is the only record."""
 
     def __init__(self, limit=ALERT_LIMIT, window=ALERT_WINDOW):
         self.limit, self.window = limit, window
         self.sent = deque()  # when the alerts in the window went out
         self.capped = None  # when the suppression began
         self.suppressed = 0
+        self.pairs = {}  # the distinct (device, indicator, action) suppressed, in order
 
-    def admit(self, now):
-        """(whether the alert goes out, the message to send in its place or None)."""
-        if self.capped is not None:
-            self.suppressed += 1
-            return False, None
-        while self.sent and now - self.sent[0] >= self.window:
-            self.sent.popleft()
-        if len(self.sent) < self.limit:
-            self.sent.append(now)
-            return True, None
-        self.capped, self.suppressed = now, 1
-        return False, CAP_REACHED
+    def admit(self, now, pair=None):
+        """(whether the alert goes out, the message to send in its place or None); `pair` is the
+        alert's (device, indicator, action), named in the summary if it is suppressed."""
+        if self.capped is None:
+            while self.sent and now - self.sent[0] >= self.window:
+                self.sent.popleft()
+            if len(self.sent) < self.limit:
+                self.sent.append(now)
+                return True, None
+            self.capped, notice = now, CAP_REACHED
+        else:
+            notice = None
+        self.suppressed += 1
+        if pair is not None:
+            self.pairs.setdefault(pair, None)
+        return False, notice
 
     def tick(self, now):
-        """The message that the suppression is over and how many alerts it held, once; else None."""
+        """The message that the suppression is over, how many alerts it held and which (at most
+        SUPPRESSED_LISTED distinct pairs, one a line), once; else None."""
         if self.capped is None or now - self.capped < self.window:
             return None
-        start, count = self.capped, self.suppressed
-        self.capped, self.suppressed = None, 0
+        start, count, pairs = self.capped, self.suppressed, list(self.pairs)
+        self.capped, self.suppressed, self.pairs = None, 0, {}
         self.sent.clear()
-        return (f"{spark_brief._count(count, 'alert')} suppressed between {datetime.fromtimestamp(start):%H:%M} "
-                f"and {datetime.fromtimestamp(now):%H:%M}; the morning brief has the counts")
+        lines = [f"{spark_brief._count(count, 'alert')} suppressed between {datetime.fromtimestamp(start):%H:%M} "
+                 f"and {datetime.fromtimestamp(now):%H:%M}:"]
+        lines += [f"  {device} → {indicator}, {action}" for device, indicator, action in pairs[:SUPPRESSED_LISTED]]
+        if len(pairs) > SUPPRESSED_LISTED:
+            lines.append(f"  … and {len(pairs) - SUPPRESSED_LISTED} more")
+        return "\n".join(lines)
 
 
 class NoteCap:
@@ -196,7 +208,7 @@ class Watcher:
     the indicator its note is about: a feed hit's, an inbound detection's source, an outbound
     Anti-Bot, Anti-Virus or Threat Emulation detection's destination. gate() holds the alerts to
     ALERT_LIMIT in ALERT_WINDOW seconds (a Notice says when the cap is reached and, once the window
-    clears, how many were held) and the notes to NoteCap's limits. `alert(items)` gets each pass's
+    clears, how many were held and which) and the notes to NoteCap's limits. `alert(items)` gets each pass's
     Alerts and Notices in one call, so their texts can all go out before the slower notes. After each
     pass the place reached in the capture is saved (POSITION_NAME), for a restart to pick up from;
     `log(text)` reports what the watcher could not do."""
@@ -280,7 +292,7 @@ class Watcher:
         cleared = self.alert_cap.tick(now)
         items = [Notice(cleared)] if cleared else []
         for alert in alerts:
-            send, notice = self.alert_cap.admit(now)
+            send, notice = self.alert_cap.admit(now, (alert.device, alert.indicator, alert.action))
             if notice:
                 items.append(Notice(notice))
             if not send:

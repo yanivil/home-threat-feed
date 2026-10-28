@@ -186,9 +186,39 @@ class WatcherTest(unittest.TestCase):
 
         [cleared] = self.watcher.gate([])
 
-        self.assertEqual(cleared.text, "4 alerts suppressed between 09:00 and 09:10; the morning brief has the counts")
+        self.assertEqual(cleared.text, "\n".join(["4 alerts suppressed between 09:00 and 09:10:"]
+                                                 + [f"  {WAN} → 185.1.3.{i}, prevent" for i in range(10, 14)]))
         self.assertEqual(len(self.watcher.gate(self.watcher.scan(self.probes(14, 1)))), 1, "alerts flow again")
         self.assertEqual(self.watcher.gate([]), [], "said once")
+
+    def test_a_suppressed_feed_hit_is_named_in_the_summary(self):
+        # The brief never counts a feed hit the gateway logged only as a firewall row: the summary must say it.
+        self.clock.time = datetime(2026, 10, 28, 9, 0).timestamp()
+        self.watcher.gate(self.watcher.scan(self.probes(0, 10)))
+
+        self.assertEqual([type(item).__name__ for item in self.watcher.gate(self.watcher.scan([OUTBOUND_TO_C2]))],
+                         ["Notice"])
+        self.watcher.alerted.clear()
+        self.watcher.gate(self.watcher.scan([OUTBOUND_TO_C2]))  # the same pair again: counted, listed once
+        self.clock.time += 600
+        [cleared] = self.watcher.gate([])
+
+        self.assertEqual(cleared.text.splitlines(), ["2 alerts suppressed between 09:00 and 09:10:",
+                                                     f"  {DEVICE} → c2.example.net, drop"])
+        self.assertNotIn("morning brief", cleared.text)
+
+    def test_the_summary_lists_ten_pairs_at_most(self):
+        self.clock.time = datetime(2026, 10, 28, 9, 0).timestamp()
+        self.watcher.gate(self.watcher.scan(self.probes(0, 10)))
+        self.watcher.gate(self.watcher.scan(self.probes(10, 13)))
+        self.clock.time += 600
+
+        [cleared] = self.watcher.gate([])
+        lines = cleared.text.splitlines()
+
+        self.assertEqual(lines[0], "13 alerts suppressed between 09:00 and 09:10:")
+        self.assertEqual(lines[1:11], [f"  {WAN} → 185.1.3.{i}, prevent" for i in range(10, 20)])
+        self.assertEqual(lines[11:], ["  … and 3 more"])
 
     def test_the_alert_window_slides(self):
         self.assertEqual(len(self.watcher.gate(self.watcher.scan(self.probes(0, 5)))), 5)

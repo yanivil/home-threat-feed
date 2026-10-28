@@ -437,8 +437,10 @@ Two things alert, each as one message:
 The same pair alerts at most once an hour (a detection's pair is its source, destination and
 protection). At most ten alerts go out in any ten minutes. The first one over that is replaced
 by `Alert cap reached: further alerts in the next 10 minutes are counted, not sent`, and when
-those ten minutes are over one message says `N alerts suppressed between HH:MM and HH:MM; the
-morning brief has the counts`.
+those ten minutes are over one message says `N alerts suppressed between HH:MM and HH:MM:` and
+lists what they were, one `<device> → <indicator>, <action>` a line, ten at most, then `… and M
+more`: the brief does not count every one of them (a feed hit logged only as a firewall row is
+in it nowhere).
 
 The watcher saves its place in today's capture after each pass (`syslog/watcher-offset.json`).
 After a restart on the same day it counts the lines up to that place without alerting and alerts

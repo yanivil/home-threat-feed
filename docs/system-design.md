@@ -346,7 +346,9 @@ is now an alert channel. The same pair (for a detection: source, destination and
 not alerted again for an hour (`COOLDOWN`). At most ten alerts go out in any sliding ten
 minutes: the first one over is replaced by `Alert cap reached: further alerts in the next 10
 minutes are counted, not sent`, and when those ten minutes are over one message says `N alerts
-suppressed between HH:MM and HH:MM; the morning brief has the counts`.
+suppressed between HH:MM and HH:MM:` followed by the distinct `<device> → <indicator>, <action>`
+pairs, one a line, ten at most, then `… and M more`. It names them because the brief would not:
+a feed hit the gateway logs only as a firewall row is counted nowhere else.
 
 The attacker-context note follows a feed alert (on the indicator), an inbound detection (on its
 source) and an outbound Anti-Bot, Anti-Virus, Anti-Malware or Threat Emulation detection (on its
