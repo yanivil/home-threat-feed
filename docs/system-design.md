@@ -549,7 +549,9 @@ what the ruleset on main forbids.
 Outcome: built 2026-10-28/29 on branch `worktree-repo-hardening`, test-first and reviewed by a
 fresh reader, after the GitHub side was set on 2026-10-28 by hand: a ruleset on main that refuses
 force-pushes and deletion, Actions limited to GitHub's and verified creators', secret scanning
-with push protection, the owner's no-reply identity on every new commit. The thirty-one commits on
+with push protection, the owner's no-reply identity on every new commit; merged and pushed on
+2026-10-29, and the Actions settings then set to require SHA-pinned actions (read back as set), so
+the monthly re-check can run nothing a moved tag points at. The thirty-one commits on
 main that this work is published together with, none of them public until then, carry in their
 history three more private LAN addresses on the two subnets the public history already names; they
 were not rewritten before the push, since such an address reveals nothing new and the stand-ins at
@@ -598,8 +600,8 @@ column may be republished.
 
 ## 6. Open items
 
-1. Set `sha_pinning_required` in the repository's Actions settings now that `actions/checkout` is
-   pinned (D8); it could not be set while the workflow still named a tag.
+1. Done 2026-10-29: `sha_pinning_required` is set in the repository's Actions settings (D8), once
+   the pinned `actions/checkout` was on main; it could not be set while the workflow named a tag.
 2. Design D7 (news agent) and record it here with its outcome; D6 is built (record the owner's
    end-to-end check under its outcome).
 3. Merge the two duplicate-check implementations when `vt_check.py` is next changed.

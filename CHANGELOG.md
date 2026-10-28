@@ -23,7 +23,8 @@ All notable changes to this feed are recorded here.
 
 ### Changed
 - The repository names nothing of the owner's network: fixtures and docs use stand-in addresses
-  and a stand-in gateway name. `actions/checkout` is pinned to a commit (v4.4.0).
+  and a stand-in gateway name. `actions/checkout` is pinned to a commit (v4.4.0), and the
+  repository's Actions settings require every action to be pinned that way.
 - `syslog_receiver.py` keeps only the gateway's datagrams (`--source`, by default the default
   route's gateway) and writes one capture line per datagram.
 - The Spark's system log lines, now forwarded with the security logs, are recognised and never
