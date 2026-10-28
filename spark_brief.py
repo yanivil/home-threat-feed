@@ -67,16 +67,20 @@ def capture_path(directory, day):
 def attacks(entries, feed):
     """What the firewall turned away: `dropped` counts the entries it dropped or rejected from the
     External zone, `sources` those entries per source address, `detections` lists the Threat
-    Prevention rows, `top` the ten busiest sources as (address, count, whether the feed has it)."""
-    dropped, sources, detections = 0, Counter(), []
+    Prevention rows, `top` the ten busiest sources as (address, count, whether the feed has it).
+    `system` counts the system log lines, which are none of these."""
+    dropped, sources, detections, system = 0, Counter(), [], 0
     for entry in entries:
+        if "system" in entry:
+            system += 1
+            continue
         if entry.get("Action") in ("drop", "reject") and entry.get("inzone") == "External":
             dropped += 1
             if entry.get("src"):
                 sources[entry["src"]] += 1
         if spark_logs.is_tp_detection(entry):
             detections.append(entry)
-    return {"dropped": dropped, "sources": sources, "detections": detections,
+    return {"dropped": dropped, "sources": sources, "detections": detections, "system": system,
             "top": [(ip, count, ip in feed) for ip, count in sources.most_common(TOP)]}
 
 
@@ -200,6 +204,8 @@ def render(day, attack, run, entered, probes, next_due, lookups_quota=LOOKUPS_QU
         lines += ["ERRORS"] + [f"  {line}" for line in shown[:ERROR_LINES]]
         if len(shown) > ERROR_LINES:
             lines.append(f"  … {len(shown) - ERROR_LINES:,} more")
+    if attack.get("system"):
+        lines.append(f"System log: {_count(attack['system'], 'line')}")
     footer = [f"Lookups: {run['lookups']} of {lookups_quota:,}"]
     if next_due:
         footer.append(f"next re-check {next_due.isoformat()}")

@@ -25,7 +25,7 @@ import feed_lock
 import telegram_api
 import telegram_bot
 import vt_check
-from tests.test_spark_logs import INBOUND_DROP, INBOUND_PREVENT, STATS
+from tests.test_spark_logs import INBOUND_DROP, INBOUND_PREVENT, STATS, SYSTEM_LINES
 from tests.test_vt_check import HEADER, FakeVT, vt_object
 
 REPO = Path(__file__).resolve().parent.parent
@@ -883,6 +883,11 @@ class WatcherTest(unittest.TestCase):
         [alert] = self.watcher.scan([OUTBOUND_TO_C2.replace("c2.example.net", "new.example.org")])
 
         self.assertIn("(News - VT 7/94 malicious 2026-10-28)", self.watcher.describe(alert))
+
+    def test_system_log_lines_raise_no_alert_and_nothing_else(self):
+        alerts = self.watcher.scan(SYSTEM_LINES + [OUTBOUND_TO_C2] + SYSTEM_LINES)
+
+        self.assertEqual([(a.kind, a.indicator) for a in alerts], [("feed", "c2.example.net")])
 
     def test_a_malformed_line_does_not_stop_the_scan(self):
         self.assertEqual(len(self.watcher.scan([MALFORMED, "", "garbage", OUTBOUND_TO_C2])), 1)

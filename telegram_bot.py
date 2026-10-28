@@ -218,6 +218,8 @@ class Watcher:
 
     def _match(self, entry):
         """(Alert, cooldown key) when the entry is worth an alert, else None."""
+        if "system" in entry:  # the Spark's own programs: never an alert
+            return None
         action = entry.get("Action", "").strip() or "detected"  # the blades log a blank Action
         found = spark_logs.candidate(entry)
         if found and found[0] == "outbound":

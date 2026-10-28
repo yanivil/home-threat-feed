@@ -21,7 +21,8 @@ import spark_brief
 import spark_logs
 import telegram_api
 import vt_check
-from tests.test_spark_logs import INBOUND_DROP, INBOUND_PREVENT, OUTBOUND_DOMAIN, OUTBOUND_IP_ONLY, OUTBOUND_URL, STATS
+from tests.test_spark_logs import (INBOUND_DROP, INBOUND_PREVENT, OUTBOUND_DOMAIN, OUTBOUND_IP_ONLY, OUTBOUND_URL,
+                                   STATS, SYSTEM_LINES)
 from tests.test_vt_check import HEADER, FakeVT, aged, cli_env, vt_error, vt_object
 
 REPO = Path(__file__).resolve().parent.parent
@@ -137,6 +138,11 @@ class AttacksTest(unittest.TestCase):
         a = spark_brief.attacks(entries(STATS), self.feed)
 
         self.assertEqual((a["dropped"], a["sources"], a["detections"], a["top"]), (0, Counter(), [], []))
+
+    def test_system_log_lines_are_counted_apart_and_are_neither_probes_nor_detections(self):
+        a = spark_brief.attacks(entries(*SYSTEM_LINES, drop(HEAVY)), self.feed)
+
+        self.assertEqual((a["dropped"], list(a["sources"]), a["detections"], a["system"]), (1, [HEAVY], [], 6))
 
     def test_the_top_list_is_the_ten_busiest_sources(self):
         lines = [drop(f"198.51.100.{n}") for n in range(1, 13) for _ in range(n)]
@@ -331,6 +337,14 @@ class RenderTest(unittest.TestCase):
             "Lookups: 45 of 500 · next re-check 2026-12-18 · no errors",
         ]))
 
+    def test_system_log_lines_get_one_line_above_the_footer(self):
+        a, run = self.sample()
+
+        text = spark_brief.render(DAY, dict(a, system=6), run, {"logs": 1, "news": 0, "hand": 0}, Counter(), None)
+
+        self.assertEqual(text.splitlines()[-2:], ["System log: 6 lines", "Lookups: 2 of 500 · no errors"])
+        self.assertNotIn("System log", spark_brief.render(DAY, a, run, {}, Counter(), None))
+
     def test_empty_sections_are_left_out_but_the_brief_is_still_sent(self):
         attack = spark_brief.attacks([], spark_logs.feed_members(FEED))
         run = spark_brief.parse_run_log("")
@@ -507,6 +521,15 @@ class ComposeTest(unittest.TestCase):
                       "  109.205.211.205: quota (QuotaExceededError - stopping)\n"
                       "  VirusTotal quota reached; rerun tomorrow for the rest.\n", text)
         self.assertTrue(text.endswith("· 3 errors"), text)
+
+    def test_system_log_lines_in_the_capture_change_no_count_and_raise_nothing(self):
+        write_capture(self.dir, DAY, SYSTEM_LINES + CAPTURE)
+
+        text = self.compose()
+
+        self.assertIn("Probes dropped: 4 from 2 sources · TP detections: 1 · Sent to block: 1", text)
+        self.assertIn("\nSystem log: 6 lines\n", text)
+        self.assertTrue(text.endswith("· no errors"), text)
 
     def test_yesterdays_gzipped_capture_is_read(self):
         write_capture(self.dir, DAY, CAPTURE, gz=True)

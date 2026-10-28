@@ -37,6 +37,16 @@ LOCAL = ('2026-10-20T20:59:23 Action="accept" Uuid="{0x7}" inzone="Internal" out
 BROADCAST = ('2026-10-20T20:59:24 Action="drop" Uuid="{0x8}" inzone="External" outzone="Local" '
              'src="176.230.241.195" dst="255.255.255.255" proto="17" svc="67" ProductName="VPN-1 & FireWall-1"')
 STATS = ('2026-10-20T20:59:25 Action=" " Uuid="{0x9}" malware_detected="0" scanned="12" log_id="3" ProductName="Threat Emulation"')
+# The Spark's system logs, forwarded beside the security logs: a program tag, a colon, a space, text.
+SYSTEM_LINES = [
+    '2026-10-28T21:08:02 rsyslogd: [origin software="rsyslogd" swVersion="8.1911.0" x-pid="10352" '
+    'x-info="https://www.rsyslog.com"] start',
+    "2026-10-28T21:08:03 root: [System Logs] Restarting rsyslogd",
+    "2026-10-28T21:08:05 lua: [Security Settings] A policy change has been applied",
+    "2026-10-28T21:08:14 lua: [AUDIT] [Interface: WEB] 'admin' CheckIfExists",
+    "2026-10-28T21:08:14 root: [WebUI] Syslog server trusted CA certificate was CheckIfExists by admin at 21:08 10/28/2026",
+    "2026-10-28T21:17:27 lua: [WEBUI] Failed to stop Shell server.",
+]
 
 
 class ParseTest(unittest.TestCase):
@@ -48,6 +58,36 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(entry["Protection Type"], "IP reputation")
         self.assertEqual(entry["Protection Name"], "")
         self.assertEqual(entry["ProductName"], "Anti Malware")
+
+    def test_a_system_log_line_is_its_tag_and_its_text_and_no_pairs(self):
+        entries = [spark_logs.parse_entry(line) for line in SYSTEM_LINES]
+
+        self.assertEqual(entries[0], {"received": "2026-10-28T21:08:02", "tag": "rsyslogd",
+                                      "system": '[origin software="rsyslogd" swVersion="8.1911.0" x-pid="10352" '
+                                                'x-info="https://www.rsyslog.com"] start'})
+        self.assertEqual(entries[1], {"received": "2026-10-28T21:08:03", "tag": "root",
+                                      "system": "[System Logs] Restarting rsyslogd"})
+        self.assertEqual([e["tag"] for e in entries], ["rsyslogd", "root", "lua", "lua", "root", "lua"])
+        self.assertEqual(entries[5]["system"], "[WEBUI] Failed to stop Shell server.")
+        for entry in entries:
+            self.assertEqual(set(entry), {"received", "tag", "system"})
+
+    def test_security_rows_are_not_system_lines(self):
+        for line in (INBOUND_DROP, INBOUND_PREVENT, STATS, '2026-10-28T21:08:02 "ctl"Uuid="{0x1}" src="192.0.2.1"'):
+            with self.subTest(line=line[:40]):
+                self.assertNotIn("system", spark_logs.parse_entry(line))
+
+    def test_system_lines_are_no_candidate_detection_or_indicator(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "spark-2026-10-28.log").write_text("\n".join(SYSTEM_LINES + [INBOUND_DROP]) + "\n")
+
+            found = spark_logs.collect(tmp, days=1, today="2026-10-28")
+
+        self.assertEqual(found, {"inbound": {"109.205.211.205": 1}, "outbound": {}})
+        for line in SYSTEM_LINES:
+            entry = spark_logs.parse_entry(line)
+            self.assertIsNone(spark_logs.candidate(entry, wan_ip="203.0.113.47"))
+            self.assertFalse(spark_logs.is_tp_detection(entry))
 
 
 class DetectionTest(unittest.TestCase):

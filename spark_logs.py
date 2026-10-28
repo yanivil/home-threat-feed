@@ -35,6 +35,9 @@ import vt_check
 DEFAULT_DIR = Path(__file__).resolve().parent / "syslog"
 CACHE_NAME = "checked.json"
 PAIR_RE = re.compile(r'(?:^|\s)(?P<key>[A-Za-z][A-Za-z0-9_ .-]*?)="(?P<value>[^"]*)"')
+# A system log line: a program tag, a colon, a space ("rsyslogd: ...", "lua: [AUDIT] ..."). A security
+# row starts with a pair (Action="...") or a quote ("ctl"Uuid="..."), never so.
+SYSTEM_RE = re.compile(r'(?P<tag>[^\s:="]+): (?P<text>.*)', re.DOTALL)
 NAME_KEYS = ("resource", "destination_domain_name", "tls_server_host_name", "sni")
 RATIO_RE = re.compile(r"(\d+)/(\d+) malicious")
 ALLOW_NAME = "allow.txt"
@@ -98,8 +101,13 @@ def load_allow(path):
 
 
 def parse_entry(line):
-    """The entry's key="value" pairs, plus "received" from the receiver's prefix."""
+    """The entry's key="value" pairs, plus "received" from the receiver's prefix. A system log line
+    ("<stamp> <tag>: <text>", the Spark's own programs) is {"received", "tag", "system": <text>}
+    and none of its pairs: it is never an indicator, a probe or a detection."""
     received, _, rest = line.partition(" ")
+    system = SYSTEM_RE.match(rest)
+    if system:
+        return {"received": received, "tag": system.group("tag"), "system": system.group("text")}
     entry = {"received": received}
     for m in PAIR_RE.finditer(rest):
         entry[m.group("key").strip()] = m.group("value")
@@ -109,7 +117,7 @@ def parse_entry(line):
 def is_tp_detection(entry):
     """True for a Threat Prevention row that names a protection or an attack between a source and a
     destination. The statistics rows the blades emit every minute (counters, no addresses) are not."""
-    return (entry.get("ProductName") in TP_BLADES
+    return ("system" not in entry and entry.get("ProductName") in TP_BLADES
             and bool(entry.get("src", "").strip()) and bool(entry.get("dst", "").strip())
             and any(entry.get(key, "").strip() for key in ("Protection Name", "attack", "malware_action", "Protection Type")))
 
@@ -147,6 +155,8 @@ def candidate(entry, wan_ip=None):
     outbound: a LAN device reaching a public destination; indicator = the
     destination's host name when the entry names one, else its address.
     """
+    if "system" in entry:
+        return None
     src, dst = _ip(entry.get("src", "")), _ip(entry.get("dst", ""))
     if src is None or dst is None:
         return None
