@@ -261,15 +261,28 @@ class GatherTest(CaptureTestCase):
 
         self.assertIsNone(facts["greynoise"])
         self.assertNotIn(GREYNOISE_URL, self.fetch.urls)
-        self.assertEqual(facts["skipped"], ["greynoise"])
+        self.assertEqual(facts["skipped"], {"greynoise": "no key"})
 
     def test_virustotal_is_skipped_without_a_key(self):
         facts = self.gather(greynoise_key="g")
 
         self.assertIsNone(facts["virustotal"])
         self.assertNotIn(VT_URL, self.fetch.urls)
-        self.assertEqual(facts["skipped"], ["virustotal"])
+        self.assertEqual(facts["skipped"], {"virustotal": "no key"})
         self.assertIsNotNone(facts["rdap"])
+
+    def test_virustotal_is_skipped_while_a_feed_check_runs(self):
+        # The daily check or the bot's own check is spending the free key's four lookups a minute:
+        # one more lookup would make its next one a 429.
+        (self.dir / ".feed-lock").mkdir()
+
+        facts = self.gather(vt_key="vt", greynoise_key="g")
+
+        self.assertIsNone(facts["virustotal"])
+        self.assertNotIn(VT_URL, self.fetch.urls)
+        self.assertEqual(facts["skipped"], {"virustotal": "a feed check is running"})
+        self.assertIsNotNone(facts["rdap"])
+        self.assertIn("\nVirusTotal: skipped (a feed check is running)\n", attacker_context.facts_text(facts))
 
     def test_a_missing_virustotal_field_is_none(self):
         self.fetch.responses[VT_URL] = {"data": {"attributes": {"country": "US"}}}
@@ -412,7 +425,7 @@ class FactsTextTest(unittest.TestCase):
             "rdap": {"name": "LINODE-US", "handle": "NET-1", "abuse": "abuse@linode.com"},
             "internetdb": {"ports": [22, 80], "tags": ["cloud"], "vulns": []},
             "greynoise": {"classification": "malicious", "name": "unknown", "noise": True, "riot": False},
-            "skipped": [],
+            "skipped": {},
         }
         facts.update(changes)
         return facts
@@ -430,7 +443,7 @@ class FactsTextTest(unittest.TestCase):
         ])
 
     def test_a_source_without_an_answer_is_unavailable_and_one_without_a_key_is_skipped(self):
-        text = attacker_context.facts_text(self.facts(rdap=None, greynoise=None, skipped=["greynoise"]))
+        text = attacker_context.facts_text(self.facts(rdap=None, greynoise=None, skipped={"greynoise": "no key"}))
 
         self.assertIn("\nRDAP: unavailable\n", text)
         self.assertTrue(text.endswith("\nGreyNoise: skipped (no key)"))
@@ -609,6 +622,15 @@ class NoteTest(CaptureTestCase):
 
         self.assertEqual(self.fetch.headers[VT_URL], VT_HEADERS)
         self.assertEqual(self.fetch.headers[GREYNOISE_URL], {"key": "g"})
+
+    def test_a_note_while_a_feed_check_runs_has_no_virustotal_lookup(self):
+        (self.dir / ".feed-lock").mkdir()
+
+        text = self.note(http=FakeHttp(answer("ok")))
+
+        self.assertIn("\nVirusTotal: skipped (a feed check is running)\n", text)
+        self.assertNotIn(VT_URL, self.fetch.urls)
+        self.assertTrue(text.endswith("\n\nok"))
 
     def test_without_a_greynoise_key_the_facts_say_it_was_skipped(self):
         with patch("keychain.item", keys(ANTHROPIC_API_KEY="sk-test", VT_API_KEY="vt")):

@@ -19,6 +19,7 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
+import feed_lock
 import keychain
 import spark_logs
 import telegram_api
@@ -35,6 +36,9 @@ SOURCES = {"IP": ("virustotal", "rdap", "internetdb", "greynoise"), "Domain": ("
 LABELS = {"virustotal": "VirusTotal", "rdap": "RDAP", "internetdb": "InternetDB", "greynoise": "GreyNoise"}
 LIST_LIMIT = 8  # items of one list in the facts, so a scanner that tried 1,000 ports stays readable
 TEXT_LIMIT = 100  # characters of one string a service sent
+# While the daily check or the bot checks the feed (syslog/.feed-lock exists), it spends the free
+# VirusTotal key's four lookups a minute: one lookup more would make its next one a 429.
+CHECK_RUNNING = "a feed check is running"
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
@@ -239,15 +243,20 @@ def gather(indicator, capture_dir, today, fetch_json, vt_key="", greynoise_key="
     """The facts about `indicator`: its activity in the captures of `today` (an ISO date) and the day before
     in `capture_dir`, and one section per source that applies to its kind: None when the source failed,
     a dict of Nones (GreyNoise: noise and riot False) when it answered that it has no record.
-    A source whose key is empty is not asked and is named in "skipped". `fetch_json(url, headers=None,
-    timeout=15)` returns the parsed JSON or None. Raises ValueError for an indicator vt_check.classify refuses."""
+    A source that is not asked is in "skipped" with the reason: an empty key ("no key"), and VirusTotal
+    whenever the feed lock in `capture_dir` exists, whoever holds it (CHECK_RUNNING). `fetch_json(url,
+    headers=None, timeout=15)` returns the parsed JSON or None. Raises ValueError for an indicator
+    vt_check.classify refuses."""
     ioc_type, value = vt_check.classify(indicator)
     facts = {"indicator": value, "type": ioc_type, "activity": _activity(ioc_type, value, capture_dir, today),
-             "virustotal": None, "rdap": None, "internetdb": None, "greynoise": None, "skipped": []}
+             "virustotal": None, "rdap": None, "internetdb": None, "greynoise": None, "skipped": {}}
     keys = {"virustotal": vt_key, "greynoise": greynoise_key}
+    checking = (Path(capture_dir) / feed_lock.LOCK_NAME).exists()
     for source in SOURCES.get(ioc_type, ("virustotal",)):
-        if source in keys and not keys[source]:
-            facts["skipped"].append(source)
+        if source == "virustotal" and checking:
+            facts["skipped"][source] = CHECK_RUNNING
+        elif source in keys and not keys[source]:
+            facts["skipped"][source] = "no key"
         else:
             facts[source] = _lookup(fetch_json, source, ioc_type, value, keys.get(source))
     return facts
@@ -307,8 +316,9 @@ def _has_data(section):
 
 
 def _source_detail(source, section, skipped):
+    """The source's line in the facts; `skipped` is why it was not asked, None when it was."""
     if section is None:
-        return "skipped (no key)" if skipped else "unavailable"
+        return f"skipped ({skipped})" if skipped else "unavailable"
     if not _has_data(section):
         return "no record (not observed scanning)" if source == "greynoise" and section["noise"] is False else "no record"
     return LINES[source](section) or "no details"
@@ -328,7 +338,7 @@ def facts_text(facts):
     if activity["actions"]:
         lines.append(f"Gateway actions: {_counted(activity['actions'])}")
     for source in SOURCES.get(facts["type"], ("virustotal",)):
-        detail = _source_detail(source, facts[source], source in facts["skipped"])
+        detail = _source_detail(source, facts[source], facts["skipped"].get(source))
         lines.append(f"{LABELS[source]}: {detail}")
     return "\n".join(lines)
 

@@ -373,7 +373,7 @@ class CheckTest(unittest.TestCase):
 
         report = self.check(found, fake=fake)
 
-        self.assertEqual(fake.calls, ["/domains/a.example"])
+        self.assertEqual(fake.calls, ["/domains/a.example"] * 2, "a 429 is tried once more")
         self.assertTrue(report["quota"])
         self.assertEqual(report["added"], [])
 

@@ -327,6 +327,24 @@ class RunTest(unittest.TestCase):
         )
         self.assertNotIn("/ip_addresses/8.8.4.4", fake.calls)
         self.assertIn("evil.com", self.feed.read_text())
+        self.assertEqual(fake.calls.count("/domains/bad.example.net"), 2, "a second 429 is the quota stop")
+        self.assertIn(61, self.sleeps)
+
+    def test_a_429_waits_a_minute_and_tries_once_more(self):
+        # One lookup from elsewhere (a note, /who) went over the free key's four a minute.
+        replies = {"/domains/evil.com": [vt_error(429, "QuotaExceededError"),
+                                         vt_object("domain", "evil.com", malicious=12)]}
+        calls = []
+
+        def fetch(path):
+            calls.append(path)
+            return replies[path].pop(0) if replies.get(path) else vt_error(404, "NotFoundError")
+
+        results = self.run_check(["evil.com", "bad.example.net"], fetch, delay=15)
+
+        self.assertEqual(self.statuses(results), {"evil.com": "added", "bad.example.net": "not-found"})
+        self.assertEqual(calls, ["/domains/evil.com", "/domains/evil.com", "/domains/bad.example.net"])
+        self.assertEqual(self.sleeps, [61, 15])
 
     def test_bad_api_key_raises(self):
         fake = FakeVT({"/domains/evil.com": vt_error(401, "WrongCredentialsError")})
@@ -520,6 +538,7 @@ class RecheckTest(unittest.TestCase):
             self.statuses(results),
             {"evil.com": "refreshed", "203.0.113.7": "quota", "https://bad.example/x": "unchecked"},
         )
+        self.assertEqual(fake.calls.count("/ip_addresses/203.0.113.7"), 2, "tried once more after a minute")
         self.assertNotIn(vt_check.api_path("URL", "https://bad.example/x"), fake.calls)
         self.assertEqual(
             self.feed.read_text(),

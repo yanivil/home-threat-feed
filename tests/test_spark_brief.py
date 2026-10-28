@@ -75,6 +75,7 @@ def check_output(responses):
         feed = Path(tmp, "feed.csv")
         feed.write_text(HEADER)
         with patch.object(vt_check, "make_fetch", return_value=FakeVT(responses)), \
+                patch.object(vt_check, "QUOTA_WAIT", 0), \
                 patch.dict(os.environ, cli_env("k"), clear=True), contextlib.redirect_stdout(out):
             try:
                 spark_logs.main(["--dir", tmp, "--check", "--today", "2026-10-20", "--feed", str(feed), "--delay", "0"])

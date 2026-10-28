@@ -42,6 +42,7 @@ import keychain
 API_BASE = "https://www.virustotal.com/api/v3"
 FEED = Path(__file__).resolve().parent / "spark-ioc-feed.csv"
 FREE_API_DELAY = 15  # free key allows 4 lookups per minute
+QUOTA_WAIT = 61  # after a 429, seconds before the one more try: the minute's four lookups are spent
 
 HASH_TYPES = {32: "MD5", 40: "SHA1", 64: "SHA256"}
 HEX_RE = re.compile(r"[0-9a-f]+")
@@ -183,6 +184,16 @@ def lookup(fetch, ioc_type, value):
     return None, "", body["data"]["attributes"].get("last_analysis_stats", {})
 
 
+def lookup_retrying(fetch, ioc_type, value, sleep=time.sleep):
+    """lookup(), with a 429 waited out once (QUOTA_WAIT seconds of `sleep`): a lookup made elsewhere
+    (a note, /who) can spend the minute's share of the free key. A second 429 is the quota stop."""
+    found = lookup(fetch, ioc_type, value)
+    if found[0] == "quota":
+        sleep(QUOTA_WAIT)
+        found = lookup(fetch, ioc_type, value)
+    return found
+
+
 def run(indicators, feed_path, fetch, *, min_malicious=None, dry_run=False,
         delay=FREE_API_DELAY, sleep=time.sleep, today=None, out=print):
     """Look up each indicator and append rows for the malicious ones to the feed.
@@ -225,7 +236,7 @@ def run(indicators, feed_path, fetch, *, min_malicious=None, dry_run=False,
             sleep(delay)
         checked.add(value.lower())
 
-        problem, detail, stats = lookup(fetch, ioc_type, value)
+        problem, detail, stats = lookup_retrying(fetch, ioc_type, value, sleep)
         if problem:
             stopped = problem == "quota"
             record(raw, problem, detail)
@@ -389,7 +400,7 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False
             sleep(delay)
         looked_up = True
 
-        problem, detail, stats = lookup(fetch, ioc_type, value)
+        problem, detail, stats = lookup_retrying(fetch, ioc_type, value, sleep)
         if problem:
             stopped = problem == "quota"
             record(value, problem, detail)

@@ -695,6 +695,21 @@ class WhoTest(BotTestCase):
         self.assertEqual(self.tg.sent, ["93.152.221.36 is a scanner"])
         note.assert_called_once_with("93.152.221.36", self.syslog, "2026-10-28")
 
+    def test_who_while_a_feed_check_runs_asks_virustotal_nothing(self):
+        self.lock.mkdir()
+        asked = []
+        fetch_json = lambda url, headers=None, timeout=15: asked.append(url)  # every source: no answer
+        model = lambda url, data=None, headers=None, timeout=60: (200, {"stop_reason": "end_turn", "content": [
+            {"type": "text", "text": "A scanner."}]})
+        stored = {"VT_API_KEY": "vt", "ANTHROPIC_API_KEY": "sk-test"}
+        with patch("attacker_context.default_fetch_json", fetch_json), patch("telegram_api.default_http", model), \
+                patch("keychain.item", side_effect=lambda account, *a, **k: stored.get(account, "")):
+            self.send("/who 93.152.221.36")
+
+        self.assertIn("\nVirusTotal: skipped (a feed check is running)\n", self.tg.sent[-1])
+        self.assertFalse([url for url in asked if "virustotal" in url], asked)
+        self.assertTrue(self.tg.sent[-1].endswith("\n\nA scanner."))
+
     def test_who_without_an_indicator_gets_the_usage(self):
         with patch("attacker_context.note") as note:
             self.send("/who")
