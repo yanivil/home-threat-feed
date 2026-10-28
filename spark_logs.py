@@ -136,7 +136,10 @@ def _host_name(entry):
         if not value or value.startswith("*"):
             continue
         if "://" in value:
-            value = urlsplit(value).hostname or ""
+            try:
+                value = urlsplit(value).hostname or ""
+            except ValueError:  # "http://[::1": a malformed URL costs only its own name
+                continue
         else:
             value = value.split("/")[0].split(":")[0]
         try:

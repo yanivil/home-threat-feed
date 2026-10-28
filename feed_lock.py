@@ -6,7 +6,9 @@
 The lock is a directory because mkdir is atomic and both Python and daily_check.sh, which takes
 the same one, can make it. A holder that died without releasing leaves the directory behind, so
 one older than `stale_after` seconds is taken over (daily_check.sh uses the same 180 minutes).
-Standard library only.
+Two waiters that find the same stale lock can both remove it within microseconds, and one of them
+then waits again (or, rarely, both go on): inherent to mkdir locks, and harmless here, since a lock
+goes stale only when its holder died. Standard library only.
 """
 
 import os

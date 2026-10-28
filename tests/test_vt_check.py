@@ -793,7 +793,7 @@ class CommandLineTest(unittest.TestCase):
             fake = FakeVT({"/domains/evil.com": vt_object("domain", "evil.com", malicious=12)})
 
             with patch.object(vt_check, "make_fetch", return_value=fake) as make_fetch, \
-                    patch.object(vt_check.subprocess, "run", keychain_with("from-keychain")), \
+                    patch("keychain.subprocess.run", keychain_with("from-keychain")), \
                     patch.dict(os.environ, cli_env(), clear=True), \
                     contextlib.redirect_stdout(io.StringIO()):
                 code = vt_check.main(["--recheck", "--feed", str(feed)])

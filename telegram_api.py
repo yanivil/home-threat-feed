@@ -50,9 +50,9 @@ def default_http(url, data=None, headers=None, timeout=60):
 
 
 def chunks(text, limit=MESSAGE_LIMIT):
-    """`text` in parts of at most `limit` characters, each cut at the last newline before the
-    limit (joining the parts with "\\n" gives the text back); a line longer than the limit is cut
-    at the limit."""
+    """`text` in parts of at most `limit` characters, each cut at the last newline before the limit
+    (the newline itself dropped), a line longer than the limit cut at the limit. No part is empty,
+    except the one part of an empty text: Telegram refuses an empty message."""
     parts = []
     while len(text) > limit:
         cut = text.rfind("\n", 1, limit + 1)
@@ -62,7 +62,8 @@ def chunks(text, limit=MESSAGE_LIMIT):
         else:
             parts.append(text[:cut])
             text = text[cut + 1:]
-    parts.append(text)
+    if text or not parts:
+        parts.append(text)
     return parts
 
 
@@ -91,7 +92,9 @@ class Telegram:
         status, body = self.http(url, data, headers, timeout)
         if status != 200 or not body.get("ok"):
             raise TelegramError(body.get("description") or f"{method} failed (HTTP {status})")
-        return body.get("result")
+        if "result" not in body:
+            raise TelegramError(f"{method} answered without a result")
+        return body["result"]
 
     def send_message(self, text):
         """Send `text` as plain text to the owner, in several messages when it is over the limit.

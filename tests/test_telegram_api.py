@@ -82,6 +82,11 @@ class ChunksTest(unittest.TestCase):
     def test_empty_text_is_one_empty_part(self):
         self.assertEqual(telegram_api.chunks(""), [""])
 
+    def test_a_newline_just_past_the_limit_leaves_no_empty_part(self):
+        # Telegram refuses an empty message: the brief would read "not sent" after it went out.
+        self.assertEqual(telegram_api.chunks("x" * 10 + "\n", limit=10), ["x" * 10])
+        self.assertEqual(telegram_api.chunks("x" * 4096 + "\n"), ["x" * 4096])
+
 
 class SendDocumentTest(unittest.TestCase):
     def test_is_multipart_with_the_file(self):
@@ -182,6 +187,9 @@ class ErrorTest(unittest.TestCase):
                 message = self.raised(reply)
                 self.assertNotIn("SECRET", message)
                 self.assertNotIn("api.telegram.org", message)
+
+    def test_ok_without_a_result_raises(self):
+        self.assertEqual(self.raised((200, {"ok": True})), "sendMessage answered without a result")
 
     def test_every_method_checks_its_response(self):
         calls = {

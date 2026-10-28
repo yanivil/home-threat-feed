@@ -139,6 +139,15 @@ class ClassifyTest(unittest.TestCase):
     def test_wildcard_names_are_not_indicators(self):
         self.assertEqual(self.candidate(OUTBOUND_WILDCARD_ONLY), ("outbound", "185.1.2.8", "10.45.60.100"))
 
+    def test_a_malformed_url_costs_only_its_name(self):
+        # urlsplit raises on "http://[::1": one such line must not stop the daily check, two days running.
+        broken = OUTBOUND_URL.replace('resource="http://evil.example/path/x.exe?a=1"', 'resource="http://[::1"')
+
+        self.assertEqual(self.candidate(broken), ("outbound", "185.1.2.5", spark_logs.parse_entry(broken)["src"]))
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, f"spark-{TODAY}.log").write_text(broken + "\n")
+            self.assertEqual(list(spark_logs.collect(tmp, today=TODAY)["outbound"]), ["185.1.2.5"])
+
     def test_local_broadcast_and_statistics_entries_yield_nothing(self):
         for line in (LOCAL, BROADCAST, STATS):
             with self.subTest(line=line[20:60]):
@@ -465,7 +474,7 @@ class CommandLineTest(unittest.TestCase):
             fake = FakeVT({"/ip_addresses/109.205.211.205": vt_object("ip_address", "109.205.211.205", malicious=0)})
 
             with patch.object(vt_check, "make_fetch", return_value=fake) as make_fetch, \
-                    patch.object(vt_check.subprocess, "run", keychain_with("from-keychain")), \
+                    patch("keychain.subprocess.run", keychain_with("from-keychain")), \
                     patch.dict(os.environ, cli_env(), clear=True), \
                     patch("builtins.print"):
                 code = spark_logs.main(["--dir", tmp, "--check", "--today", TODAY, "--feed", str(feed), "--delay", "0"])

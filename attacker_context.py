@@ -93,17 +93,26 @@ def _matcher(ioc_type, value):
     return None
 
 
-def _entries(path):
-    """The parsed entries of one day's capture; an unreadable file gives the entries before the break."""
-    entries = []
+def _entries(path, matches):
+    """The entries of one day's capture that `matches` keeps, read one line at a time (a busy day's
+    capture is hundreds of MB parsed); an unreadable file gives the entries before the break."""
     try:
         handle = spark_logs._open_capture(path)
-        if handle:
-            with handle:
-                entries.extend(spark_logs.parse_entry(line.rstrip("\n")) for line in handle if line.strip())
+        if not handle:
+            return
+        with handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                entry = spark_logs.parse_entry(line.rstrip("\n"))
+                try:
+                    kept = matches(entry)
+                except ValueError:  # a malformed line costs only itself
+                    continue
+                if kept:
+                    yield entry
     except (OSError, ValueError, EOFError, zlib.error):
-        pass
-    return entries
+        return
 
 
 def _activity(ioc_type, value, capture_dir, today):
@@ -113,13 +122,7 @@ def _activity(ioc_type, value, capture_dir, today):
     if matches:
         day = date.fromisoformat(today)
         for back in (1, 0):
-            path = Path(capture_dir) / f"spark-{day - timedelta(days=back)}.log"
-            for entry in _entries(path):
-                try:
-                    if matches(entry):
-                        found.append(entry)
-                except ValueError:  # a malformed line (spark_logs._host_name on resource="http://[::1") costs only itself
-                    continue
+            found.extend(_entries(Path(capture_dir) / f"spark-{day - timedelta(days=back)}.log", matches))
     # Every string from the capture goes through clean(): it reaches the facts and the model's prompt.
     received = [entry["received"] for entry in found]
     services = (clean(entry.get("svc") or entry.get("service_id")) for entry in found)

@@ -1,3 +1,4 @@
+import subprocess
 import unittest
 from unittest.mock import Mock
 
@@ -23,6 +24,20 @@ class ItemTest(unittest.TestCase):
             run.calls,
             [["security", "find-generic-password", "-s", "spark-ioc-feed", "-a", "TELEGRAM_BOT_TOKEN", "-w"]],
         )
+
+    def test_security_is_asked_with_a_timeout_and_one_that_hangs_or_fails_gives_empty(self):
+        # A locked login Keychain can keep `security` waiting until the timeout.
+        run = Mock(side_effect=subprocess.TimeoutExpired("security", 30))
+
+        self.assertEqual(keychain.item("X", environ={}, run=run), "")
+        self.assertEqual(run.call_args.kwargs["timeout"], 30)
+        self.assertEqual(keychain.item("X", environ={}, run=Mock(side_effect=subprocess.SubprocessError)), "")
+
+    def test_without_an_env_var_the_environment_is_not_read(self):
+        run = keychain_with("from-keychain")
+
+        self.assertEqual(keychain.item("VT_API_KEY", environ={"VT_API_KEY": "from-env"}, run=run), "from-keychain")
+        self.assertEqual(len(run.calls), 1)
 
     def test_missing_item_and_failing_security_give_empty(self):
         self.assertEqual(keychain.item("X", environ={}, run=keychain_with(None)), "")

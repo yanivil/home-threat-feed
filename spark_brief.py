@@ -8,7 +8,8 @@ what the daily check just added to the feed, and on the system's health.
     python3 spark_brief.py --send --notice TEXT   # daily_check.sh's one-line notice when it fails early
 
 Reads the day's capture (syslog/spark-YYYY-MM-DD.log, plain or gzipped), the daily check's output
-(--run-log: the rows it added, its outbound hits, the lookups it used, its ERROR lines), the feed
+(--run-log: the rows it added, its outbound hits, the lookups it used, the lines that say something
+went wrong and the exception of each traceback), the feed
 and the feed's git history. --send posts the brief with the bot in the Keychain (telegram_api),
 then one attacker-context note per source the check sent to block; without --send, or without a
 bot token, the brief is printed. The layout is the one approved in docs/system-design.md, D6.
@@ -41,8 +42,9 @@ ADDED_RE = re.compile(r"(\S+): added \(([^)]*)\)$")
 HIT_RE = re.compile(r"OUTBOUND HIT  (\S+)  \((.*?)\)  reached by (.*?)  <- check these devices")
 LOOKUPS_RE = re.compile(r"Added to the feed: (\d+)  clean: (\d+)  unknown to VirusTotal: (\d+)")
 # What the run log says when something went wrong: vt_check.run prints "<x>: error (HTTP ...)" and
-# "<x>: quota (... - stopping)", spark_logs.py "VirusTotal quota reached; ..." on a quota stop.
-PROBLEMS = ("ERROR", ": error (", ": quota ", "VirusTotal quota reached")
+# "<x>: quota (... - stopping)", spark_logs.py "VirusTotal quota reached; ..." on a quota stop and,
+# through argparse, "spark_logs.py: error: ..." when it could not start (no VirusTotal key).
+PROBLEMS = ("ERROR", ": error (", ": quota ", "VirusTotal quota reached", ": error: ")
 TRACEBACK = "Traceback (most recent call last):"
 LOOKUP_ERROR_RE = re.compile(r"\S+: (error|quota) \((.*)\)$")  # one failed lookup, as vt_check.run prints it
 ERROR_LINES = 5  # the brief lists this many error lines, then counts the rest
@@ -223,8 +225,8 @@ def compose(day, capture_dir, feed_path, run_log_text, added_rows, today):
     feed = spark_logs.feed_members(feed_text)
     run = parse_run_log(run_log_text)
     entries = read_entries(capture_path(capture_dir, day))
-    if entries is None:
-        run["errors"].append(f"no syslog capture for {day.isoformat()}")
+    if entries is None:  # first: a receiver that was down is the brief's key health signal
+        run["errors"].insert(0, f"no syslog capture for {day.isoformat()}")
     attack = attacks(entries or (), feed)
     # The check read the day and the morning of the run, so the probes it saw span both.
     probes = attack["sources"] + attacks(read_entries(capture_path(capture_dir, today)) or (), feed)["sources"]

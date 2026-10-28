@@ -223,6 +223,14 @@ class ParseRunLogTest(unittest.TestCase):
 
         self.assertEqual(spark_brief.parse_run_log(log)["errors"], ["KeyError: 'a'", "RuntimeError: ERROR in b"])
 
+    def test_a_run_that_could_not_start_reads_as_its_error(self):
+        # spark_logs.py without a VirusTotal key: argparse's "error:" line and exit 2, no lookup at all.
+        text = ("usage: spark_logs.py [-h] [--dir DIR] [--days DAYS] [--check]\n"
+                "spark_logs.py: error: set the VT_API_KEY environment variable to your VirusTotal API key\n")
+
+        self.assertEqual(spark_brief.parse_run_log(text)["errors"],
+                         ["spark_logs.py: error: set the VT_API_KEY environment variable to your VirusTotal API key"])
+
     def test_an_ordinary_run_has_no_errors(self):
         log = check_output({"/domains/evil.example": vt_object("domain", "evil.example", malicious=0)})
 
@@ -505,6 +513,14 @@ class ComposeTest(unittest.TestCase):
 
         self.assertIn("ERRORS\n  no syslog capture for 2026-10-28\n", text)
         self.assertTrue(text.endswith("· 1 error"), text)
+
+    def test_a_missing_capture_is_the_first_error_whatever_the_run_said(self):
+        # A receiver that was down is the brief's key health signal: it must not fall under "… N more".
+        run_log = "".join(f"ERROR: problem {n}\n" for n in range(7))
+
+        text = self.compose(run_log=run_log)
+
+        self.assertIn("ERRORS\n  no syslog capture for 2026-10-28\n  ERROR: problem 0\n", text)
 
     def test_a_day_with_a_capture_is_not_an_error(self):
         write_capture(self.dir, DAY, CAPTURE, gz=True)
