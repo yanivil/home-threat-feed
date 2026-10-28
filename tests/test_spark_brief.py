@@ -52,6 +52,18 @@ def entries(*lines):
     return [spark_logs.parse_entry(line) for line in lines]
 
 
+def lookup_errors(count, code="ServiceUnavailable", status=503):
+    """The lines vt_check.run prints when VirusTotal fails `count` lookups in a row."""
+    names = [f"host{i}.example.net" for i in range(count)]
+    fake = FakeVT({f"/domains/{name}": vt_error(status, code) for name in names})
+    lines = []
+    with tempfile.TemporaryDirectory() as tmp:
+        feed = Path(tmp, "feed.csv")
+        feed.write_text(HEADER)
+        vt_check.run(names, feed, fake, delay=0, sleep=lambda seconds: None, out=lines.append)
+    return lines
+
+
 def check_output(responses):
     """What `spark_logs.py --check` prints for the daily run's $run_log, against a VirusTotal that
     answers `responses`: one outbound name and one inbound source to look up. A crash adds its
@@ -375,6 +387,52 @@ class RenderTest(unittest.TestCase):
 
         self.assertIn("ERRORS\n  2026-10-29 07:31:00 ERROR: git push failed\n  ERROR: VT refused the key\n", text)
         self.assertTrue(text.endswith("Lookups: 0 of 500 · next re-check 2026-12-18 · 2 errors"), text)
+
+    def errors_section(self, lines):
+        text = spark_brief.render(DAY, sample_attack(), spark_brief.parse_run_log("\n".join(lines)), {}, Counter(), None)
+        return text.split("ERRORS\n")[1].rsplit("\n", 1)[0].splitlines(), text
+
+    def test_a_virustotal_outage_stays_one_message(self):
+        lines = lookup_errors(400)
+        self.assertEqual(lines[0], "host0.example.net: error (HTTP 503 ServiceUnavailable)")
+
+        section, text = self.errors_section(lines)
+
+        self.assertEqual(section, ["  400 lookups: error (HTTP 503 ServiceUnavailable)"])
+        self.assertTrue(text.endswith("· 400 errors"), "the footer still counts every failure")
+        self.assertLess(len(text), telegram_api.MESSAGE_LIMIT)
+
+    def test_a_single_lookup_error_keeps_its_original_line(self):
+        section, _ = self.errors_section(lookup_errors(1))
+
+        self.assertEqual(section, ["  host0.example.net: error (HTTP 503 ServiceUnavailable)"])
+
+    def test_lookup_errors_merge_by_status_and_detail_at_the_place_of_the_first(self):
+        mixed = ["ERROR: git push failed", *lookup_errors(2), "other.example.net: error (HTTP 400 BadRequestError)",
+                 "198.51.100.5: quota (QuotaExceededError - stopping)", "VirusTotal quota reached; rerun tomorrow for the rest."]
+
+        section, _ = self.errors_section(mixed)
+
+        self.assertEqual(section, [
+            "  ERROR: git push failed",
+            "  2 lookups: error (HTTP 503 ServiceUnavailable)",
+            "  other.example.net: error (HTTP 400 BadRequestError)",
+            "  198.51.100.5: quota (QuotaExceededError - stopping)",
+            "  VirusTotal quota reached; rerun tomorrow for the rest.",
+        ])
+
+    def test_at_most_five_error_lines_are_shown_and_the_rest_are_counted(self):
+        seven = [f"ERROR: failure {n}" for n in range(1, 8)]
+
+        section, text = self.errors_section(seven)
+
+        self.assertEqual(section, [f"  ERROR: failure {n}" for n in range(1, 6)] + ["  … 2 more"])
+        self.assertTrue(text.endswith("· 7 errors"), text)
+
+    def test_five_error_lines_are_all_shown(self):
+        section, _ = self.errors_section([f"ERROR: failure {n}" for n in range(1, 6)])
+
+        self.assertEqual(section, [f"  ERROR: failure {n}" for n in range(1, 6)])
 
     def test_rows_from_no_known_origin_are_counted_when_there_are_any(self):
         text = spark_brief.render(DAY, sample_attack(), spark_brief.parse_run_log(""),

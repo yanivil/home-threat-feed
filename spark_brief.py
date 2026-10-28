@@ -43,6 +43,8 @@ LOOKUPS_RE = re.compile(r"Added to the feed: (\d+)  clean: (\d+)  unknown to Vir
 # "<x>: quota (... - stopping)", spark_logs.py "VirusTotal quota reached; ..." on a quota stop.
 PROBLEMS = ("ERROR", ": error (", ": quota ", "VirusTotal quota reached")
 TRACEBACK = "Traceback (most recent call last):"
+LOOKUP_ERROR_RE = re.compile(r"\S+: (error|quota) \((.*)\)$")  # one failed lookup, as vt_check.run prints it
+ERROR_LINES = 5  # the brief lists this many error lines, then counts the rest
 
 
 def read_entries(path):
@@ -147,6 +149,21 @@ def _count(n, noun):
     return f"{n:,} {noun}" + ("" if n == 1 else "s")
 
 
+def _error_lines(errors):
+    """The error lines as the brief lists them: lookups that failed with the same status and detail
+    become one line, at the place of the first (a VirusTotal outage fails every lookup of a run);
+    every other line stays as it is."""
+    groups = {}  # (status, detail) of a failed lookup, else the line's position -> [first line, count]
+    for position, line in enumerate(errors):
+        failed = LOOKUP_ERROR_RE.match(line)
+        key = failed.groups() if failed else position
+        if key in groups:
+            groups[key][1] += 1
+        else:
+            groups[key] = [line, 1]
+    return [line if count == 1 else f"{count:,} lookups: {key[0]} ({key[1]})" for key, (line, count) in groups.items()]
+
+
 def render(day, attack, run, entered, probes, next_due, lookups_quota=LOOKUPS_QUOTA):
     """The brief for `day` as plain text; a section with nothing to say is left out. `probes`
     counts per source the drops the daily check saw, for the 'probed N×' beside each added one."""
@@ -179,7 +196,10 @@ def render(day, attack, run, entered, probes, next_due, lookups_quota=LOOKUPS_QU
         lines.append(f"INDICATORS ENTERED: {counts['logs']} from the Spark's logs · {counts['news']} from news · "
                      f"{counts['hand']} by hand" + (f" · {counts['other']} other" if counts["other"] else ""))
     if run["errors"]:
-        lines += ["ERRORS"] + [f"  {line}" for line in run["errors"]]
+        shown = _error_lines(run["errors"])
+        lines += ["ERRORS"] + [f"  {line}" for line in shown[:ERROR_LINES]]
+        if len(shown) > ERROR_LINES:
+            lines.append(f"  … {len(shown) - ERROR_LINES:,} more")
     footer = [f"Lookups: {run['lookups']} of {lookups_quota:,}"]
     if next_due:
         footer.append(f"next re-check {next_due.isoformat()}")
