@@ -186,15 +186,172 @@ checked IPs come up from 2026-12-18 (316 rows over four days), the trusted IPs, 
 URLs on 2027-01-20 (377 rows, about 95 minutes of lookups), the checked domains and URLs
 from 2027-04-17.
 
-### D6. Alerts and the daily brief go to Telegram (requested 2026-10-28, design pending)
+### D6. Alerts, the daily brief and manual additions go through a Telegram bot (designed 2026-10-28, awaiting the owner's review)
 
 Requested: alerts on Telegram instead of only macOS notifications; a daily brief of attack
-attempts and of indicators added; and a way to send the bot an indicator to be added, either
-after a VirusTotal check or without one. To be designed as a separate always-on LaunchAgent
-(the bot) with its token in the login Keychain beside the VirusTotal key. Open questions,
-to be settled with the owner: what counts as an "attack attempt" in the brief; who may talk
-to the bot; whether to also alert on live matches (a LAN device reaching a feed indicator)
-within minutes rather than at the daily run.
+attempts and of indicators added; a way to send the bot indicators to be added, with or
+without a VirusTotal check; and, for each attacker, a second message saying who they are and
+why they attack. Settled with the owner on 2026-10-28, one question at a time:
+
+- An *attack attempt* is an inbound probe the firewall dropped or rejected, a Threat
+  Prevention detection, or a connection the firewall accepted whose source VirusTotal then
+  flagged and the daily check sent to block; the outbound counterpart, a LAN device reaching
+  a flagged destination, is reported beside it. The per-minute Threat Emulation and
+  Anti-Malware statistics rows are not attack attempts.
+- The brief is one message a morning, short enough for a phone: totals, then everything
+  that needs a decision in full, then the noise counted with a top ten. The complete list of
+  sources, thousands a day (672 distinct sources in the receiver's first hour), is available
+  on request as a file, not sent daily.
+- Two events alert within minutes: a LAN device trying to reach an indicator already in the
+  feed, and a Threat Prevention detection. Nothing else alerts live.
+- A bare message to the bot means "check these on VirusTotal and add the flagged ones";
+  `/trust` adds without a check. Only the owner's Telegram account is listened to.
+- Every live alert and every source sent to block gets a second message with the attacker's
+  context, written by Claude Opus 5.5 from gathered facts; `/who` gives the same on demand.
+
+#### Design
+
+**Approaches considered.** (a) One always-on process that both talks to Telegram and watches
+the live capture; (b) two processes, a watcher and a bot; (c) a webhook bot, which needs an
+inbound HTTPS port through the gateway. Chosen: (a), one LaunchAgent like the receiver,
+long-polling Telegram (`getUpdates`) in one thread and tailing today's capture in another,
+because it is one more process to keep alive and nothing to open on the firewall. The
+morning brief is not the bot's job: `daily_check.sh` builds and sends it at the end of its
+run, so it reports exactly what that run did.
+
+**Components** (new files; standard library only, like the rest):
+
+| File | Role |
+|---|---|
+| `telegram_api.py` | `send_message`, `send_document`, `get_updates` over HTTPS; the bot token and the owner's chat id from the login Keychain (`spark-ioc-feed` / `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`), the same mechanism as the VirusTotal key |
+| `telegram_bot.py` | the LaunchAgent `com.spark-ioc-feed.telegram` (Python.app program, `KeepAlive`): the command loop and the live watcher; `--pair` for first-time setup |
+| `spark_brief.py` | composes the morning brief from yesterday's capture, the daily run's log and the feed; `--send` posts it, otherwise prints it; called by `daily_check.sh` as its last step |
+| `attacker_context.py` | gathers the facts about an indicator and asks Opus 5.5 for the note; used by the brief, the live alerts and `/who` |
+| `launchd/com.spark-ioc-feed.telegram.plist` | keeps the bot running, logs to `~/Library/Logs/spark-ioc-feed/telegram-bot.log` |
+
+**First-time setup** (the owner's steps): create the bot in BotFather and store its token
+(`security add-generic-password -s spark-ioc-feed -a TELEGRAM_BOT_TOKEN -w '<token>' -U`);
+run `python3 telegram_bot.py --pair`, send the bot any message, and it prints the chat id
+and the `security` command that stores it; install the plist like the other two.
+
+**The bot's commands.** Messages from any other chat id are ignored (logged once a day per
+id). Text is split on whitespace; leading tokens that `vt_check.classify` accepts, defanged
+or not, are the indicators, the rest of the line is the label that goes into `COMMENT`:
+
+- *bare text*: `vt_check.run()` on the indicators (one lookup every 15 s; the bot first
+  replies how many it is checking and how long that takes), then one reply line per
+  indicator (`added (Domain 11/94)`, `clean (IP 1/94)`, `already in feed`, `invalid: …`,
+  `VirusTotal has no record`), then a commit `Add N indicators sent from Telegram: <label>`
+  of the feed alone and a push, and a last line saying the push succeeded or that the commit
+  waits for the next run.
+- `/trust <indicators> [label]`: `vt_check.add_trusted()`, so the rows get the
+  `added without VirusTotal check <date>` note and the 90-day first check of D5; then the
+  same commit and push.
+- `/who <indicator>`: the attacker-context note (below).
+- `/sources [YYYY-MM-DD]`: every inbound source that probed on that day (default yesterday),
+  busiest first with its count and whether it is in the feed, as an attached text file.
+- `/status`: whether the receiver is writing (today's capture modified within the last two
+  minutes), when the daily check last ran and how it ended, lookups it used, the next
+  re-check date (the earliest `recheck_due` over the feed), the bot's uptime.
+- `/help`, and anything unrecognised: the list above.
+
+**Writing the feed from two places.** The daily check and the bot both commit the feed, on
+the same clone. A directory lock, `syslog/.feed-lock` (`mkdir` is atomic, and bash and
+Python can both take it), is held by `daily_check.sh` for its whole run and by the bot for
+the seconds an addition takes; the bot waits up to ten minutes for it, telling the owner
+the daily check is running, and a lock older than three hours is treated as stale and
+removed. Both commit only `spark-ioc-feed.csv` and push at once.
+
+**The live watcher.** A thread follows today's capture (`syslog/spark-<today>.log`, moving
+to the new file at midnight) and raises an alert for two kinds of entry:
+
+1. A LAN device and a feed member: the entry's source is a private address and its
+   destination, host name or resource host is in the feed (`spark_logs.feed_members`,
+   which also covers `IP Range` rows). Whether the gateway dropped it or let it through is
+   said in the alert; an accepted one is the louder case.
+2. A Threat Prevention detection: an entry from Anti-Malware, Anti-Bot, IPS/SmartDefense,
+   Threat Emulation or Anti-Virus that names a protection or attack and carries a source and
+   destination; the statistics rows those blades emit every minute (counters, no
+   addresses) are not detections.
+
+An alert is one message: time, device, indicator (with the feed row's label), action, and
+how many times today; the same (device, indicator) pair is not alerted again for an hour.
+The attacker-context note follows as a second message. The receiver's file is read, never
+the socket, so the watcher cannot disturb the capture.
+
+**The morning brief** (`daily_check.sh` runs `spark_brief.py --send` after the push; the
+format approved on 2026-10-28):
+
+```
+Spark brief — Wed 2026-10-29
+Probes dropped: 41,207 from 3,912 sources · TP detections: 2 · Sent to block: 1 · Outbound hits: 1
+
+SENT TO BLOCK (passed the firewall, VirusTotal flags them)
+  47.79.34.208     VT 11/94   probed 20×   →  added
+OUTBOUND HIT — look at this device
+  10.68.144.121 reached c2.example.net (VT 9/94)
+THREAT PREVENTION
+  Anti-Malware: 1 ·  IPS: 1
+TOP PROBING SOURCES (all dropped)
+  93.152.221.36   312×  (in feed)
+  … 8 more
+INDICATORS ENTERED: 3 from the Spark's logs · 5 from news · 0 by hand
+Lookups: 45 of 500 · next re-check 2026-12-18 · no errors
+```
+
+Inputs: the previous calendar day's capture (drops and rejects from the External zone,
+distinct sources, top ten with the in-feed mark, Threat Prevention detections), the run's
+log (rows added with their ratio and probe count, outbound hits, lookups used, `ERROR`
+lines), the feed's commits since the previous brief grouped by the origin in `COMMENT`
+(`Spark syslog`, the news agent's label, `Telegram`, `added without VirusTotal check`), and
+`recheck_due` over the feed for the next date. Sections with nothing to say are left out,
+but the message is always sent, so a quiet morning still shows the system ran. Each source
+under "sent to block" then gets its attacker-context message.
+
+**Attacker context** (`attacker_context.py`). Facts first, from read-only requests to public
+services, each optional so one failure never blocks the note:
+
+| Source | Contributes |
+|---|---|
+| the capture (today and yesterday) | ports and services tried, counts, first and last seen, dropped or accepted |
+| VirusTotal (one lookup, counted against the 500 a day) | owner network and country, engines flagging it and their categories; for a domain also the registrar |
+| RDAP (`rdap.org`) | the registrant of the address block or domain, abuse contact |
+| Shodan InternetDB (no key) | the attacker's own open ports, tags such as `honeypot`, `tor`, `vpn`, known vulnerable software |
+| GreyNoise community API, only if a `GREYNOISE_API_KEY` item exists in the Keychain | whether it is a known mass scanner, benign or malicious |
+
+Then one request to Claude Opus 5.5 (`claude-opus-5-5`) on the Messages API, over HTTPS
+from the standard library because this Mac's only Python is the Command Line Tools' 3.9 and
+the Anthropic SDK needs 3.10; the key comes from the Keychain (`ANTHROPIC_API_KEY`, stored
+2026-10-28). The request carries the facts as data, the `web_search` server tool
+(`web_search_20260209`, at most three searches) for what the address and its network are
+known for, `output_config.effort` `medium`, and Anthropic's server-side refusal fallback
+(`fallbacks: "default"`). The instructions ask for at most eight plain lines: who (network,
+country, what the address is known as), what they did here, whether this is aimed at this
+network or internet-wide scanning, and what to do; no motive is to be invented, and when
+the pattern is mass scanning the note says so. Search results are untrusted text and are
+never treated as instructions. A note costs one to three cents; at the daily cap of twenty
+blocked sources plus a few alerts that is well under a dollar a day. If the request fails,
+the facts go out alone with one line saying the note is unavailable.
+
+**Errors.** Telegram and the public services are retried with backoff and then skipped for
+that message; the watcher survives a missing or rotated file; a failed push leaves the
+commit for the next daily run, as today; everything is logged to the bot's log, and the
+`/status` reply shows the last error.
+
+**Tests** (unit, no network, in the repository's style): parsing of bare messages and
+labels, the allowlist, the `/trust` and bare paths against `FakeVT`, the lock between the
+script and the bot, watcher matching for both alert kinds with midnight rollover and the
+one-hour cooldown, brief rendering from a fixture capture and run log, context gathering
+with each source failing in turn, the Opus request body and the handling of its response and
+of a refusal, the plist.
+
+**Done means:** the brief arrives after the 07:30 run; an indicator sent to the bot is added,
+committed and pushed within a minute, and the bot says so; an entry appended to today's
+capture for a LAN device reaching a feed indicator raises an alert within a minute with a
+context note behind it; `/who`, `/sources` and `/status` answer; the bot comes back after
+a kill like the receiver does.
+
+Outcome: to be recorded when built.
 
 ### D7. A daily news-sourcing agent (requested 2026-10-28, design pending)
 
