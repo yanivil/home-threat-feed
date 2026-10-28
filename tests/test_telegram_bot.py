@@ -15,7 +15,7 @@ import threading
 import time
 import unittest
 import urllib.error
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -316,6 +316,7 @@ class AddTest(BotTestCase):
         self.assertEqual(([c[1] for c in self.git.calls], self.vt.calls), (["pull"], []))
         self.assertEqual(self.feed.read_text(), FEED)
         self.assertFalse(self.lock.exists())
+        self.assertIn("git pull failed: fatal: pull refused", self.bot.status().splitlines()[-1])
 
     def test_a_failed_push_leaves_the_commit_for_the_daily_check(self):
         self.git.failing = {"push"}
@@ -324,6 +325,7 @@ class AddTest(BotTestCase):
 
         self.assertEqual(self.tg.sent[-1].splitlines()[-1],
                          "Committed, but the push failed (fatal: push refused); the daily check will push it.")
+        self.assertIn("git push failed: fatal: push refused", self.bot.status().splitlines()[-1])
 
     def test_a_failed_commit_says_the_rows_are_in_the_file(self):
         self.git.failing = {"commit"}
@@ -452,7 +454,20 @@ class StatusTest(BotTestCase):
         self.assertEqual(lines[:3], ["receiver: writing", "last daily check: 2026-10-28 16:20 done, 45 lookups",
                                      "next re-check 2026-12-18"])
         self.assertRegex(lines[3], r"^bot: up since \d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
-        self.assertEqual(len(lines), 4)
+        self.assertEqual(lines[4:], ["last error: none"])
+
+    def test_status_shows_the_last_error(self):
+        self.send("/status")
+        self.assertEqual(self.tg.sent[-1].splitlines()[-1], "last error: none")
+
+        self.tg.batches = [telegram_api.TelegramError("getUpdates: 502"), [message("/status", update_id=2)],
+                           KeyboardInterrupt()]
+        failed_at = datetime.fromtimestamp(self.clock.time)
+        self.bot.run_forever()
+
+        self.assertEqual(self.clock.sleeps, [10])
+        last = self.tg.sent[-1].splitlines()[-1]
+        self.assertTrue(last.startswith(f"last error: {failed_at:%Y-%m-%d %H:%M} Telegram: getUpdates: 502"), last)
 
     def test_a_quiet_receiver(self):
         self.capture(age=10 * 60)
@@ -523,6 +538,7 @@ class AlertTest(BotTestCase):
             self.bot.on_alert(alert)
 
         self.assertIn("Too Many Requests", self.err.getvalue())
+        self.assertIn("Too Many Requests", self.bot.status().splitlines()[-1])
 
 
 class RunForeverTest(BotTestCase):
@@ -555,6 +571,7 @@ class RunForeverTest(BotTestCase):
 
         self.assertEqual(len(calls), 2)
         self.assertRegex(self.err.getvalue(), r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} .*bad line")
+        self.assertIn("bad line", self.bot.status().splitlines()[-1], "the watcher thread records it too")
 
 
 class WatcherTest(unittest.TestCase):

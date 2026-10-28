@@ -67,8 +67,8 @@ RUN_END_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} (?:Daily check do
 Alert = namedtuple("Alert", "kind device indicator action entry")
 
 
-def log(text):
-    print(f"{datetime.now():%Y-%m-%d %H:%M:%S} {text}", file=sys.stderr, flush=True)
+def log(text, at=None):
+    print(f"{at or datetime.now():%Y-%m-%d %H:%M:%S} {text}", file=sys.stderr, flush=True)
 
 
 def parse_message(text):
@@ -298,9 +298,16 @@ class Bot:
         self.sleep = sleep
         self.daily_log = Path(daily_log)
         self.started = clock()
+        self.last_error = None  # (when, message) of the last error logged, for /status
         self.ignored = {}  # chat id -> the day it was last logged
         self.offset = self.load_offset()
         self.watcher = Watcher(self.syslog, FeedFile(self.feed), self.on_alert, today=self.today, clock=clock)
+
+    def error(self, text):
+        """Log an error and keep it as the last one /status shows; called from both threads."""
+        at = datetime.fromtimestamp(self.clock())
+        self.last_error = (at, text)
+        log(text, at)
 
     # The command loop.
 
@@ -332,7 +339,7 @@ class Bot:
                 try:
                     self.run_once()
                 except (telegram_api.TelegramError, OSError) as e:  # URLError and timeouts are OSErrors
-                    log(f"Telegram: {e}; trying again in {BACKOFF} s")
+                    self.error(f"Telegram: {e}; trying again in {BACKOFF} s")
                     self.sleep(BACKOFF)
         except KeyboardInterrupt:
             stop.set()
@@ -344,7 +351,7 @@ class Bot:
             try:
                 self.watcher.follow(stop)
             except Exception as e:  # the alerts must not stop for good over one bad line or file
-                log(f"watcher failed, starting again in {BACKOFF} s: {e!r}")
+                self.error(f"watcher failed, starting again in {BACKOFF} s: {e!r}")
                 stop.wait(BACKOFF)
 
     def handle(self, update):
@@ -363,7 +370,7 @@ class Bot:
         try:
             reply = self.respond(verb, indicators, label)
         except Exception as e:  # one failing command must not stop the bot
-            log(f"{verb} failed: {e!r}")
+            self.error(f"{verb} failed: {e!r}")
             reply = f"{verb} failed: {e}"
         if reply:
             self.send(reply)
@@ -372,7 +379,7 @@ class Bot:
         try:
             self.telegram.send_message(text)
         except (telegram_api.TelegramError, OSError) as e:
-            log(f"a message to the owner was not sent: {e}")
+            self.error(f"a message to the owner was not sent: {e}")
 
     def respond(self, verb, indicators, label):
         """Carry the command out; returns the reply, or None when it went out as a document."""
@@ -438,6 +445,7 @@ class Bot:
         or trusted when it is None), commit, push."""
         ok, output = self._git("pull", "--rebase", "--autostash", "--quiet")
         if not ok:
+            self.error(f"git pull failed: {output}")
             return [f"git pull failed, nothing was added: {output}"]
         lines = []
         pairs = [(indicator, f"{label} - sent from Telegram" if label else "sent from Telegram")
@@ -461,9 +469,13 @@ class Bot:
         for args in (("add", FEED_NAME), ("commit", "-m", message, "--", FEED_NAME)):
             ok, output = self._git(*args)
             if not ok:
+                self.error(f"git {args[0]} failed: {output}")
                 return f"git {args[0]} failed, the rows are in the feed file but not committed: {output}"
         ok, output = self._git("push", "--quiet")
-        return "Committed and pushed." if ok else f"Committed, but the push failed ({output}); the daily check will push it."
+        if not ok:
+            self.error(f"git push failed: {output}")
+            return f"Committed, but the push failed ({output}); the daily check will push it."
+        return "Committed and pushed."
 
     def _git(self, *args):
         """(whether git succeeded, what it said) for one git command in the repository."""
@@ -490,9 +502,11 @@ class Bot:
             due = spark_brief.next_recheck(self.feed.read_text(), self.today())
         except OSError:
             due = None
+        last = self.last_error  # read once: the watcher thread may replace it meanwhile
         return "\n".join([self._receiver(), self._daily_check(),
                           f"next re-check {due}" if due else "no re-check due",
-                          f"bot: up since {datetime.fromtimestamp(self.started):%Y-%m-%d %H:%M}"])
+                          f"bot: up since {datetime.fromtimestamp(self.started):%Y-%m-%d %H:%M}",
+                          f"last error: {last[0]:%Y-%m-%d %H:%M} {last[1]}" if last else "last error: none"])
 
     def _receiver(self):
         try:
@@ -530,7 +544,7 @@ class Bot:
             if note:
                 self.telegram.send_message(note)
         except (telegram_api.TelegramError, OSError) as e:
-            log(f"an alert on {alert.indicator} was not sent: {e}")
+            self.error(f"an alert on {alert.indicator} was not sent: {e}")
 
 
 BOTFATHER_HELP = f"""No bot token in the Keychain. To create the bot:
