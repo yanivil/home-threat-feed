@@ -5,6 +5,12 @@ All notable changes to this feed are recorded here.
 ## [Unreleased]
 
 ### Added
+- `unifi-blocklist.txt`: the feed's `IP` and `IP Range` rows as a bare IPv4 list (ranges as
+  CIDR, one entry per line, nothing else) for UniFi gateways, which refresh a Network List
+  from a URL but cannot read the CSV. Rendered by `unifi_list.py` and kept in step with the
+  feed by GitHub Actions (`.github/workflows/unifi-list.yml` after every push that changes the
+  feed, and a step of the monthly re-check); the Mac's jobs do not touch it. See the README,
+  "UniFi gateways", and `docs/system-design.md`, D10.
 - Two internet-wide scanner networks observed sweeping the WAN IP on 2026-10-19/20:
   Colocatel "ColocationX" (109.205.211.0/24) and Modat B.V. (212.73.148.0/24),
   as `IP Range` indicators plus the individual hosts seen in the Spark logs.

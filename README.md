@@ -1,12 +1,19 @@
 # home-threat-feed
 
 Custom Indicators of Compromise (IoC) feed for a Check Point Quantum Spark gateway
-(locally managed, Threat Prevention → IoC Feeds).
+(locally managed, Threat Prevention → IoC Feeds). Its addresses are also published as a
+plain IPv4 list for UniFi gateways.
 
 ## Feed URL
 
 ```
 https://raw.githubusercontent.com/yanivil/home-threat-feed/main/spark-ioc-feed.csv
+```
+
+For a UniFi gateway, the same addresses as a bare IPv4 list (see "UniFi gateways" below):
+
+```
+https://raw.githubusercontent.com/yanivil/home-threat-feed/main/unifi-blocklist.txt
 ```
 
 ## Gateway setup (Quantum Spark 1595, R82.00.11, locally managed)
@@ -40,6 +47,31 @@ Threat Prevention → IoC Feeds → New: Resource = the feed URL above, Action =
   silently for 36 hours. Keep IoT assets on *Monitor* (or add their real endpoints), and reboot a
   device that has gone quiet; its boot shows in syslog as an NTP burst.
 - **Verify from a LAN device:** `dig +short <a domain from the feed>` must return `62.0.58.94`.
+
+## UniFi gateways
+
+`unifi-blocklist.txt` is the feed's `IP` and `IP Range` rows as a bare IPv4 list: one address
+or CIDR network per line and nothing else, ranges as CIDR, an address inside a range left out.
+It is rendered from the CSV by `unifi_list.py` and kept in step by GitHub Actions
+(`.github/workflows/unifi-list.yml` after every push that changes the feed, and a step of the
+monthly re-check), so the jobs on the Mac never touch it; it lags the CSV by about a minute.
+Domains, URLs and hashes are not in it: a UniFi firewall matches a domain list by the
+addresses the names resolve to, which hits shared hosting, and cannot use URLs or hashes.
+
+On UniFi Network 11.0.83 or later (UniFi OS 6.0.10 or later):
+
+1. **Networks → Network Lists → Create New**: Type **IP**, Source **Dynamic**, the list URL
+   under "Feed URL", refresh every **24 hours** (the feed changes a few times a day; the
+   gateway alerts when a refresh fails).
+2. **Firewall policies** (zone-based), action **Block**, placed above any allow rule for the
+   same traffic: External → Internal with the list as source, External → Gateway with the
+   list as source, Internal → External with the list as destination.
+3. After the first refresh, Network Lists shows the list's entry count.
+
+A UniFi list holds IPv4 or IPv6, not both; this one is IPv4 (the feed has no IPv6 row today).
+The menu names come from vendor guides for Network 11, not from Ubiquiti's own documentation,
+so expect small differences between versions. By hand, `python3 unifi_list.py` renders the
+list from the local CSV.
 
 ## Format
 
@@ -698,7 +730,8 @@ python3 feed_lint.py && git commit -am "Re-verify stale indicators" && git push
 ### Monthly re-check on GitHub Actions
 
 `.github/workflows/recheck.yml` runs `--recheck` on the 1st of every month (or on demand
-from the Actions tab, optionally with a `--max-age` override) and commits the result. It does nothing until
+from the Actions tab, optionally with a `--max-age` override), renders `unifi-blocklist.txt`
+from the result and commits both. It does nothing until
 the repository has a `VT_API_KEY` secret: Settings → Secrets and variables → Actions →
 New repository secret. A full run takes about 15 s per stale row, within the free key's
 500 lookups a day; if it stops early the rows done so far are still committed and the job

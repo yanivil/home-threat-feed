@@ -39,15 +39,19 @@ jobs:
       - name: Lint the feed
         run: python3 feed_lint.py spark-ioc-feed.csv
 
-      - name: Commit the updated feed
+      # This job's push triggers no workflow, so the UniFi list is rendered here, not by unifi-list.yml.
+      - name: Render unifi-blocklist.txt from the feed
+        run: python3 unifi_list.py
+
+      - name: Commit the updated feed and list
         run: |
-          if git diff --quiet -- spark-ioc-feed.csv; then
+          if git diff --quiet -- spark-ioc-feed.csv unifi-blocklist.txt; then
             echo "Feed unchanged"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Re-verify stale indicators on VirusTotal" -- spark-ioc-feed.csv
+          git commit -m "Re-verify stale indicators on VirusTotal" -- spark-ioc-feed.csv unifi-blocklist.txt
           git push
 
       - name: Fail the job if the re-check stopped early

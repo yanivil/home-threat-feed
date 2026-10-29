@@ -1,0 +1,45 @@
+name: Keep the UniFi list in step with the feed
+
+# unifi-blocklist.txt is rendered from spark-ioc-feed.csv (unifi_list.py) and committed here, by
+# GitHub, after every push that changes the feed; the Mac's jobs never touch it (design D10).
+# A push made with the workflow token triggers no workflow, so the list's own commit never
+# re-runs this, and the monthly re-check (recheck.yml) renders the list itself before its commit.
+on:
+  push:
+    branches: [main]
+    paths: [spark-ioc-feed.csv]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One run at a time, the newest queued: each run renders from the tip of main, so a run that
+# waited still writes the list for the feed as it is now.
+concurrency:
+  group: unifi-list
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Pinned to a commit, not a tag, like recheck.yml; bump the SHA and the comment together.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          ref: main
+
+      - name: Render unifi-blocklist.txt from the feed
+        run: python3 unifi_list.py
+
+      - name: Commit the list when it changed
+        run: |
+          if git diff --quiet -- unifi-blocklist.txt; then
+            echo "List unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Keep unifi-blocklist.txt in step with the feed" -- unifi-blocklist.txt
+          # A feed commit that landed meanwhile has its own run queued; rebase on it and push.
+          git push || (git pull --rebase && git push)

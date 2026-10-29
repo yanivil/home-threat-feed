@@ -42,7 +42,9 @@ iMac "home-server" (on the LAN), user home-server     |            v  spark-ioc-
    |
    +-- by hand: vt_check.py <indicators> | --trusted | cyberint_xlsx.py -> TSV -> vt_check.py --trusted
 
-GitHub Actions, 1st of the month: .github/workflows/recheck.yml -> vt_check.py --recheck -> CSV
+GitHub Actions, 1st of the month: .github/workflows/recheck.yml -> vt_check.py --recheck -> CSV -> unifi_list.py
+GitHub Actions, after every push that changes the CSV: .github/workflows/unifi-list.yml -> unifi_list.py -> unifi-blocklist.txt
+   (the feed's addresses as a bare IPv4 list, for UniFi gateways; the Mac's jobs never touch it: D10)
 ```
 
 | Piece | Runs | Reads | Writes |
@@ -55,7 +57,9 @@ GitHub Actions, 1st of the month: .github/workflows/recheck.yml -> vt_check.py -
 | `spark_logs.py` | from the daily job or by hand | capture files, plain or `.gz` | feed rows (through `vt_check.run`) |
 | `vt_check.py` | by hand, from the daily job, from Actions | VirusTotal API v3 | feed rows; with `--recheck`, rewrites rows in place |
 | `cyberint_xlsx.py` | by hand | Cyberint `.xlsx` exports | a TSV for `vt_check.py --trusted` |
-| `recheck.yml` | monthly on GitHub | the feed, `VT_API_KEY` secret | the feed |
+| `recheck.yml` | monthly on GitHub | the feed, `VT_API_KEY` secret | the feed, and `unifi-blocklist.txt` rendered from it in the same commit |
+| `unifi_list.py` | from `unifi-list.yml` and `recheck.yml` on GitHub, or by hand | the feed | `unifi-blocklist.txt`: the `IP` and `IP Range` rows as a bare IPv4 list, ranges as CIDR (D10) |
+| `unifi-list.yml` | on GitHub after every push to main that changes the feed | the feed at the tip of main | `unifi-blocklist.txt`, committed as `github-actions[bot]` when it differs |
 | `keychain.py` | imported by the scripts that need a secret | an environment variable, else the login Keychain (service `spark-ioc-feed`) | nothing |
 | `telegram_api.py` | imported by the bot and the brief | Telegram Bot API (`getUpdates`); bot token and chat id from the Keychain | messages and documents to the owner's chat |
 | `feed_lock.py` | by the bot around each addition | `syslog/.feed-lock` | the lock directory (`daily_check.sh` takes the same one) |
@@ -811,6 +815,48 @@ names (394 clean, 6 unknown to VirusTotal), it added nothing and left 2,041 for 
 Merged into main on the owner's word the same morning, with the shared-platform exception; the
 first run on the new order is 2026-10-30 07:30.
 
+### D10. A bare IPv4 list for UniFi gateways, derived from the feed and kept in step by GitHub (requested, decided and built 2026-10-29)
+
+Asked for a friend running a Ubiquiti UniFi cloud gateway. Found (vendor guides for UniFi
+Network 11, not Ubiquiti's own documentation): since Network 11.0.83 on UniFi OS 6.0.10 a
+gateway refreshes a "Network List" from a URL every 24, 48 or 72 hours and uses it in its
+zone-based firewall policies, but the URL must return nothing but addresses, one per line,
+IPv4 or IPv6 and never both, up to 100,000 entries; a domain list is matched by the addresses
+the names resolve to (so it hits shared hosting), and URLs and hashes cannot be used at all.
+The CSV the Spark reads is therefore of no use to it, and the wiki's "split it yourself"
+recipe would leave the friend hosting a file somewhere the gateway can fetch.
+
+Decision, approved by the owner with one constraint, that nothing of the current system
+changes ("just adding and maintaining another file for him"):
+
+- One more file in the repository, `unifi-blocklist.txt`, named for the product it serves:
+  every `IP` row and every `IP Range` row of the feed (ranges as CIDR, an address inside a
+  range left out, a value twice listed once), IPv4 only, in the feed's order, one entry per
+  line and nothing else: no header, no comment, since UniFi's parser is undocumented. IPv6
+  rows (none today) are left out; they would need a second list. Rendered by `unifi_list.py`
+  (standard library only; a row the lint would refuse is skipped rather than breaking the
+  list). The CSV, its lint and what the Spark reads are untouched: the list is derived.
+- GitHub keeps it in step, not the Mac: `.github/workflows/unifi-list.yml` runs on every push
+  to main that changes the CSV (a web edit included), renders the list from the tip of main and
+  commits it as `github-actions[bot]` when it differs; runs are serialised by a concurrency
+  group, so a run that waited renders the newest feed. A push made with the workflow token
+  triggers no workflow, so the monthly re-check renders the list itself before its commit, and
+  the list's own commit never re-triggers the workflow. The daily job, the news job, the bot
+  and the lint are untouched; they `git pull --rebase` before every commit, so the extra commit
+  on main costs them nothing. Known limits: the list lags the CSV by about a minute (the
+  gateway refreshes every 24 hours); if the bot pushes in the same minute the workflow does,
+  the bot's push is refused and the daily job pushes it the next morning, the bot's existing
+  behaviour; a hand edit of the list is overwritten by the next run.
+- Not published: domain, URL and hash lists (a UniFi gateway cannot use them; the poll in
+  Discussions decides whether other products get them, open item 6).
+
+Outcome: built 2026-10-29 test-first (15 tests in `tests/test_unifi_list.py`, among them one
+that fails whenever the committed list is out of step with the committed feed; the suite
+stands at 629 and passes, also under `python3 -I`); the first render holds 487 entries, the
+feed's 485 addresses and its two /24 ranges. README ("UniFi gateways"), the wiki ("Using the
+feed with other gateways", Home, the FAQ) and the poll in Discussions point at the list. The
+workflow's first run on GitHub is still to be seen after the push.
+
 ## 5. Operating it
 
 - Is the system up? Send `/status` to the bot first: five lines, the receiver, the last daily
@@ -861,3 +907,6 @@ first run on the new order is 2026-10-30 07:30.
    lines and alerts. The same for the news agent's search and fetch caps and its 40-lookup
    share, on the first week of `news usage` lines and of rows added (D7).
 5. The owner's hardening items listed under D8's outcome.
+6. Lists for other products beyond the UniFi one (domains for DNS filters, URLs, hashes), the
+   same way: rendered from the CSV by GitHub (D10). Published when the poll in Discussions
+   shows a product that would use one.
