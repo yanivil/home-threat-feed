@@ -6,7 +6,7 @@ Custom Indicators of Compromise (IoC) feed for a Check Point Quantum Spark gatew
 ## Feed URL
 
 ```
-https://raw.githubusercontent.com/yanivil/spark-ioc-feed/main/spark-ioc-feed.csv
+https://raw.githubusercontent.com/yanivil/home-threat-feed/main/spark-ioc-feed.csv
 ```
 
 ## Gateway setup (Quantum Spark 1595, R82.00.11, locally managed)

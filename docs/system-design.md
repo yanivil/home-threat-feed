@@ -16,7 +16,7 @@ the owner when something on the LAN reached a known-bad destination.
 ## 2. Components and data flow (as built on 2026-10-28; the news job added 2026-10-29)
 
 ```
-Spark 1595 (the LAN gateway)                    GitHub: yanivil/spark-ioc-feed
+Spark 1595 (the LAN gateway)                    GitHub: yanivil/home-threat-feed
    | security logs, syslog over UDP 5514              ^            |
    v                                                  | push       | the Spark pulls
 iMac "home-server" (on the LAN), user home-server     |            v  spark-ioc-feed.csv

@@ -31,6 +31,10 @@ All notable changes to this feed are recorded here.
   reply names the line to fix. See the README, "Format", and `docs/system-design.md`, D8.
 
 ### Changed
+- The repository is `yanivil/home-threat-feed` (it was `spark-ioc-feed`): a name friends can read when
+  they set the feed up on their own gateway. The raw feed URL changed with it; the old URL
+  redirects for as long as the old name stays unused. The file name `spark-ioc-feed.csv` is
+  unchanged.
 - The repository names nothing of the owner's network: fixtures and docs use stand-in addresses
   and a stand-in gateway name. `actions/checkout` is pinned to a commit (v4.4.0), and the
   repository's Actions settings require every action to be pinned that way.
