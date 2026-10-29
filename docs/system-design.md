@@ -88,8 +88,12 @@ addresses, and URLs with commas, are rejected before any lookup.
 **No duplicates.** Every insert path reads the feed first and skips values already there
 (case-insensitively, and for IPs also addresses inside the feed's `IP Range` rows), plus
 duplicates inside the same batch. Syslog candidates looked up within the last 30 days are not
-looked up again (`syslog/checked.json`). The checks live in two places today,
-`vt_check.feed_values` and `spark_logs.feed_members`; they agree, and merging them is pending.
+looked up again (`syslog/checked.json`). One implementation answers every path:
+`vt_check.FeedMembers` (reached as `vt_check.feed_members` or, for the callers that read the
+syslog side, `spark_logs.feed_members`) holds the VALUE column lowercased and the parsed `IP Range`
+rows; `vt_check.run` and `add_trusted` use it too since 2026-10-29, so an address inside a range
+row is "in-feed" there as well (before that day only the syslog, bot, brief and news paths knew
+the ranges; `vt_check.feed_values`, which compared values only, is gone).
 
 **What the gateway's logs contribute.** Outbound destinations are *reported, never added*: a
 LAN device reaching a flagged destination is a device to look at, not a feed row. Inbound
@@ -850,7 +854,8 @@ first run on the new order is 2026-10-30 07:30.
    the pinned `actions/checkout` was on main; it could not be set while the workflow named a tag.
 2. Done 2026-10-29: D7 (news agent) designed and built, its outcome recorded under it; D6's
    end-to-end check is recorded under its outcome.
-3. Merge the two duplicate-check implementations when `vt_check.py` is next changed.
+3. Done 2026-10-29: the two duplicate-check implementations are one, `vt_check.FeedMembers`
+   (see "No duplicates" under section 3); `spark_logs` keeps the names as aliases.
 4. The Telegram bot's alert rule (which detections alert, which get a note) and its caps were set
    on measured data and the review's arithmetic; tune them on the first week of `note usage`
    lines and alerts. The same for the news agent's search and fetch caps and its 40-lookup

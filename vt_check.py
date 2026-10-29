@@ -175,13 +175,40 @@ def feed_row(ioc_type, value, stats, label, today):
     return ",".join([name, value, ioc_type, confidence(malicious), "high", product, comment])
 
 
-def feed_values(text):
-    values = set()
-    for line in text.splitlines():
-        fields = line.split(",")
-        if not line.startswith("#") and len(fields) > 1:
-            values.add(fields[1].strip().lower())
-    return values
+class FeedMembers:
+    """What the feed already blocks: its VALUE column, compared case-insensitively, plus any address
+    inside its IP Range rows. add() records a row appended after the feed was read."""
+
+    def __init__(self, text):
+        self.values = set()
+        self.ranges = []
+        for line in text.splitlines():
+            fields = line.split(",")
+            if line.startswith("#") or len(fields) < 2:
+                continue
+            self.values.add(fields[1].strip().lower())
+            if len(fields) == 7 and fields[2].strip() == "IP Range" and "-" in fields[1]:
+                start, _, end = fields[1].partition("-")
+                try:
+                    self.ranges.append((ipaddress.ip_address(start.strip()), ipaddress.ip_address(end.strip())))
+                except ValueError:
+                    pass
+
+    def add(self, value):
+        self.values.add(value.lower())
+
+    def __contains__(self, indicator):
+        if indicator.lower() in self.values:
+            return True
+        try:
+            ip = ipaddress.ip_address(indicator)
+        except ValueError:
+            return False
+        return any(start <= ip <= end for start, end in self.ranges if ip.version == start.version)
+
+
+def feed_members(text):
+    return FeedMembers(text)
 
 
 def lookup(fetch, ioc_type, value):
@@ -225,7 +252,7 @@ def run(indicators, feed_path, fetch, *, min_malicious=None, dry_run=False,
     today = today or date.today().isoformat()
     feed_path = Path(feed_path)
     text = feed_path.read_text()
-    in_feed = feed_values(text)
+    in_feed = feed_members(text)
     needs_newline = bool(text) and not text.endswith("\n")
     checked = set()
     results = []
@@ -245,7 +272,7 @@ def run(indicators, feed_path, fetch, *, min_malicious=None, dry_run=False,
         except ValueError as e:
             record(raw, "invalid", str(e))
             continue
-        if value.lower() in in_feed:
+        if value in in_feed:
             record(raw, "in-feed")
             continue
         if value.lower() in checked:
@@ -272,7 +299,7 @@ def run(indicators, feed_path, fetch, *, min_malicious=None, dry_run=False,
         with feed_path.open("a", newline="\n") as f:
             f.write(("\n" if needs_newline else "") + row + "\n")
         needs_newline = False
-        in_feed.add(value.lower())
+        in_feed.add(value)
         record(raw, "added", ratio)
 
     return results
@@ -287,7 +314,7 @@ def add_trusted(indicators, feed_path, *, today=None, out=print):
     today = today or date.today().isoformat()
     feed_path = Path(feed_path)
     text = feed_path.read_text()
-    in_feed = feed_values(text)
+    in_feed = feed_members(text)
     needs_newline = bool(text) and not text.endswith("\n")
     added_now = set()
     results = []
@@ -301,7 +328,7 @@ def add_trusted(indicators, feed_path, *, today=None, out=print):
             key = value.lower()
             if key in added_now:
                 status, detail = "duplicate", ""
-            elif key in in_feed:
+            elif value in in_feed:
                 status, detail = "in-feed", ""
             else:
                 name = f"trusted-{ioc_type.lower()}-{hashlib.sha1(value.encode()).hexdigest()[:10]}"

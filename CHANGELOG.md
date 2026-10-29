@@ -59,6 +59,9 @@ All notable changes to this feed are recorded here.
   Telegram message (`Daily check failed: <reason>` when it fails before its check).
 - VirusTotal: a 429 is tried once more after 61 s, and notes and `/who` skip VirusTotal while a
   feed check runs.
+- One duplicate check for every insert path (`vt_check.FeedMembers`): `vt_check.py` and
+  `--trusted` now also report `in-feed` for an address inside one of the feed's `IP Range` rows
+  instead of looking it up or adding it as a second row.
 
 ## [1.0.0] - 2026-10-19
 

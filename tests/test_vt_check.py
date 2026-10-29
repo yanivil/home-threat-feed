@@ -16,6 +16,7 @@ STUBS = REPO / "tests" / "stubs"
 KEYCHAIN_LOOKUP = ["security", "find-generic-password", "-s", "spark-ioc-feed", "-a", "VT_API_KEY", "-w"]
 HEADER = "# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT\n"
 EXISTING = "test-domain-01,example.com,Domain,high,high,AB,TEST ENTRY\n"
+RANGE_ROW = "scanner-x,185.1.2.0-185.1.2.255,IP Range,high,high,AB,scanner network\n"
 TODAY = "2026-10-19"
 SHA256 = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
 
@@ -154,6 +155,18 @@ class ApiPathTest(unittest.TestCase):
                 self.assertEqual(vt_check.api_path(*args), want)
 
 
+class FeedMembersTest(unittest.TestCase):
+    def test_values_case_insensitively_addresses_inside_ranges_and_rows_added_later(self):
+        members = vt_check.feed_members(HEADER + EXISTING + RANGE_ROW)
+
+        self.assertIn("EXAMPLE.com", members)
+        self.assertIn("185.1.2.255", members)
+        self.assertNotIn("185.1.3.1", members)
+        self.assertNotIn("evil.com", members)
+        members.add("Evil.com")
+        self.assertIn("evil.com", members)
+
+
 class RunTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -187,6 +200,15 @@ class RunTest(unittest.TestCase):
             HEADER + EXISTING
             + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,VT 12/93 malicious 2026-10-19\n",
         )
+
+    def test_an_address_inside_a_feed_ip_range_is_in_feed_and_not_looked_up(self):
+        self.feed.write_text(HEADER + EXISTING + RANGE_ROW)
+        fake = FakeVT({"/ip_addresses/185.1.2.7": vt_object("ip_address", "185.1.2.7", malicious=9)})
+
+        results = self.run_check(["185.1.2.7", "185.1.3.7"], fake)
+
+        self.assertEqual(self.statuses(results), {"185.1.2.7": "in-feed", "185.1.3.7": "not-found"})
+        self.assertEqual(fake.calls, ["/ip_addresses/185.1.3.7"])
 
     def test_label_goes_into_comment_without_commas(self):
         fake = FakeVT({"/domains/evil.com": vt_object("domain", "evil.com", malicious=12, suspicious=1)})
@@ -885,6 +907,15 @@ class TrustedTest(unittest.TestCase):
 
         self.assertEqual([r.status for r in results], ["in-feed", "added", "duplicate", "invalid"])
         self.assertEqual(self.feed.read_text().count("evil.com"), 1)
+
+    def test_an_address_inside_a_feed_ip_range_is_in_feed(self):
+        self.feed.write_text(HEADER + EXISTING + RANGE_ROW)
+
+        results = vt_check.add_trusted(
+            [("185.1.2.7", "x"), ("185.1.3.7", "x")], self.feed, today=TODAY, out=lambda *a: None,
+        )
+
+        self.assertEqual([r.status for r in results], ["in-feed", "added"])
 
     def test_command_line_needs_no_api_key(self):
         env = {k: v for k, v in os.environ.items() if k != "VT_API_KEY"}

@@ -67,30 +67,10 @@ SECOND_LEVEL = frozenset({"co", "com", "net", "org", "ac", "gov", "edu", "or", "
                           "k12", "muni"})
 
 
-class FeedMembers:
-    """What the feed already blocks: its values, plus any address inside its IP Range rows."""
-
-    def __init__(self, text):
-        self.values = vt_check.feed_values(text)
-        self.ranges = []
-        for line in text.splitlines():
-            fields = line.split(",")
-            if len(fields) == 7 and fields[2].strip() == "IP Range" and "-" in fields[1]:
-                start, _, end = fields[1].partition("-")
-                try:
-                    self.ranges.append((ipaddress.ip_address(start.strip()), ipaddress.ip_address(end.strip())))
-                except ValueError:
-                    continue
-
-    def __contains__(self, indicator):
-        if indicator.lower() in self.values:
-            return True
-        ip = _ip(indicator)
-        return ip is not None and any(start <= ip <= end for start, end in self.ranges if ip.version == start.version)
-
-
-def feed_members(text):
-    return FeedMembers(text)
+# The duplicate check lives in vt_check (one implementation for every insert path); these names stay
+# for the callers and tests that reach it through spark_logs.
+FeedMembers = vt_check.FeedMembers
+feed_members = vt_check.feed_members
 
 
 def allowed(name, suffixes=ALLOWED_SUFFIXES):
