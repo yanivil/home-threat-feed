@@ -495,12 +495,25 @@ capture for a LAN device reaching a feed indicator raises an alert within a minu
 context note behind it; `/who`, `/sources` and `/status` answer; the bot comes back after
 a kill like the receiver does.
 
-Outcome: built 2026-10-28 on branch worktree-telegram-bot (499 tests); awaiting the owner's
-end-to-end check (README, "Setting it up"). Record the result here. A fix wave after the
+Outcome: built 2026-10-28 on branch worktree-telegram-bot (499 tests). A fix wave after the
 whole-branch review (the receiver's source filter, the caps, the note thread, the saved watcher
 position, explicit alert actions, the daily check's failure message, the private-chat rule and
-the never-block list, among others) followed on the same branch before that check, and its
-re-review was clean. Known limitation left for the first week of alerts: a Threat Prevention
+the never-block list, among others) followed on the same branch, and its re-review was clean.
+Merged into main by fast-forward on 2026-10-28 at 23:25 and running since 23:44 as the
+LaunchAgent, paired with the owner's private chat the same evening; on 2026-10-29 BotFather's
+`/setjoingroups` was set to disabled, so the bot cannot be added to a group. First night in
+production: three Threat Prevention alerts (one source probing the WAN address at 02:09, 04:47
+and 06:40) reached the phone, each with its note naming the port it went for and the
+provider's abuse contact. The owner completed the end-to-end check (README, "Setting it up")
+on 2026-10-29: `/status` and `/help` answer; a test address that VirusTotal flags 5/92 was
+added, committed and pushed from the phone within a minute, its row labelled as sent from
+Telegram; `/sources` sent the previous day's probing sources as a 42 KB file; the morning
+brief arrived at 09:14 when the scheduled run ended; the crafted-capture item was covered by
+the real alerts above; and the bot comes back after a kill, as it did after the restart that
+followed each merge (the LaunchAgent restarts it; a same-day restart alerts what it missed as
+`late:`). Learned in production and recorded under D9: while the daily check holds the feed
+lock, about 100 minutes from 07:30, an addition from the phone is answered with "the feed is
+locked" and the notes skip VirusTotal. Known limitation left for the first week of alerts: a Threat Prevention
 row whose source is a public address is read as inbound and its note describes that source; if
 the Spark ever logs such a row after NAT with the line's own WAN address as the source, the note
 would describe the owner's own address.
