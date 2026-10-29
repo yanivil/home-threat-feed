@@ -1782,3 +1782,4 @@ vt-ip-a03632f2a0,115.190.52.2,IP,high,high,AB,Inbound probe of WAN - Spark dashb
 vt-ip-90864734cf,85.217.140.46,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 10/92 malicious 2026-10-22
 vt-ip-b8d203b1d8,84.54.73.46,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 6/92 malicious 2026-10-22
 vt-ip-5ec142e840,62.150.237.107,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 8/92 malicious 2026-10-22
+vt-ip-b077b152ac,171.225.216.46,IP,medium,high,AB,bot test - sent from Telegram - VT 5/92 malicious 2026-10-29
