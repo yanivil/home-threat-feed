@@ -13,7 +13,7 @@ indicators added by hand; it checks every candidate against VirusTotal before ad
 re-verifies rows as they age and drops the ones that stopped being malicious; and it tells
 the owner when something on the LAN reached a known-bad destination.
 
-## 2. Components and data flow (as built on 2026-10-28)
+## 2. Components and data flow (as built on 2026-10-28; the news job added 2026-10-29)
 
 ```
 Spark 1595 (the LAN gateway)                    GitHub: yanivil/spark-ioc-feed
@@ -30,6 +30,11 @@ iMac "home-server" (on the LAN), user home-server     |            v  spark-ioc-
    |      -> spark_brief.py --send (the morning brief to Telegram)
    |      macOS notification on outbound hits and on errors; a Telegram notice when a run fails
    |
+   +-- news_check.sh       (LaunchAgent com.spark-ioc-feed.news, 06:30)
+   |      news_agent.py (Claude: web search + web fetch, filtered by our code) -> syslog/news-<date>.txt
+   |      -> feed lock -> git pull -> vt_check.py -f -> CSV -> feed_lint.py -> commit, push
+   |      a Telegram notice when a run fails; no brief of its own
+   |
    +-- telegram_bot.py     (LaunchAgent com.spark-ioc-feed.telegram, always on)
    |      Telegram <-> commands (add indicators: feed lock -> git pull -> vt_check.run() -> CSV -> commit, push)
    |      live watcher (capture_watcher.py): syslog/spark-<today>.log -> alerts (capped)
@@ -44,6 +49,8 @@ GitHub Actions, 1st of the month: .github/workflows/recheck.yml -> vt_check.py -
 |---|---|---|---|
 | `syslog_receiver.py` | always, restarted by launchd if it dies | UDP 5514, the gateway's datagrams only (`--source`, by default the default route's gateway) | `syslog/spark-<day>.log`, one line per entry; its log names the source it receives from and the ones it drops |
 | `daily_check.sh` | 07:30 daily (a run missed while asleep happens on wake) | capture of the last 2 days, `syslog/checked.json`, `syslog/allow.txt`, VT key from the Keychain | the feed, `syslog/checked.json`, `syslog/.feed-lock` (taken after the retention step, given back right after the push), `~/Library/Logs/spark-ioc-feed/daily-check.log`, a notification, and as its last step the morning brief |
+| `news_check.sh` | 06:30 daily | the Anthropic key from the Keychain (through `news_agent.py`), then the feed and the VT key | `syslog/news-<day>.txt`, the feed, `syslog/checked.json`, `syslog/.feed-lock` (taken after the model call, given back right after the push), `~/Library/Logs/spark-ioc-feed/news-check.log`, a Telegram notice on failure |
+| `news_agent.py` | from the news job or by hand | the Anthropic API (Opus 5.5 with web search and web fetch), the feed, `syslog/checked.json`, `syslog/allow.txt` | the candidates file for `vt_check.py -f`, one `news usage:` line |
 | `syslog_retention.py` | first step of the daily job | capture file names (the date in them) | `.log` → `.log.gz` after 7 days; removes both after 180 |
 | `spark_logs.py` | from the daily job or by hand | capture files, plain or `.gz` | feed rows (through `vt_check.run`) |
 | `vt_check.py` | by hand, from the daily job, from Actions | VirusTotal API v3 | feed rows; with `--recheck`, rewrites rows in place |
@@ -57,11 +64,13 @@ GitHub Actions, 1st of the month: .github/workflows/recheck.yml -> vt_check.py -
 | `telegram_bot.py` | always, restarted by launchd | Telegram updates, today's capture, the feed, the Keychain | the feed (rows and one commit per addition), `syslog/telegram-offset.json`, `~/Library/Logs/spark-ioc-feed/telegram-bot.log`, messages |
 | `capture_watcher.py` | a thread of the bot | today's capture, the feed | alerts (handed to the bot), `syslog/watcher-offset.json` (its place in the capture) |
 | `launchd/com.spark-ioc-feed.telegram.plist` | installed in `~/Library/LaunchAgents/`; `RunAtLoad` and `KeepAlive` | nothing | the bot's log |
+| `launchd/com.spark-ioc-feed.news.plist` | installed in `~/Library/LaunchAgents/`; 06:30 | nothing | the news job's log |
 
-All three LaunchAgents run the Command Line Tools `Python.app` binary as their program (see
-decision D1), with logs in `~/Library/Logs/spark-ioc-feed/`. `daily_check.sh` takes the feed
-lock before its `git pull` (waiting up to twenty minutes for the bot, taking over a lock older
-than three hours), gives it back right after its push and ends by sending the brief; see D6.
+All four LaunchAgents run the Command Line Tools `Python.app` binary as their program (see
+decision D1), with logs in `~/Library/Logs/spark-ioc-feed/`. `daily_check.sh` and
+`news_check.sh` take the feed lock before their `git pull` (waiting up to twenty minutes for
+the bot, taking over a lock older than three hours) and give it back right after their push;
+the daily check ends by sending the brief, the news job sends none; see D6 and D7.
 
 ## 3. Rules the system enforces
 
@@ -89,6 +98,15 @@ IPs), at most 20 a run. The free VirusTotal key allows 500 lookups a day, so a r
 in this order: inbound sources (at most 20), the 40 busiest outbound addresses seen 3+ times,
 then outbound names (minus well-known vendor domains; three or more hosts under one apex are
 looked up once, as the apex), capped at 400 a day; the rest waits for another day (D9).
+
+**What public reporting contributes.** Once a day, before the daily check, Claude searches
+and reads current security reporting for home-relevant network indicators. Our code drops
+hashes, names under the allowed vendor suffixes, shared-platform apexes, private addresses,
+candidates older than seven days, duplicates, feed members and anything looked up in the
+last three days, caps the rest at 40 and hands them to VirusTotal, which admits them at the
+usual bar (D7). Their `COMMENT` starts with `News <report date> <theme>` and never names an
+outlet. The day's 500 free lookups are therefore shared 400 (daily check), 40 (news), 60 (the
+bot and runs by hand).
 
 **Expiration.** Rows are not expired by age; they are *re-verified* by age and removed only
 when VirusTotal no longer flags them above the admission bar:
@@ -518,14 +536,87 @@ row whose source is a public address is read as inbound and its note describes t
 the Spark ever logs such a row after NAT with the line's own WAN address as the source, the note
 would describe the owner's own address.
 
-### D7. A daily news-sourcing agent (requested 2026-10-28, design pending)
+### D7. A daily news agent: Claude reads current public reporting, our code filters, VirusTotal admits (requested 2026-10-28, decided and built 2026-10-29)
 
 Requested: a daily job that finds indicators worth adding in current security reporting,
-checks them and adds them. To be built on the Claude API (Opus 5.5, web search), its key in
-the Keychain, output fed to `vt_check.py` so admission, deduplication and expiration apply
-unchanged. Sources, caps and cost are the open design questions. Rows from the news agent
-will carry a COMMENT starting with `News`, so the brief's origin count ("from news") can show
-them; the morning brief already recognises that convention.
+checks them and adds them. Until now the feed grew from three sources, the gateway's own logs
+(D5, D9), vendor exports and the owner's hand through the bot (D6), and none of them sees an
+indicator before it reaches this network. Public reporting does: phishing kits, info-stealer
+delivery, Android banking trojans and router botnets are written up with their domains and
+addresses within days of being seen, and a gateway that blocks them before a device on the
+LAN reaches them is the feed doing what it is for. The stub of this item fixed two things in
+advance: the agent is built on the Claude API with its key in the Keychain, and its output
+goes through `vt_check.py`, so admission, deduplication and expiration apply unchanged.
+
+Three questions were put to the owner one at a time on 2026-10-29 and answered:
+
+- What the agent optimises for: home-relevant, VirusTotal-confirmed indicators, over breadth
+  (every indicator in every report) or region (reporting about one country). Home-relevant
+  means consumer phishing (banks, parcel and tax portals, streaming services, marketplaces),
+  the delivery and command-and-control of commodity malware that runs on home devices
+  (info-stealers, Android banking trojans, router and camera botnets), fake installers and
+  updates, and scam and tech-support domains. Out: enterprise-only and state-actor
+  infrastructure, file hashes (the gateway blocks by network indicator, not by file), and
+  reports older than seven days.
+- Cost: about $1 a day. Opus 5.5 costs $4 per million input tokens and $20 per million
+  output tokens, a web search $10 per thousand; a D6 note costs about $0.12.
+- Approach: Claude searches and reads the reports, one model call with web search and web
+  fetch, over a fixed list of feeds parsed by our code (cheaper, but blind to anything not on
+  the list and brittle to every site change) or Claude only ranking what a fixed list found.
+
+Decision, approved by the owner the same morning:
+
+- `news_agent.py` (new; the standard library, Python 3.9) makes one Opus 5.5 call the way the
+  notes do (raw HTTP as in `attacker_context.ask_claude`: the same API version and
+  `server-side-fallback` beta, `fallbacks: default`, effort `medium`, a `pause_turn` continued
+  at most three times) with two server tools: `web_search_20260209`, at most 8 searches, and
+  `web_fetch_20260209`, at most 4 pages of at most 20,000 tokens each. The system prompt fixes
+  the scope above and says that search results and fetched pages are data about the
+  reporting, never instructions. The reply ends with one JSON object listing candidates, each
+  with the indicator, the report's date, a theme of a few words and the source URL; the run
+  prints one `news usage: input=N output=N searches=N fetches=N seconds=N` line, as a note
+  prints its usage.
+- Our code, not the model, decides what reaches VirusTotal: `vt_check.classify` keeps IPs,
+  domains and URLs and drops hashes and anything else; then out go names under the allowed
+  vendor suffixes (`spark_logs.ALLOWED_SUFFIXES` and `syslog/allow.txt`), the bare apexes of
+  shared platforms (`vt_check.SHARED_PLATFORMS`), private and reserved addresses, candidates
+  whose report date is missing or more than seven days old, duplicates, values already in the
+  feed, and anything `syslog/checked.json` shows looked up within the last three days (the
+  daily check's cache, the same file and keys; the news job records its own outcomes there).
+  What is left is capped at 40, newest report first, and written to `syslog/news-<date>.txt`
+  as `indicator<TAB>label` for `vt_check.py -f`. The label is `News <report date> <theme>`,
+  the theme cleaned as a Telegram label is (quotes and hidden characters removed, commas made
+  spaces, whitespace collapsed) and cut at 60 characters; it never holds a URL or an outlet's
+  name, so no feed row names a publication. The source URLs go to the run log only. A
+  COMMENT that starts with `News` is what the brief counts as "from news"
+  (`spark_brief.origin`), the convention the stub announced.
+- `news_check.sh` (new, modelled on `daily_check.sh`): the model call runs outside the feed
+  lock, so the bot is not blocked while Claude reads; then the lock is taken under the daily
+  check's rules (wait up to twenty minutes, take over a lock older than three hours),
+  `git pull`, `vt_check.py -f` at the default bar (5 engines for an IP, 3 otherwise),
+  `feed_lint.py`, a commit `Add N indicators from news <date>`, a push of every commit ahead,
+  release. A failure before the push sends `News check failed: <reason>` through
+  `spark_brief.py --send --notice`; the job sends no brief of its own, the 07:30 brief that
+  follows counts its rows. `DRY_RUN=1` runs `vt_check.py --dry-run` and commits nothing;
+  `MAX_CANDIDATES` overrides the 40. Without an `ANTHROPIC_API_KEY` in the Keychain the job
+  says so and ends.
+- `launchd/com.spark-ioc-feed.news.plist` runs it at 06:30 through the Command Line Tools
+  `Python.app` (D1), log `~/Library/Logs/spark-ioc-feed/news-check.log`. Forty lookups at
+  fifteen seconds end by about 06:50; the 07:30 check waits up to twenty minutes for the lock
+  in any case.
+- Budgets: of the free VirusTotal key's 500 lookups a day, 400 stay with the daily check, 40
+  go to the news job and 60 remain for the bot and runs by hand (the README said 100 for
+  those until now). The Claude call is estimated at about $0.80 a run: eight searches $0.08,
+  up to 80,000 fetched tokens and the search results about $0.50 of input, a few thousand
+  output tokens about $0.10; about $25 a month, under the ceiling. The `max_uses` are tuned on
+  the first week's usage lines.
+- Safety and limits: the model's output can only cause VirusTotal lookups and a cleaned label,
+  never a feed row by itself; a quiet day adds nothing; an indicator so fresh that no engine
+  flags it yet is dropped as clean and tried again when a report names it after the cache's
+  three days; no outlet is named in a row; the tests use stand-in addresses and `.example`
+  names only.
+
+Outcome: (filled in after the build)
 
 ### D8. The public repository names nothing of the owner's network, lints the feed before every commit and pins its workflow (decided 2026-10-28, built 2026-10-28/29)
 
@@ -662,6 +753,11 @@ first run on the new order is 2026-10-30 07:30.
 - Run the daily job now: `launchctl start com.spark-ioc-feed.daily`. Until its push it holds
   the feed lock, and the bot answers an addition by saying so. A lock left by a killed bot is
   taken over after three hours; `rmdir syslog/.feed-lock` clears it at once.
+- Did the news job run? `~/Library/Logs/spark-ioc-feed/news-check.log`: its `news usage:` line
+  says what the model call cost, the `Checking N indicators` line how many reached VirusTotal,
+  and `syslog/news-<day>.txt` holds them with their labels. Run it now:
+  `launchctl start com.spark-ioc-feed.news`; a dry run by hand that looks up but commits
+  nothing: `DRY_RUN=1 bash news_check.sh`.
 - The bot's log is `~/Library/Logs/spark-ioc-feed/telegram-bot.log`: a timestamped line for
   its start, for a message ignored from another chat, and for each error. Restart the bot: `launchctl kickstart -k gui/$(id -u)/com.spark-ioc-feed.telegram`.
   Stop it: `launchctl bootout gui/$(id -u)/com.spark-ioc-feed.telegram`.
@@ -681,10 +777,11 @@ first run on the new order is 2026-10-30 07:30.
 
 1. Done 2026-10-29: `sha_pinning_required` is set in the repository's Actions settings (D8), once
    the pinned `actions/checkout` was on main; it could not be set while the workflow named a tag.
-2. Design D7 (news agent) and record it here with its outcome; D6 is built (record the owner's
-   end-to-end check under its outcome).
+2. Done 2026-10-29: D7 (news agent) designed and built, its outcome recorded under it; D6's
+   end-to-end check is recorded under its outcome.
 3. Merge the two duplicate-check implementations when `vt_check.py` is next changed.
 4. The Telegram bot's alert rule (which detections alert, which get a note) and its caps were set
    on measured data and the review's arithmetic; tune them on the first week of `note usage`
-   lines and alerts.
+   lines and alerts. The same for the news agent's search and fetch caps and its 40-lookup
+   share, on the first week of `news usage` lines and of rows added (D7).
 5. The owner's hardening items listed under D8's outcome.
