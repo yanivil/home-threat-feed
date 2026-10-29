@@ -15,6 +15,13 @@ All notable changes to this feed are recorded here.
   on VirusTotal and added. Only the owner's private chat is served, and values the gateway must
   never block (GitHub, Telegram, Anthropic, VirusTotal and the vendor list) are refused. See the
   README, "Telegram", and `docs/system-design.md`, D6.
+- A news agent (`news_agent.py`, `news_check.sh`, LaunchAgent `com.spark-ioc-feed.news`, 06:30):
+  one Claude call with web search and web fetch names the network indicators the week's public
+  security reporting lists for home networks (consumer phishing, commodity malware delivery and
+  control, fake installers, scam domains); the repository's code drops vendor and shared-platform
+  names, stale reports, duplicates and recently checked values and keeps at most 40; VirusTotal
+  admits them at the usual bar. Rows carry `News <report date> <theme>` and never name a
+  publication. See the README, "News agent", and `docs/system-design.md`, D7.
 - `feed_lint.py`: the checks the feed passes before any commit (the exact header, seven fields
   with all but the COMMENT filled in, a VALUE of its TYPE and normalised, no duplicates, no
   hidden characters, none of the hosts this system needs). The daily check, the Telegram bot and
@@ -34,6 +41,8 @@ All notable changes to this feed are recorded here.
   on a family lists its hosts): on a full day's capture (accepted connections included) the names
   alone exceeded the whole budget and the inbound sources the feed is built from were never
   reached. See `docs/system-design.md`, D9.
+- Of the free VirusTotal key's 500 lookups a day, 40 now go to the news check at 06:30; the bot
+  and runs by hand share 60 (100 until now), the daily check keeps its 400.
 - `syslog_receiver.py` keeps only the gateway's datagrams (`--source`, by default the default
   route's gateway) and writes one capture line per datagram.
 - The Spark's system log lines, now forwarded with the security logs, are recognised and never

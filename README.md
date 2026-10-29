@@ -238,8 +238,8 @@ time.
 
 3. If the repository lives on an external disk, grant Full Disk Access once to the Command
    Line Tools' `Python.app` (System Settings → Privacy & Security → Full Disk Access → `+`,
-   then ⌘⇧G and the path in the plist's `ProgramArguments`). All three plists (the receiver, the
-   daily check, the Telegram bot) run their job through that binary because macOS denies
+   then ⌘⇧G and the path in the plist's `ProgramArguments`). All four plists (the receiver, the
+   daily check, the news check, the Telegram bot) run their job through that binary because macOS denies
    `/usr/bin/python3` and `/bin/bash` on external volumes
    without prompting; `docs/system-design.md`, decision D1, has the details.
 
@@ -251,7 +251,7 @@ time.
 - Two days of capture are read because at 07:30 today's file holds only a few hours;
   `syslog/checked.json` keeps yesterday's indicators from being looked up twice. The default
   400 lookups take under two hours, fine for a morning job, and leave 100 of the free key's
-  500 a day for manual runs.
+  500 a day: 40 for the news check ("News agent" below) and 60 for the bot and runs by hand.
 - The pull first brings in rows committed elsewhere (the GitHub web editor, the monthly
   re-check on Actions). A pull or push that fails is logged as `ERROR` with a notification,
   the run exits non-zero, and a commit that could not be pushed stays local until the next run
@@ -314,7 +314,7 @@ checklist, once:
    step 3. A stored chat id that is not a number (the two items swapped, say) is treated the
    same way and logged as `TELEGRAM_CHAT_ID is not a number`, never with the value.
 3. Install the agent (edit the paths in the plist first if the repository or your home
-   directory lives elsewhere). It runs through the same `Python.app` as the other two agents,
+   directory lives elsewhere). It runs through the same `Python.app` as the other agents,
    so the Full Disk Access grant described above covers it:
    ```
    cp launchd/com.spark-ioc-feed.telegram.plist ~/Library/LaunchAgents/
@@ -534,10 +534,12 @@ day).
 ### Quotas
 
 The free VirusTotal key allows 500 lookups a day and 4 a minute. The daily check spends up to
-400 of the day's 500 (`MAX_LOOKUPS` lowers that); your checks through the bot (one lookup per
-indicator), each `/who` and each attacker note (one lookup each) share the remaining 100. While
-a check is writing the feed (`syslog/.feed-lock` exists: the daily check until its push, or the
-bot's own check), notes and `/who` do not ask VirusTotal, so they cannot push a check over the
+400 of the day's 500 (`MAX_LOOKUPS` lowers that) and the 06:30 news check up to 40
+(`MAX_CANDIDATES`, "News agent" below); your checks through the bot (one lookup per
+indicator), each `/who` and each attacker note (one lookup each) share the remaining 60. While
+a check is writing the feed (`syslog/.feed-lock` exists: the daily check until its push, the news
+check from its first lookup until its push, or the bot's own check), notes and `/who` do not ask
+VirusTotal, so they cannot push a check over the
 4 a minute; their facts then say `VirusTotal: skipped (a feed check is running)`. The daily check
 gives the lock back before its brief, so the brief's notes do ask it. A lookup that still meets a
 429 waits 61 seconds and tries once more; a second 429 is the quota stop: the check keeps the rows
@@ -574,6 +576,85 @@ through launchd, so after a rotation they go on writing to the renamed file unti
 start: restart them then (`launchctl kickstart -k gui/$(id -u)/com.spark-ioc-feed.telegram`,
 and the same with `com.spark-ioc-feed.syslog`). The entry leaves the rotated files uncompressed
 for that reason.
+
+## News agent: indicators from the week's public reporting
+
+`news_agent.py` asks Claude (Opus 5.5 with web search and web fetch, one call) which network
+indicators the last seven days of public security reporting name, keeps the home-relevant ones,
+and lets VirusTotal decide; `news_check.sh` does that every morning at 06:30 through
+`launchd/com.spark-ioc-feed.news.plist` and commits what VirusTotal confirms. The design and the
+reasons are in `docs/system-design.md`, D7.
+
+Home-relevant, to the agent: consumer phishing (banks, parcel and tax portals, streaming
+services, marketplaces), the delivery and command-and-control of commodity malware that runs on
+home devices (info-stealers, Android banking trojans, router and camera botnets), fake installers
+and updates, scam and tech-support domains. Not: enterprise-only and state-actor infrastructure,
+file hashes (the gateway blocks by network indicator), abused legitimate services, victims'
+names, anything reported more than seven days ago.
+
+The model names candidates; this repository's code decides what reaches VirusTotal; VirusTotal
+decides what reaches the feed:
+
+- `vt_check.classify` keeps IPs, domains and URLs (defanged forms accepted) and drops hashes and
+  anything else.
+- Out go names under the vendor suffixes (`spark_logs.ALLOWED_SUFFIXES` and `syslog/allow.txt`),
+  the bare apexes of shared platforms (`netlify.app`, `pages.dev`, …), the hosts this system
+  needs (the `feed_lint.py` list), private and reserved addresses, candidates with no report date
+  or one more than seven days old, duplicates, values already in the feed, and anything
+  `syslog/checked.json` shows looked up within the last three days.
+- At most 40 are kept, newest report first, and written to `syslog/news-<date>.txt` as
+  `indicator<TAB>label`, the `vt_check.py -f` format, so you can run them by hand. The label is
+  `News <report date> <theme>`: the theme is a few words from the model, cleaned as a Telegram
+  label is and cut at 60 characters, and never holds a URL or an outlet's name. The source URLs
+  are printed in the run log only, so no feed row names a publication.
+- `python3 news_agent.py --check syslog/news-<date>.txt` looks them up exactly as `vt_check.py -f`
+  would (3 engines for a domain or URL, 5 for an IP) and records every verdict in
+  `syslog/checked.json`, so the following days skip them; with `--dry-run` nothing is recorded or
+  written.
+
+Setting it up, once:
+
+1. Both keys in the login Keychain: `VT_API_KEY` ("Daily check on this Mac" above) and
+   `ANTHROPIC_API_KEY` ("Setting it up" under Telegram, step 5).
+2. A dry run by hand, which reads the week's reporting, looks the candidates up and changes
+   nothing:
+   ```
+   DRY_RUN=1 bash news_check.sh
+   ```
+3. Install the agent (edit the two paths in the plist first if the repository lives elsewhere).
+   It runs through the same `Python.app` as the other agents, so the Full Disk Access grant
+   covers it:
+   ```
+   cp launchd/com.spark-ioc-feed.news.plist ~/Library/LaunchAgents/
+   launchctl load ~/Library/LaunchAgents/com.spark-ioc-feed.news.plist
+   launchctl start com.spark-ioc-feed.news      # run it now instead of waiting for 06:30
+   ```
+
+What a run does:
+
+- The model call runs first and outside the feed lock, so the bot is not held up while Claude
+  reads. Then the lock is taken under the daily check's rules (wait up to twenty minutes, take
+  over a lock older than three hours), `git pull`, `feed_lint.py`, the lookups, `feed_lint.py`
+  again, a commit of `spark-ioc-feed.csv` only, `Add N indicators from news <date>`, a push, and
+  the lock is given back. A day with no candidates takes no lock and ends.
+- It sends no brief: the 07:30 daily check's brief counts its rows as `from news`.
+- Everything is logged to `~/Library/Logs/spark-ioc-feed/news-check.log`: the agent's one
+  `news usage: input=N output=N searches=N fetches=N seconds=N` line (what the call cost; the
+  design budgets about $0.80 a run, $25 a month), `N candidates for VirusTotal from M named
+  (dropped: 2 vendor domain, 1 older than 7 days, …)` with one line per candidate and its
+  source, then the lookups as `vt_check.py` prints them, `News check: 2 added, 3 clean`,
+  `Committed: …`, `Pushed to origin/main`, `News check done`.
+- A run that fails sends one Telegram line, `News check failed: <reason>` (printed in the log
+  without a bot token), raises a macOS notification and exits 1. The reasons: no
+  `ANTHROPIC_API_KEY` in the Keychain; the model could not be reached; the feed on main fails
+  its lint (fix `spark-ioc-feed.csv`, nothing was looked up); no `VT_API_KEY`; the VirusTotal
+  quota reached (the rows done so far are committed and pushed first; the rest are candidates
+  again the next morning while a report still names them); the feed locked for over twenty
+  minutes; a pull or push that failed (the commit stays local and the next run pushes it).
+- By hand: `MAX_CANDIDATES=10 bash news_check.sh` lowers the cap for the day;
+  `python3 news_agent.py` alone writes today's candidates file and prints them, their labels and
+  sources, without a lookup; `python3 news_agent.py --check syslog/news-<date>.txt --dry-run`
+  previews the lookups.
 
 ## Keeping the feed fresh
 

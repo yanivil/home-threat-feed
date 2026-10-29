@@ -50,7 +50,7 @@ GitHub Actions, 1st of the month: .github/workflows/recheck.yml -> vt_check.py -
 | `syslog_receiver.py` | always, restarted by launchd if it dies | UDP 5514, the gateway's datagrams only (`--source`, by default the default route's gateway) | `syslog/spark-<day>.log`, one line per entry; its log names the source it receives from and the ones it drops |
 | `daily_check.sh` | 07:30 daily (a run missed while asleep happens on wake) | capture of the last 2 days, `syslog/checked.json`, `syslog/allow.txt`, VT key from the Keychain | the feed, `syslog/checked.json`, `syslog/.feed-lock` (taken after the retention step, given back right after the push), `~/Library/Logs/spark-ioc-feed/daily-check.log`, a notification, and as its last step the morning brief |
 | `news_check.sh` | 06:30 daily | the Anthropic key from the Keychain (through `news_agent.py`), then the feed and the VT key | `syslog/news-<day>.txt`, the feed, `syslog/checked.json`, `syslog/.feed-lock` (taken after the model call, given back right after the push), `~/Library/Logs/spark-ioc-feed/news-check.log`, a Telegram notice on failure |
-| `news_agent.py` | from the news job or by hand | the Anthropic API (Opus 5.5 with web search and web fetch), the feed, `syslog/checked.json`, `syslog/allow.txt` | the candidates file for `vt_check.py -f`, one `news usage:` line |
+| `news_agent.py` | from the news job or by hand | the Anthropic API (Opus 5.5 with web search and web fetch), the feed, `syslog/checked.json`, `syslog/allow.txt`; with `--check`, VirusTotal | the candidates file (the `vt_check.py -f` format), one `news usage:` line; with `--check`, the rows VirusTotal confirms and every verdict in `syslog/checked.json` |
 | `syslog_retention.py` | first step of the daily job | capture file names (the date in them) | `.log` → `.log.gz` after 7 days; removes both after 180 |
 | `spark_logs.py` | from the daily job or by hand | capture files, plain or `.gz` | feed rows (through `vt_check.run`) |
 | `vt_check.py` | by hand, from the daily job, from Actions | VirusTotal API v3 | feed rows; with `--recheck`, rewrites rows in place |
@@ -616,7 +616,29 @@ Decision, approved by the owner the same morning:
   three days; no outlet is named in a row; the tests use stand-in addresses and `.example`
   names only.
 
-Outcome: (filled in after the build)
+Outcome (2026-10-29, built test-first in a worktree): as decided, with one change of mechanism.
+`news_check.sh` runs the lookups through `news_agent.py --check <file>` rather than
+`vt_check.py -f`: the `--check` command calls the same `vt_check.run` with the same bar and
+prints the same lines, and in addition records every verdict (added, clean, not found) in
+`syslog/checked.json`, which a shell call of `vt_check.py` cannot do and which the three-day
+rule above depends on. The candidates file keeps the `vt_check.py -f` format, so a run by hand
+is unchanged, and a dry run records nothing. The two programs agree on exit codes: 0 good, 2
+the model or VirusTotal unreachable, 3 a key missing, 4 the VirusTotal quota reached (the
+rows done so far are committed and pushed first, then the notice says `exited 4`). A day
+with no candidates takes no lock and runs no pull. The agent's only arguments are `--out`,
+`--max-candidates`, `--dir`, `--feed`, `--delay`, `--check` and `--dry-run`; the source URLs
+appear in the run log as `  <indicator>  <label>  <source>` lines and nowhere else. Tests:
+40 in `tests/test_news_agent.py` (the API call with a fake HTTP function, `pause_turn`
+continued, a refusal, the JSON found at the end of prose, every drop rule with its reason,
+the cap and the order, the label's cleaning and cut, the file, `--check` against a fake
+VirusTotal including the quota stop and the cache written, the CLI's exit codes) and 20 in
+`tests/test_news_check.py` (the script against a temporary repository and origin with a stub
+agent and a stub brief: the quiet day, the commit's subject and content, the dry run,
+`MAX_CANDIDATES`, each failure's notice, exit code and lock state, the lock wait and the
+stale take-over, a failed pull and a failed push, the plist's label, program, schedule and
+log). The whole suite stands at 594 tests. Still the owner's to do, since the key is theirs:
+the first dry run (`DRY_RUN=1 bash news_check.sh`) and the plist's installation (README,
+"News agent"); the first week's `news usage:` lines then decide the caps (open item 4).
 
 ### D8. The public repository names nothing of the owner's network, lints the feed before every commit and pins its workflow (decided 2026-10-28, built 2026-10-28/29)
 
