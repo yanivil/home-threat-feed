@@ -629,7 +629,8 @@ the morning run's 400 names in the cache and the exception in, the same window r
 553 names, 113 family apexes). The 07:30 run
 of 2026-10-29, the last on the old order, confirmed the finding: its 400 lookups all went to
 names (394 clean, 6 unknown to VirusTotal), it added nothing and left 2,041 for another day.
-Awaiting the owner's word to merge; the first run on the new order is 2026-10-30 07:30.
+Merged into main on the owner's word the same morning, with the shared-platform exception; the
+first run on the new order is 2026-10-30 07:30.
 
 ## 5. Operating it
 
