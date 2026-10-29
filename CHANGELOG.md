@@ -28,6 +28,11 @@ All notable changes to this feed are recorded here.
 - The COMMENT column names no vendor: 1,230 rows that read `<vendor> export <date>` or named a
   national alert now read `External export <date>` or `External alert phishing` (the group and
   the dates are unchanged), and `cyberint_xlsx.py` writes the External label from now on.
+- The daily check spends its lookups on inbound sources first, then the 40 busiest outbound
+  addresses (`--max-ips`), then outbound names, where three or more hosts under one apex are
+  one lookup of the apex: on a full day's capture (accepted connections included) the names
+  alone exceeded the whole budget and the inbound sources the feed is built from were never
+  reached. See `docs/system-design.md`, D9.
 - `syslog_receiver.py` keeps only the gateway's datagrams (`--source`, by default the default
   route's gateway) and writes one capture line per datagram.
 - The Spark's system log lines, now forwarded with the security logs, are recognised and never

@@ -244,13 +244,79 @@ class SelectTest(unittest.TestCase):
         },
     }
 
+    # Three hosts under one apex (a family), one lone host, and two hosts under another apex (not a family).
+    FAMILY = {
+        "inbound": {},
+        "outbound": {
+            "a.cdn.example": {"count": 5, "devices": ["192.168.1.100"]},
+            "b.cdn.example": {"count": 4, "devices": ["192.168.1.101"]},
+            "c.cdn.example": {"count": 1, "devices": ["192.168.1.100"]},
+            "lone.example.net": {"count": 2, "devices": ["192.168.1.100"]},
+            "x.pair.example": {"count": 1, "devices": ["192.168.1.100"]},
+            "y.pair.example": {"count": 1, "devices": ["192.168.1.100"]},
+        },
+    }
+
     def test_groups_candidates_in_check_order_busiest_first(self):
         groups = spark_logs.select(self.FOUND, set(), {}, today=TODAY)
 
-        self.assertEqual(list(groups), ["names", "ips", "inbound"])
-        self.assertEqual(groups["names"], ["c2.example.net", "evil.example"])  # every name, vendor ones excepted
-        self.assertEqual(groups["ips"], ["185.1.2.9", "185.1.2.7"])  # addresses seen 3+ times
+        self.assertEqual(list(groups), ["inbound", "ips", "names"])
         self.assertEqual(groups["inbound"], ["109.205.211.205", "31.14.32.6"])  # sources seen 5+ times
+        self.assertEqual(groups["ips"], ["185.1.2.9", "185.1.2.7"])  # addresses seen 3+ times
+        self.assertEqual(groups["names"], ["c2.example.net", "evil.example"])  # every name, vendor ones excepted
+
+    def test_apex_is_the_registrable_domain_near_enough(self):
+        for name, expected in [
+            ("rr2---sn-nhpax-ua8e7.googlevideo.com", "googlevideo.com"),
+            ("Host.Example.COM.", "example.com"),
+            ("example.com", "example.com"),
+            ("a.b.example.co.il", "example.co.il"),
+            ("www.foo.co.uk", "foo.co.uk"),
+            ("shop.example.com.au", "example.com.au"),
+            ("mail.ac.example", "ac.example"),  # "ac" before a long TLD is an ordinary label
+            ("single", "single"),
+        ]:
+            with self.subTest(name=name):
+                self.assertEqual(spark_logs.apex(name), expected)
+
+    def test_three_or_more_hosts_under_one_apex_are_one_lookup_of_the_apex(self):
+        groups = spark_logs.select(self.FAMILY, set(), {}, today=TODAY)
+
+        # the family counts as the sum of its hosts (10), ahead of the lone host (2) and the pair (1 each)
+        self.assertEqual(groups["names"], ["cdn.example", "lone.example.net", "x.pair.example", "y.pair.example"])
+
+    def test_a_family_apex_is_cached_and_skipped_as_itself(self):
+        cache = {"cdn.example": {"checked": "2026-10-19", "malicious": 0, "total": 92}}
+
+        groups = spark_logs.select(self.FAMILY, set(), cache, today=TODAY)
+
+        self.assertEqual(groups["names"], ["lone.example.net", "x.pair.example", "y.pair.example"])
+
+    def test_a_lone_host_is_looked_up_even_under_an_apex_checked_clean(self):
+        cache = {"pair.example": {"checked": "2026-10-19", "malicious": 0, "total": 92}}
+
+        groups = spark_logs.select(self.FAMILY, set(), cache, today=TODAY)
+
+        self.assertIn("x.pair.example", groups["names"])
+        self.assertIn("y.pair.example", groups["names"])
+
+    def test_members_are_the_hosts_a_family_apex_stands_for_and_a_lone_host_itself(self):
+        names = spark_logs.candidate_names(self.FAMILY["outbound"])
+
+        self.assertEqual(spark_logs.members(names, "cdn.example"), ["a.cdn.example", "b.cdn.example", "c.cdn.example"])
+        self.assertEqual(spark_logs.members(names, "lone.example.net"), ["lone.example.net"])
+        self.assertEqual(spark_logs.members(names, "x.pair.example"), ["x.pair.example"])
+
+    def test_at_most_max_ips_addresses_are_checked_busiest_first(self):
+        found = {"inbound": {}, "outbound": {f"185.1.2.{i}": {"count": 2 + i, "devices": ["192.168.1.100"]}
+                                             for i in range(1, 42)}}
+
+        groups = spark_logs.select(found, set(), {}, today=TODAY)
+
+        self.assertEqual(len(groups["ips"]), 40)
+        self.assertEqual(groups["ips"][0], "185.1.2.41")
+        self.assertNotIn("185.1.2.1", groups["ips"])
+        self.assertEqual(spark_logs.select(found, set(), {}, today=TODAY, max_ips=2)["ips"], ["185.1.2.41", "185.1.2.40"])
 
     def test_allow_decides_which_names_are_skipped(self):
         groups = spark_logs.select(self.FOUND, set(), {}, today=TODAY, allow={"example.net"})
@@ -338,7 +404,7 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(self.feed.read_text().splitlines()[1],
                          "vt-ip-1,31.14.32.6,IP,high,high,AB,seen in Spark logs 2026-10-20 - VT 10/90 malicious 2026-09-01")
 
-    def test_lookups_go_to_outbound_names_then_recurring_addresses_then_inbound(self):
+    def test_lookups_go_to_inbound_then_recurring_addresses_then_outbound_names(self):
         fake = FakeVT({})
         found = {"inbound": {"185.1.2.1": 5, "185.1.2.2": 50},
                  "outbound": {"a.example": {"count": 1, "devices": ["10.0.0.1"]},
@@ -347,8 +413,32 @@ class CheckTest(unittest.TestCase):
 
         report = self.check(found, fake=fake, max_lookups=3)
 
-        self.assertEqual(fake.calls, ["/domains/a.example", "/ip_addresses/185.1.2.3", "/ip_addresses/185.1.2.2"])
-        self.assertEqual(report["skipped"], ["185.1.2.1"])
+        self.assertEqual(fake.calls, ["/ip_addresses/185.1.2.2", "/ip_addresses/185.1.2.1", "/ip_addresses/185.1.2.3"])
+        self.assertEqual(report["skipped"], ["a.example"])
+
+    def test_a_share_a_group_does_not_use_passes_down_to_the_names(self):
+        fake = FakeVT({})
+        found = {"inbound": {"185.1.2.1": 5, "185.1.2.2": 50},
+                 "outbound": {"a.example": {"count": 1, "devices": ["10.0.0.1"]},
+                              "b.example": {"count": 1, "devices": ["10.0.0.1"]}}}
+
+        report = self.check(found, fake=fake, max_lookups=3, max_inbound=1)
+
+        self.assertEqual(fake.calls, ["/ip_addresses/185.1.2.2", "/domains/a.example", "/domains/b.example"])
+        self.assertEqual(report["skipped"], [])
+
+    def test_an_outbound_hit_on_a_family_apex_names_every_device_that_reached_it(self):
+        fake = FakeVT({"/domains/cdn.example": vt_object("domain", "cdn.example", malicious=9)})
+        found = {"inbound": {},
+                 "outbound": {"a.cdn.example": {"count": 3, "devices": ["10.0.0.1"]},
+                              "b.cdn.example": {"count": 2, "devices": ["10.0.0.2"]},
+                              "c.cdn.example": {"count": 1, "devices": ["10.0.0.1"]}}}
+
+        report = self.check(found, fake=fake)
+
+        self.assertEqual(fake.calls, ["/domains/cdn.example"], "one lookup for the family")
+        self.assertEqual(report["outbound_hits"], [("cdn.example", "Domain 9/89 malicious", ["10.0.0.1", "10.0.0.2"])])
+        self.assertEqual(json.loads(self.cache.read_text())["cdn.example"]["malicious"], 9)
 
     def test_one_off_inbound_sources_and_single_contact_addresses_are_never_looked_up(self):
         fake = FakeVT({})
@@ -376,15 +466,16 @@ class CheckTest(unittest.TestCase):
 
         self.assertEqual(json.loads(self.cache.read_text()), {})
 
-    def test_quota_stop_during_outbound_leaves_inbound_for_another_day(self):
-        fake = FakeVT({"/domains/a.example": (429, {"error": {"code": "QuotaExceededError"}})})
+    def test_quota_stop_during_inbound_leaves_outbound_for_another_day(self):
+        fake = FakeVT({"/ip_addresses/185.1.2.1": (429, {"error": {"code": "QuotaExceededError"}})})
         found = {"inbound": {"185.1.2.1": 5}, "outbound": {"a.example": {"count": 1, "devices": ["10.0.0.1"]}}}
 
         report = self.check(found, fake=fake)
 
-        self.assertEqual(fake.calls, ["/domains/a.example"] * 2, "a 429 is tried once more")
+        self.assertEqual(fake.calls, ["/ip_addresses/185.1.2.1"] * 2, "a 429 is tried once more")
         self.assertTrue(report["quota"])
         self.assertEqual(report["added"], [])
+        self.assertEqual(report["outbound_hits"], [])
 
 
 class CommandLineTest(unittest.TestCase):
@@ -397,9 +488,9 @@ class CommandLineTest(unittest.TestCase):
         return subprocess.run([sys.executable, str(REPO / "spark_logs.py"), *args],
                               capture_output=True, text=True, env=cli_env(env_key), cwd=REPO)
 
-    def listing(self, *args, allow=None):
+    def listing(self, *args, allow=None, capture=None):
         with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, "spark-2026-10-20.log").write_text(self.CAPTURE)
+            Path(tmp, "spark-2026-10-20.log").write_text(capture or self.CAPTURE)
             Path(tmp, "feed.csv").write_text(HEADER)
             if allow is not None:
                 Path(tmp, "allow.txt").write_text(allow)
@@ -411,37 +502,55 @@ class CommandLineTest(unittest.TestCase):
         out = self.listing()
 
         self.assertIn("2 inbound sources and 4 outbound destinations in the last 1 day(s); "
-                      "to check: 1 outbound names, 1 outbound addresses, 1 inbound sources", out)
-        names, ips, inbound = (out.index(h) for h in ("outbound names:", "outbound addresses:", "inbound sources:"))
-        self.assertLess(names, ips)
-        self.assertLess(ips, inbound)
-        self.assertLess(names, out.index("evil.example"))
-        self.assertLess(out.index("evil.example"), ips)
-        self.assertLess(ips, out.index("185.1.2.7"))
-        self.assertLess(out.index("185.1.2.7"), inbound)
+                      "to check: 1 inbound sources, 1 outbound addresses, 1 outbound names (0 family apexes)", out)
+        inbound, ips, names = (out.index(h) for h in ("inbound sources:", "outbound addresses:", "outbound names:"))
+        self.assertLess(inbound, ips)
+        self.assertLess(ips, names)
         self.assertLess(inbound, out.index("109.205.211.205"))
+        self.assertLess(out.index("109.205.211.205"), ips)
+        self.assertLess(ips, out.index("185.1.2.7"))
+        self.assertLess(out.index("185.1.2.7"), names)
+        self.assertLess(names, out.index("evil.example"))
         self.assertIn("1 under allowed vendor domains", out)
-        self.assertIn("seen 3+ times", out)
-        self.assertIn("seen 5+ times", out)
-        self.assertIn("at most 20 a run", out)
+        self.assertIn("seen 3+ times, at most 40 a run", out)
+        self.assertIn("seen 5+ times, at most 20 a run", out)
+        self.assertIn("0 family apexes of 3+ hosts", out)
         for skipped in ("ab.chatgpt.com", "185.1.2.8", "31.14.32.6"):
             self.assertNotIn(skipped, out)
+
+    def test_listing_shows_a_family_as_its_apex_with_its_hosts_counted(self):
+        family = "".join(OUTBOUND_DOMAIN.replace("ab.chatgpt.com", f"{h}.cdn.example") + "\n" for h in "abc")
+
+        out = self.listing(capture=self.CAPTURE + family)
+
+        self.assertIn("to check: 1 inbound sources, 1 outbound addresses, 2 outbound names (1 family apexes)", out)
+        self.assertIn("1 family apexes of 3+ hosts", out)
+        self.assertRegex(out, r"cdn\.example\s+x3\s+3 hosts, from 192\.168\.2\.121")
+        self.assertNotIn("a.cdn.example", out)
 
     def test_allow_file_in_the_capture_directory_extends_the_vendor_list(self):
         out = self.listing(allow="evil.example\n")
 
-        self.assertIn("to check: 0 outbound names", out)
+        self.assertIn("0 outbound names", out)
         self.assertIn("2 under allowed vendor domains", out)
         self.assertNotIn("evil.example", out)
 
     def test_thresholds_and_the_inbound_cap_are_flags(self):
         out = self.listing("--min-ip-hits", "1", "--min-inbound-hits", "1", "--max-inbound", "1")
 
-        self.assertIn("to check: 1 outbound names, 2 outbound addresses, 1 inbound sources", out)
+        self.assertIn("to check: 1 inbound sources, 2 outbound addresses, 1 outbound names", out)
         self.assertIn("185.1.2.8", out)
         self.assertIn("109.205.211.205", out)
         self.assertNotIn("31.14.32.6", out)
-        self.assertIn("at most 1 a run", out)
+        self.assertIn("seen 1+ times, at most 1 a run", out)
+
+    def test_the_address_cap_is_a_flag(self):
+        out = self.listing("--min-ip-hits", "1", "--max-ips", "1")
+
+        self.assertIn("to check: 1 inbound sources, 1 outbound addresses, 1 outbound names", out)
+        self.assertIn("185.1.2.7", out)
+        self.assertNotIn("185.1.2.8", out)
+        self.assertIn("seen 1+ times, at most 1 a run", out)
 
     def test_check_passes_the_defaults_on(self):
         done = {"added": [], "outbound_hits": [], "clean": 0, "not_found": 0, "skipped": [], "quota": False}
@@ -481,7 +590,7 @@ class CommandLineTest(unittest.TestCase):
 
         self.assertEqual(code, 0)
         make_fetch.assert_called_once_with("from-keychain")
-        self.assertEqual(fake.calls, ["/domains/evil.example", "/ip_addresses/185.1.2.7", "/ip_addresses/109.205.211.205"])
+        self.assertEqual(fake.calls, ["/ip_addresses/109.205.211.205", "/ip_addresses/185.1.2.7", "/domains/evil.example"])
 
 
 if __name__ == "__main__":

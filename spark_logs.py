@@ -11,11 +11,12 @@ Reads syslog/spark-YYYY-MM-DD.log (written by syslog_receiver.py) and pulls out:
              "look at that device", not just "block the address"
   inbound  - public addresses that probed the WAN; the ones VirusTotal flags are
              ADDED to the feed (they are attacker-side, blocking them costs nothing)
-Lookups go to outbound names first (the hunting signal; hosts under ALLOWED_SUFFIXES
-and syslog/allow.txt are skipped), then outbound addresses reached --min-ip-hits times,
-then at most --max-inbound sources that probed --min-inbound-hits times. Indicators
-already in the feed, or checked within --recheck-days (syslog/checked.json), are
-skipped, and --max-lookups caps a run so it fits the free API's daily quota.
+Lookups go first to at most --max-inbound sources that probed --min-inbound-hits times,
+then to the --max-ips busiest outbound addresses reached --min-ip-hits times, then to
+outbound names (the hunting signal; hosts under ALLOWED_SUFFIXES and syslog/allow.txt are
+skipped), where FAMILY_HOSTS or more hosts under one apex are looked up once, as the apex.
+Indicators already in the feed, or checked within --recheck-days (syslog/checked.json),
+are skipped, and --max-lookups caps a run so it fits the free API's daily quota.
 """
 
 import argparse
@@ -54,6 +55,13 @@ ALLOWED_SUFFIXES = frozenset({
     "ntp.org", "quad9.net", "one.one.one.one", "samsungcloudsolution.net",
     "anthropic.com", "openai.com", "chatgpt.com",
 })
+# Hosts under one apex that make a family: a CDN's tail of hostnames (rr2---sn-….googlevideo.com,
+# ….cdn.example) is one service, looked up once as the apex. Fewer hosts stay separate lookups, so
+# an infected device's one host under a dynamic-DNS or hosting apex keeps its own verdict.
+FAMILY_HOSTS = 3
+# Second-level labels under a two-letter country code that are registries, not registrants
+# (co.il, co.uk, com.au, ac.jp): the apex of a host under them has three labels.
+SECOND_LEVEL = frozenset({"co", "com", "net", "org", "ac", "gov", "edu", "or", "ne"})
 
 
 class FeedMembers:
@@ -86,6 +94,26 @@ def allowed(name, suffixes=ALLOWED_SUFFIXES):
     """True when `name` is one of the allowed vendor domains or a host under one of them."""
     labels = name.lower().rstrip(".").split(".")
     return any(".".join(labels[i:]) in suffixes for i in range(len(labels)))
+
+
+def apex(name):
+    """The registrable domain of `name`, near enough: its last two labels, or three under a
+    second-level registry of a country code (SECOND_LEVEL)."""
+    labels = name.lower().rstrip(".").split(".")
+    if len(labels) >= 3 and labels[-2] in SECOND_LEVEL and len(labels[-1]) == 2:
+        return ".".join(labels[-3:])
+    return ".".join(labels[-2:])
+
+
+def candidate_names(outbound, allow=ALLOWED_SUFFIXES):
+    """The outbound host names worth a lookup: not addresses, not under an allowed vendor domain."""
+    return [i for i in outbound if _ip(i) is None and not allowed(i, allow)]
+
+
+def members(names, indicator):
+    """The names `indicator` stands for: the hosts under it when it is a family apex, else itself."""
+    hosts = [n for n in names if apex(n) == indicator]
+    return sorted(hosts) if len(hosts) >= FAMILY_HOSTS else [indicator]
 
 
 def load_allow(path):
@@ -215,14 +243,17 @@ def collect(directory, days=1, today=None, wan_ip=None):
 
 
 def select(found, in_feed, cache, today, recheck_days=30, *, allow=ALLOWED_SUFFIXES,
-           min_ip_hits=3, min_inbound_hits=5, max_inbound=20):
+           min_ip_hits=3, min_inbound_hits=5, max_inbound=20, max_ips=40):
     """Indicators still worth a lookup, grouped in the order they are checked, busiest first.
 
-    "names": every outbound host name not under an allowed vendor domain (the hunting
-    signal); "ips": outbound addresses reached at least min_ip_hits times (a C2 reached
-    by address recurs, a CDN edge does not); "inbound": sources that probed at least
-    min_inbound_hits times, at most max_inbound of them a run (persistent probing, not
-    one-off background noise). Feed members and recent cache entries are left out.
+    "inbound": sources that probed at least min_inbound_hits times, at most max_inbound of
+    them a run (persistent probing, not one-off background noise); "ips": the max_ips busiest
+    outbound addresses reached at least min_ip_hits times (a C2 reached by address recurs,
+    a CDN edge does not); "names": every outbound host name not under an allowed vendor
+    domain (the hunting signal), where FAMILY_HOSTS or more hosts under one apex are one
+    entry, the apex, counted as their sum. The caps give the first two groups a share of
+    --max-lookups that the names cannot take. Feed members and recent cache entries are
+    left out.
     """
     today = date.fromisoformat(today)
     outbound = found["outbound"]
@@ -236,13 +267,21 @@ def select(found, in_feed, cache, today, recheck_days=30, *, allow=ALLOWED_SUFFI
     def busiest(indicators, count):
         return sorted((i for i in indicators if fresh(i)), key=lambda i: -count(i))
 
-    names = [i for i in outbound if _ip(i) is None and not allowed(i, allow)]
+    by_apex = {}
+    for name in candidate_names(outbound, allow):
+        by_apex.setdefault(apex(name), []).append(name)
+    names = {}  # entry (a family apex or a lone host) -> how often it was reached
+    for family, hosts in by_apex.items():
+        if len(hosts) >= FAMILY_HOSTS:
+            names[family] = sum(outbound[h]["count"] for h in hosts)
+        else:
+            names.update((h, outbound[h]["count"]) for h in hosts)
     ips = [i for i in outbound if _ip(i) is not None and outbound[i]["count"] >= min_ip_hits]
     inbound = [i for i in found["inbound"] if found["inbound"][i] >= min_inbound_hits]
     return {
-        "names": busiest(names, lambda i: outbound[i]["count"]),
-        "ips": busiest(ips, lambda i: outbound[i]["count"]),
         "inbound": busiest(inbound, lambda i: found["inbound"][i])[:max_inbound],
+        "ips": busiest(ips, lambda i: outbound[i]["count"])[:max_ips],
+        "names": busiest(names, names.__getitem__),
     }
 
 
@@ -263,16 +302,17 @@ def load_cache(path):
 
 
 def check(found, feed_path, cache_path, fetch, *, today=None, max_lookups=None, min_malicious=None,
-          recheck_days=30, allow=ALLOWED_SUFFIXES, min_ip_hits=3, min_inbound_hits=5, max_inbound=20,
+          recheck_days=30, allow=ALLOWED_SUFFIXES, min_ip_hits=3, min_inbound_hits=5, max_inbound=20, max_ips=40,
           delay=vt_check.FREE_API_DELAY, sleep=time.sleep, out=print):
-    """Look the selected indicators up, outbound first: report flagged destinations, add flagged inbound sources."""
+    """Look the selected indicators up, inbound first: add flagged inbound sources, report flagged destinations."""
     today = today or date.today().isoformat()
     cache = load_cache(cache_path)
     in_feed = feed_members(Path(feed_path).read_text())
     groups = select(found, in_feed, cache, today, recheck_days, allow=allow, min_ip_hits=min_ip_hits,
-                    min_inbound_hits=min_inbound_hits, max_inbound=max_inbound)
+                    min_inbound_hits=min_inbound_hits, max_inbound=max_inbound, max_ips=max_ips)
     picked, skipped = budget(groups, max_lookups)
-    outbound, inbound = picked["names"] + picked["ips"], picked["inbound"]
+    inbound, outbound = picked["inbound"], picked["ips"] + picked["names"]
+    names = candidate_names(found["outbound"], allow)
     report = {"added": [], "outbound_hits": [], "clean": 0, "not_found": 0, "skipped": skipped, "quota": False,
               "stamped": []}
 
@@ -282,11 +322,11 @@ def check(found, feed_path, cache_path, fetch, *, today=None, max_lookups=None, 
         return vt_check.run([(i, label) for i in items], feed_path, fetch, min_malicious=min_malicious,
                             dry_run=dry_run, delay=delay, sleep=sleep, today=today, out=out)
 
-    results = run(outbound, f"Outbound destination - Spark syslog {today}", dry_run=True)
-    if outbound and inbound and not any(r.status == "quota" for r in results):
+    results = run(inbound, f"Inbound probe of WAN - Spark syslog {today}", dry_run=False)
+    if inbound and outbound and not any(r.status == "quota" for r in results):
         sleep(delay)
     if not any(r.status == "quota" for r in results):
-        results += run(inbound, f"Inbound probe of WAN - Spark syslog {today}", dry_run=False)
+        results += run(outbound, f"Outbound destination - Spark syslog {today}", dry_run=True)
 
     for r in results:
         ratio = RATIO_RE.search(r.detail)
@@ -298,7 +338,8 @@ def check(found, feed_path, cache_path, fetch, *, today=None, max_lookups=None, 
         if r.status == "added":
             report["added"].append(r.indicator)
         elif r.status == "would-add":
-            report["outbound_hits"].append((r.indicator, r.detail.split(" -> ")[0], found["outbound"][r.indicator]["devices"]))
+            devices = sorted({d for h in members(names, r.indicator) for d in found["outbound"][h]["devices"]})
+            report["outbound_hits"].append((r.indicator, r.detail.split(" -> ")[0], devices))
         elif r.status == "clean":
             report["clean"] += 1
         elif r.status == "quota":
@@ -317,12 +358,14 @@ def main(argv=None):
     parser.add_argument("--check", action="store_true",
                         help="look the candidates up on VirusTotal (key from VT_API_KEY or the Keychain)")
     parser.add_argument("--max-lookups", type=int, default=400,
-                        help="lookups per run: outbound names, then outbound addresses, then inbound sources (default 400)")
+                        help="lookups per run: inbound sources, then outbound addresses, then outbound names (default 400)")
     parser.add_argument("--min-ip-hits", type=int, default=3,
                         help="outbound addresses (no name) are looked up once reached this often (default 3)")
     parser.add_argument("--min-inbound-hits", type=int, default=5,
                         help="inbound sources are looked up once they probed this often (default 5)")
     parser.add_argument("--max-inbound", type=int, default=20, help="inbound sources looked up per run (default 20)")
+    parser.add_argument("--max-ips", type=int, default=40,
+                        help="outbound addresses looked up per run, busiest first (default 40)")
     parser.add_argument("--recheck-days", type=int, default=30, help="days before an indicator is looked up again")
     parser.add_argument("--feed", type=Path, default=vt_check.FEED, help="feed CSV to append confirmed inbound sources to")
     parser.add_argument("--wan-ip", help="the gateway's public address (learned from the logs when omitted)")
@@ -335,28 +378,39 @@ def main(argv=None):
     cache = load_cache(args.dir / CACHE_NAME)
     in_feed = feed_members(args.feed.read_text()) if args.feed.exists() else set()
     allow = load_allow(args.dir / ALLOW_NAME)
-    thresholds = dict(min_ip_hits=args.min_ip_hits, min_inbound_hits=args.min_inbound_hits, max_inbound=args.max_inbound)
+    thresholds = dict(min_ip_hits=args.min_ip_hits, min_inbound_hits=args.min_inbound_hits, max_inbound=args.max_inbound,
+                      max_ips=args.max_ips)
     groups = select(found, in_feed, cache, today, args.recheck_days, allow=allow, **thresholds)
+    names = candidate_names(found["outbound"], allow)
+    hosts = {entry: members(names, entry) for entry in groups["names"]}
+    apexes = sum(1 for h in hosts.values() if len(h) > 1)
     say = lambda *a: print(*a, flush=True)
     say(f"{len(found['inbound'])} inbound sources and {len(found['outbound'])} outbound destinations in the last "
-        f"{args.days} day(s); to check: {len(groups['names'])} outbound names, {len(groups['ips'])} outbound addresses, "
-        f"{len(groups['inbound'])} inbound sources")
+        f"{args.days} day(s); to check: {len(groups['inbound'])} inbound sources, {len(groups['ips'])} outbound addresses, "
+        f"{len(groups['names'])} outbound names ({apexes} family apexes)")
 
     if not args.check:
-        vendor = sum(1 for i in found["outbound"] if _ip(i) is None and allowed(i, allow))
+        outbound = found["outbound"]
+        vendor = sum(1 for i in outbound if _ip(i) is None and allowed(i, allow))
         headers = {
-            "names": f"outbound names: {len(groups['names'])} to check ({vendor} under allowed vendor domains skipped)",
-            "ips": f"outbound addresses: {len(groups['ips'])} to check (seen {args.min_ip_hits}+ times)",
             "inbound": f"inbound sources: {len(groups['inbound'])} to check (seen {args.min_inbound_hits}+ times, "
                        f"at most {args.max_inbound} a run)",
+            "ips": f"outbound addresses: {len(groups['ips'])} to check (seen {args.min_ip_hits}+ times, "
+                   f"at most {args.max_ips} a run)",
+            "names": f"outbound names: {len(groups['names'])} to check ({apexes} family apexes of {FAMILY_HOSTS}+ hosts; "
+                     f"{vendor} under allowed vendor domains skipped)",
         }
         for group, indicators in groups.items():
             say(headers[group])
             for i in indicators:
                 if group == "inbound":
                     say(f"  {i:40} x{found['inbound'][i]}")
+                elif group == "names" and len(hosts[i]) > 1:
+                    count = sum(outbound[h]["count"] for h in hosts[i])
+                    devices = sorted({d for h in hosts[i] for d in outbound[h]["devices"]})
+                    say(f"  {i:40} x{count}  {len(hosts[i])} hosts, from {', '.join(devices)}")
                 else:
-                    say(f"  {i:40} x{found['outbound'][i]['count']}  from {', '.join(found['outbound'][i]['devices'])}")
+                    say(f"  {i:40} x{outbound[i]['count']}  from {', '.join(outbound[i]['devices'])}")
         return 0
 
     key = vt_check.api_key()

@@ -9,8 +9,9 @@
 #                          then feed_lint.py: a feed on main that fails it (a bad web edit) stops the
 #                          run here, so that the morning message says what to fix
 #   3. spark_logs.py       mine the last two daily captures, look new indicators up on VirusTotal
-#                          (outbound names first, then recurring outbound addresses, then persistent
-#                          inbound sources; see its --help for the thresholds)
+#                          (persistent inbound sources first, then the busiest recurring outbound
+#                          addresses, then outbound names, a family of hosts as its apex; see its
+#                          --help for the thresholds and caps)
 #   4. git commit + push   spark-ioc-feed.csv only, when the check added rows, after feed_lint.py
 #                          passed it again; a feed that fails stays uncommitted
 #   5. spark_brief.py      send the morning brief to Telegram: yesterday's attack attempts, the rows
@@ -36,7 +37,7 @@ FEED=spark-ioc-feed.csv
 LOG_FILE=$HOME/Library/Logs/spark-ioc-feed/daily-check.log
 # At 07:30 today's capture holds a few hours; yesterday's completes the day. syslog/checked.json
 # keeps indicators seen in both from being looked up twice. The lookup budget is the script's
-# default (400, outbound names first: under two hours at 15 s each, inside the free key's 500 a
+# default (400, inbound sources first: under two hours at 15 s each, inside the free key's 500 a
 # day) unless MAX_LOOKUPS says otherwise.
 DAYS=${DAYS:-2}
 MAX_LOOKUPS=${MAX_LOOKUPS:-}

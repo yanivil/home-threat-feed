@@ -183,27 +183,35 @@ python3 spark_logs.py --check               # look them up (VT_API_KEY in the en
 python3 spark_logs.py --check --max-lookups 100
 ```
 
-Lookups are the scarce resource (the free key allows 500 a day), so a run spends them where
-an infected device would show, in this order:
+Lookups are the scarce resource (the free key allows 500 a day), so a run spends them in
+this order, each group busiest first:
 
-- **Outbound names first.** Every host name a LAN device reached, busiest first, except
+- **Inbound sources first**, but only those that probed at least `--min-inbound-hits` times
+  (5: persistent probing, not one-off background noise), at most `--max-inbound` (20) a run.
+  These are the rows the feed gains; adding every scanner that knocked once would grow it by
+  a hundred rows a day of no value.
+- **Then outbound addresses** that carried no name and were reached at least `--min-ip-hits`
+  times (3), at most `--max-ips` (40) a run. A command-and-control server reached by address
+  recurs; a CDN edge is seen once and never again.
+- **Then outbound names**, the hunting signal: every host name a LAN device reached, except
   hosts under the well-known vendor domains listed in `ALLOWED_SUFFIXES` at the top of the
   script (`apple.com`, `googleapis.com`, `office.com`, `akamaiedge.net`, `whatsapp.net`, ...),
   matched by suffix. `syslog/allow.txt` (one suffix per line, `#` comments, git-ignored like
-  the rest of that folder) extends the list for the vendors your own devices talk to.
-- **Then outbound addresses** that carried no name and were reached at least `--min-ip-hits`
-  times (3). A command-and-control server reached by address recurs; a CDN edge is seen once
-  and never again.
-- **Then inbound sources**, but only those that probed at least `--min-inbound-hits` times
-  (5: persistent probing, not one-off background noise), at most `--max-inbound` (20) a run.
-  Adding every scanner that knocked once would grow the feed by a hundred rows a day of no
-  value, while the outbound names that matter waited.
+  the rest of that folder) extends the list for the vendors your own devices talk to. Three
+  or more hosts under one apex (`rr2---sn-….googlevideo.com` and its siblings; the apex is
+  the last two labels, or three under `co.il`, `co.uk` and the like) are one lookup, the
+  apex: a CDN's tail of hostnames is one service. Fewer stay separate lookups, so one
+  device's one host under a dynamic-DNS or hosting domain keeps its own verdict, whatever
+  the apex's.
 
-Indicators already in the feed, or looked up within `--recheck-days` (30; `syslog/checked.json`
-remembers them), are skipped, and `--max-lookups` (default 400, under two hours at 15 s each)
-caps a run; what does not fit is left for another day. Without `--check` the script lists the
-three groups in that order, with counts, so you can see what a run will do before it spends
-anything. The daily check below runs it for you and pushes what it adds.
+The first two caps give those groups a share of the run that the names cannot take; a share
+a group does not use passes down to the names. Indicators already in the feed, or looked up
+within `--recheck-days` (30; `syslog/checked.json` remembers them, a family under its apex),
+are skipped, and `--max-lookups` (default 400, under two hours at 15 s each) caps a run;
+what does not fit is left for another day. Without `--check` the script lists the three
+groups in that order, with counts (a family as its apex, with how many hosts it stands for),
+so you can see what a run will do before it spends anything. The daily check below runs it
+for you and pushes what it adds.
 
 ### Daily check on this Mac
 

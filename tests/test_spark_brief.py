@@ -196,12 +196,12 @@ class ParseRunLogTest(unittest.TestCase):
         self.assertEqual(run["errors"], ["2026-10-29 07:31:00 ERROR: git push failed", "ERROR VT refused the key"])
 
     def test_a_quota_stop_reads_as_errors_in_the_producers_own_words(self):
-        log = check_output({"/domains/evil.example": vt_error(500, "InternalError"),
-                            "/ip_addresses/109.205.211.205": vt_error(429, "QuotaExceededError")})
+        log = check_output({"/ip_addresses/109.205.211.205": vt_error(500, "InternalError"),
+                            "/domains/evil.example": vt_error(429, "QuotaExceededError")})
 
         self.assertEqual(spark_brief.parse_run_log(log)["errors"], [
-            "evil.example: error (HTTP 500 InternalError)",
-            "109.205.211.205: quota (QuotaExceededError - stopping)",
+            "109.205.211.205: error (HTTP 500 InternalError)",
+            "evil.example: quota (QuotaExceededError - stopping)",
             "VirusTotal quota reached; rerun tomorrow for the rest.",
         ])
 
@@ -529,13 +529,13 @@ class ComposeTest(unittest.TestCase):
 
     def test_a_quota_morning_shows_its_errors_and_counts_them(self):
         write_capture(self.dir, DAY, CAPTURE)
-        run_log = check_output({"/domains/evil.example": vt_error(500, "InternalError"),
-                                "/ip_addresses/109.205.211.205": vt_error(429, "QuotaExceededError")})
+        run_log = check_output({"/ip_addresses/109.205.211.205": vt_error(500, "InternalError"),
+                                "/domains/evil.example": vt_error(429, "QuotaExceededError")})
 
         text = self.compose(run_log=run_log)
 
-        self.assertIn("ERRORS\n  evil.example: error (HTTP 500 InternalError)\n"
-                      "  109.205.211.205: quota (QuotaExceededError - stopping)\n"
+        self.assertIn("ERRORS\n  109.205.211.205: error (HTTP 500 InternalError)\n"
+                      "  evil.example: quota (QuotaExceededError - stopping)\n"
                       "  VirusTotal quota reached; rerun tomorrow for the rest.\n", text)
         self.assertTrue(text.endswith("· 3 errors"), text)
 

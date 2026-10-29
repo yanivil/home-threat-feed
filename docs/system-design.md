@@ -86,8 +86,9 @@ looked up again (`syslog/checked.json`). The checks live in two places today,
 LAN device reaching a flagged destination is a device to look at, not a feed row. Inbound
 sources that probed the WAN 5+ times are added when VirusTotal flags them (5+ engines, being
 IPs), at most 20 a run. The free VirusTotal key allows 500 lookups a day, so a run spends them
-in this order: outbound names (minus well-known vendor domains), outbound addresses seen 3+
-times, inbound sources, capped at 400 a day; the rest waits for another day.
+in this order: inbound sources (at most 20), the 40 busiest outbound addresses seen 3+ times,
+then outbound names (minus well-known vendor domains; three or more hosts under one apex are
+looked up once, as the apex), capped at 400 a day; the rest waits for another day (D9).
 
 **Expiration.** Rows are not expired by age; they are *re-verified* by age and removed only
 when VirusTotal no longer flags them above the admission bar:
@@ -569,6 +570,52 @@ the vendor exports are not named: every COMMENT that read `<vendor> export <date
 national alert now reads `External export <date>` or `External alert phishing`, `cyberint_xlsx.py`
 writes the External label, and no new row names where it came from. The rows themselves stay
 public; what is withheld is whose export they were.
+
+### D9. The daily check spends its lookups inbound first, then the busiest addresses, then names collapsed into families (decided and built 2026-10-29)
+
+Found on the first full day of capture after the receiver rewrite (one line per datagram of
+the gateway, accepted connections included): the capture runs at fifteen to thirty thousand
+lines an hour, and the 07:30 run of 2026-10-29 found 4,277 inbound sources and 3,694 outbound
+destinations in its two-day window, 2,441 of them to check, against a 400-lookup budget of
+which the run the day before had used 45. Under the order of the time (outbound names, then
+addresses, then inbound sources) the whole budget went to 1,160 names; the addresses and the 20
+inbound sources, the rows the feed is built from, were never reached, and would never be while
+the names alone exceed 400 a day. Measured on that capture: of the 1,211 names in the window,
+109 apexes with three or more hosts stood for 689 names (yesplus.tv 42, gvt2.com 26,
+netflix.com 26, googlevideo.com 18, adobe.com 17) and 522 were lone hosts; day to day a third
+of the names and a quarter of the apexes were new, more than half of the bare addresses, and
+18 of the 20 busiest inbound sources.
+
+Decision, approved by the owner the same morning:
+
+- Shares of the budget, in this order: inbound sources first, at most 20 as before; then the
+  40 busiest bare addresses reached three or more times (`--max-ips`, new); then outbound names
+  take what is left, 340 on a full day. A share a group does not use passes down to the names.
+  Inbound sources and addresses can no longer be starved by names.
+- Names are grouped by apex: the last two labels, or three under a second-level registry of a
+  country code (co.il, co.uk, com.au; a short built-in list, not the public suffix list). An
+  apex with three or more hosts in the window is one lookup, the apex, cached under the apex;
+  a lone host is looked up as itself. A host under an apex checked clean is not skipped: a
+  CDN's tail of hostnames is one service, while an infected device's one host under a
+  dynamic-DNS or hosting apex is exactly what VirusTotal flags by host and not by apex.
+- The 400 budget stays (100 of the free key's 500 remain for the bot and for runs by hand), the
+  gateway's forwarding stays as it is, and no top-sites list is fetched or maintained.
+
+Expected effect on that window: 20, 40 and 340 lookups, with 291 of the 631 name entries left
+for the next day; at the measured churn about 250 name entries a day fit inside the share, so
+the backlog clears in two or three days. Known limit: the run still takes about 100 minutes and
+holds the feed lock throughout, so the bot cannot add indicators until about 09:10 each
+morning; this change narrows what is checked, not how long the check takes.
+
+Outcome: built the same morning on branch `worktree-narrow-check`, test-first (10 new tests on
+the ordering, the apex rule, the family cache and the listing; the suite stands at 532 and
+passes, also under `python3 -I`). A dry listing of the same two-day window under the new order
+reads "to check: 20 inbound sources, 40 outbound addresses, 631 outbound names (111 family
+apexes)", with 501 names under the allowed vendor domains skipped; the biggest families were a
+streaming service's 27 hosts, the gateway vendor's 20 and a software updater's 19. The 07:30 run
+of 2026-10-29, the last on the old order, confirmed the finding: its 400 lookups all went to
+names (394 clean, 6 unknown to VirusTotal), it added nothing and left 2,041 for another day.
+Awaiting the owner's word to merge; the first run on the new order is 2026-10-30 07:30.
 
 ## 5. Operating it
 
