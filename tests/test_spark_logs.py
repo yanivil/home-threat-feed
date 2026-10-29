@@ -270,9 +270,10 @@ class SelectTest(unittest.TestCase):
             ("rr2---sn-nhpax-ua8e7.googlevideo.com", "googlevideo.com"),
             ("Host.Example.COM.", "example.com"),
             ("example.com", "example.com"),
-            ("a.b.example.co.il", "example.co.il"),
+            ("a.b.example.co.jp", "example.co.jp"),
             ("www.foo.co.uk", "foo.co.uk"),
             ("shop.example.com.au", "example.com.au"),
+            ("www.city.lg.jp", "city.lg.jp"),  # a public-body registry under a country code
             ("mail.ac.example", "ac.example"),  # "ac" before a long TLD is an ordinary label
             ("single", "single"),
         ]:
@@ -306,6 +307,25 @@ class SelectTest(unittest.TestCase):
         self.assertEqual(spark_logs.members(names, "cdn.example"), ["a.cdn.example", "b.cdn.example", "c.cdn.example"])
         self.assertEqual(spark_logs.members(names, "lone.example.net"), ["lone.example.net"])
         self.assertEqual(spark_logs.members(names, "x.pair.example"), ["x.pair.example"])
+
+    def test_hosts_under_a_shared_platform_never_make_a_family(self):
+        # Three tenants' pages on a hosting platform are three indicators, not one clean apex.
+        found = {"inbound": {}, "outbound": {f"{h}.netlify.app": {"count": 1, "devices": ["192.168.1.100"]} for h in "abc"}}
+
+        groups = spark_logs.select(found, set(), {}, today=TODAY)
+
+        self.assertEqual(groups["names"], ["a.netlify.app", "b.netlify.app", "c.netlify.app"])
+        names = spark_logs.candidate_names(found["outbound"])
+        self.assertEqual(spark_logs.members(names, "a.netlify.app"), ["a.netlify.app"])
+        self.assertEqual(spark_logs.members(names, "netlify.app"), ["netlify.app"])
+
+    def test_a_host_checked_alone_before_is_looked_up_with_its_family_today(self):
+        cache = {"a.cdn.example": {"checked": "2026-10-19", "malicious": 0, "total": 92}}
+
+        groups = spark_logs.select(self.FAMILY, set(), cache, today=TODAY)
+
+        self.assertEqual(groups["names"][0], "cdn.example")
+        self.assertNotIn("a.cdn.example", groups["names"])
 
     def test_at_most_max_ips_addresses_are_checked_busiest_first(self):
         found = {"inbound": {}, "outbound": {f"185.1.2.{i}": {"count": 2 + i, "devices": ["192.168.1.100"]}
@@ -386,7 +406,7 @@ class CheckTest(unittest.TestCase):
         self.assertIn(",31.14.32.6,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - "
                       "seen in Spark logs 2026-10-20 - VT 10/90", rows[0])
         self.assertEqual(report["added"], ["31.14.32.6"])
-        self.assertEqual(report["outbound_hits"], [("evil.example", "Domain 9/89 malicious", ["192.168.1.101"])])
+        self.assertEqual(report["outbound_hits"], [("evil.example", "Domain 9/89 malicious", ["192.168.1.101"], ["evil.example"])])
         cache = json.loads(self.cache.read_text())
         self.assertEqual(cache["185.1.2.9"], {"checked": TODAY, "malicious": 1, "total": 81})
         self.assertEqual(cache["evil.example"]["malicious"], 9)
@@ -437,7 +457,8 @@ class CheckTest(unittest.TestCase):
         report = self.check(found, fake=fake)
 
         self.assertEqual(fake.calls, ["/domains/cdn.example"], "one lookup for the family")
-        self.assertEqual(report["outbound_hits"], [("cdn.example", "Domain 9/89 malicious", ["10.0.0.1", "10.0.0.2"])])
+        self.assertEqual(report["outbound_hits"], [("cdn.example", "Domain 9/89 malicious", ["10.0.0.1", "10.0.0.2"],
+                                                    ["a.cdn.example", "b.cdn.example", "c.cdn.example"])])
         self.assertEqual(json.loads(self.cache.read_text())["cdn.example"]["malicious"], 9)
 
     def test_one_off_inbound_sources_and_single_contact_addresses_are_never_looked_up(self):
@@ -567,7 +588,20 @@ class CommandLineTest(unittest.TestCase):
         self.assertEqual((kwargs["min_ip_hits"], kwargs["min_inbound_hits"], kwargs["max_inbound"]), (3, 5, 20))
         self.assertEqual(kwargs["allow"], spark_logs.ALLOWED_SUFFIXES | {"mine.example"})
 
-    def test_check_needs_the_api_key(self):
+    def test_a_family_hit_lists_the_hosts_behind_the_apex(self):
+        done = {"added": [], "clean": 0, "not_found": 0, "skipped": [], "quota": False,
+                "outbound_hits": [("cdn.example", "Domain 9/89 malicious", ["192.168.1.100"], ["a.cdn.example", "b.cdn.example", "c.cdn.example"]),
+                                  ("evil.example", "Domain 9/89 malicious", ["192.168.1.101"], ["evil.example"])]}
+        with tempfile.TemporaryDirectory() as tmp, patch.object(spark_logs, "check", return_value=done), \
+                patch.dict(os.environ, cli_env("k"), clear=True), patch("builtins.print") as printed:
+            Path(tmp, "feed.csv").write_text(HEADER)
+            spark_logs.main(["--dir", tmp, "--check", "--today", TODAY, "--feed", str(Path(tmp, "feed.csv"))])
+
+        lines = [c.args[0] for c in printed.call_args_list if c.args]
+        hit = lines.index("OUTBOUND HIT  cdn.example  (Domain 9/89 malicious)  reached by 192.168.1.100  <- check these devices")
+        self.assertEqual(lines[hit + 1], "  the family's hosts: a.cdn.example, b.cdn.example, c.cdn.example")
+        self.assertTrue(lines[hit + 2].startswith("OUTBOUND HIT  evil.example"), "a lone host gets no hosts line")
+
         with tempfile.TemporaryDirectory() as tmp:
             proc = self.run_cli("--dir", tmp, "--check")
 

@@ -199,10 +199,12 @@ this order, each group busiest first:
   matched by suffix. `syslog/allow.txt` (one suffix per line, `#` comments, git-ignored like
   the rest of that folder) extends the list for the vendors your own devices talk to. Three
   or more hosts under one apex (`rr2---sn-….googlevideo.com` and its siblings; the apex is
-  the last two labels, or three under `co.il`, `co.uk` and the like) are one lookup, the
+  the last two labels, or three under `co.uk`, `com.au` and the like) are one lookup, the
   apex: a CDN's tail of hostnames is one service. Fewer stay separate lookups, so one
   device's one host under a dynamic-DNS or hosting domain keeps its own verdict, whatever
-  the apex's.
+  the apex's; hosts under a shared platform (`x.netlify.app` and its like: `SHARED_PLATFORMS`
+  in `vt_check.py`, the list the import uses too) never form a family at all, since each
+  tenant's page is its own indicator. A hit on a family is reported with the hosts it stands for.
 
 The first two caps give those groups a share of the run that the names cannot take; a share
 a group does not use passes down to the names. Indicators already in the feed, or looked up

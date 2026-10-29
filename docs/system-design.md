@@ -581,8 +581,8 @@ which the run the day before had used 45. Under the order of the time (outbound 
 addresses, then inbound sources) the whole budget went to 1,160 names; the addresses and the 20
 inbound sources, the rows the feed is built from, were never reached, and would never be while
 the names alone exceed 400 a day. Measured on that capture: of the 1,211 names in the window,
-109 apexes with three or more hosts stood for 689 names (yesplus.tv 42, gvt2.com 26,
-netflix.com 26, googlevideo.com 18, adobe.com 17) and 522 were lone hosts; day to day a third
+109 apexes with three or more hosts stood for 689 names (the biggest a streaming service's 42,
+a software updater's 26 and a video CDN's 18) and 522 were lone hosts; day to day a third
 of the names and a quarter of the apexes were new, more than half of the bare addresses, and
 18 of the 20 busiest inbound sources.
 
@@ -593,11 +593,18 @@ Decision, approved by the owner the same morning:
   take what is left, 340 on a full day. A share a group does not use passes down to the names.
   Inbound sources and addresses can no longer be starved by names.
 - Names are grouped by apex: the last two labels, or three under a second-level registry of a
-  country code (co.il, co.uk, com.au; a short built-in list, not the public suffix list). An
+  country code (co.uk, com.au, go.jp; a short built-in list, not the public suffix list). An
   apex with three or more hosts in the window is one lookup, the apex, cached under the apex;
   a lone host is looked up as itself. A host under an apex checked clean is not skipped: a
   CDN's tail of hostnames is one service, while an infected device's one host under a
   dynamic-DNS or hosting apex is exactly what VirusTotal flags by host and not by apex.
+  Hosts under a shared platform (`x.netlify.app` and its like: `SHARED_PLATFORMS`, the list
+  the feed's import already used, now kept in `vt_check.py`) never make a family however many there are: the
+  platform's apex is always clean and each tenant's page is its own indicator, the stance
+  the feed's import takes. This exception came out of the review below, before the first run.
+  A family whose apex is itself a feed Domain row is skipped like any feed member, its hosts
+  with it: the gateway blocks that domain already. A hit on a family is reported as the apex,
+  the devices that reached it and the hosts it stands for.
 - The 400 budget stays (100 of the free key's 500 remain for the bot and for runs by hand), the
   gateway's forwarding stays as it is, and no top-sites list is fetched or maintained.
 
@@ -607,12 +614,19 @@ the backlog clears in two or three days. Known limit: the run still takes about 
 holds the feed lock throughout, so the bot cannot add indicators until about 09:10 each
 morning; this change narrows what is checked, not how long the check takes.
 
-Outcome: built the same morning on branch `worktree-narrow-check`, test-first (10 new tests on
-the ordering, the apex rule, the family cache and the listing; the suite stands at 532 and
-passes, also under `python3 -I`). A dry listing of the same two-day window under the new order
+Outcome: built the same morning on branch `worktree-narrow-check`, test-first (12 new tests on
+the ordering, the apex rule, the family cache, the shared-platform exception and the listing;
+the suite stands at 534 and passes, also under `python3 -I`). An independent review of the
+branch before the merge found that the family rule as approved would have swallowed the
+sub-hosts of shared hosting platforms (three tenants' pages under one platform would have
+become a single clean lookup of the platform, cached for thirty days), the opposite of the
+stance the feed's import takes; the shared-platform exception and the hosts line under a
+family hit above come from that review. A dry listing of the same two-day window under the new order
 reads "to check: 20 inbound sources, 40 outbound addresses, 631 outbound names (111 family
 apexes)", with 501 names under the allowed vendor domains skipped; the biggest families were a
-streaming service's 27 hosts, the gateway vendor's 20 and a software updater's 19. The 07:30 run
+streaming service's 27 hosts, the gateway vendor's 20 and a software updater's 19 (at 09:40, with
+the morning run's 400 names in the cache and the exception in, the same window read 20, 40 and
+553 names, 113 family apexes). The 07:30 run
 of 2026-10-29, the last on the old order, confirmed the finding: its 400 lookups all went to
 names (394 clean, 6 unknown to VirusTotal), it added nothing and left 2,041 for another day.
 Awaiting the owner's word to merge; the first run on the new order is 2026-10-30 07:30.

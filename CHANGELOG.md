@@ -30,7 +30,8 @@ All notable changes to this feed are recorded here.
   the dates are unchanged), and `cyberint_xlsx.py` writes the External label from now on.
 - The daily check spends its lookups on inbound sources first, then the 40 busiest outbound
   addresses (`--max-ips`), then outbound names, where three or more hosts under one apex are
-  one lookup of the apex: on a full day's capture (accepted connections included) the names
+  one lookup of the apex (hosts under a shared platform such as `netlify.app` excepted; a hit
+  on a family lists its hosts): on a full day's capture (accepted connections included) the names
   alone exceeded the whole budget and the inbound sources the feed is built from were never
   reached. See `docs/system-design.md`, D9.
 - `syslog_receiver.py` keeps only the gateway's datagrams (`--source`, by default the default

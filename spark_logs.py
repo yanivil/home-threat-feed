@@ -57,11 +57,14 @@ ALLOWED_SUFFIXES = frozenset({
 })
 # Hosts under one apex that make a family: a CDN's tail of hostnames (rr2---sn-….googlevideo.com,
 # ….cdn.example) is one service, looked up once as the apex. Fewer hosts stay separate lookups, so
-# an infected device's one host under a dynamic-DNS or hosting apex keeps its own verdict.
+# an infected device's one host under a dynamic-DNS or hosting apex keeps its own verdict. Hosts
+# under a shared platform (x.netlify.app: one tenant among millions, vt_check.SHARED_PLATFORMS)
+# never make a family however many there are: the platform's apex is always clean.
 FAMILY_HOSTS = 3
 # Second-level labels under a two-letter country code that are registries, not registrants
-# (co.il, co.uk, com.au, ac.jp): the apex of a host under them has three labels.
-SECOND_LEVEL = frozenset({"co", "com", "net", "org", "ac", "gov", "edu", "or", "ne"})
+# (co.uk, com.au, ac.jp, go.jp): the apex of a host under them has three labels.
+SECOND_LEVEL = frozenset({"co", "com", "net", "org", "ac", "gov", "edu", "or", "ne", "go", "lg", "gob", "nhs", "sch",
+                          "k12", "muni"})
 
 
 class FeedMembers:
@@ -110,10 +113,19 @@ def candidate_names(outbound, allow=ALLOWED_SUFFIXES):
     return [i for i in outbound if _ip(i) is None and not allowed(i, allow)]
 
 
+def families(names):
+    """The apexes that FAMILY_HOSTS or more of `names` share, each with its hosts; a shared
+    platform's apex never makes one, so its hosts stay lone."""
+    by_apex = {}
+    for name in names:
+        by_apex.setdefault(apex(name), []).append(name)
+    return {a: sorted(hosts) for a, hosts in by_apex.items()
+            if len(hosts) >= FAMILY_HOSTS and a not in vt_check.SHARED_PLATFORMS}
+
+
 def members(names, indicator):
     """The names `indicator` stands for: the hosts under it when it is a family apex, else itself."""
-    hosts = [n for n in names if apex(n) == indicator]
-    return sorted(hosts) if len(hosts) >= FAMILY_HOSTS else [indicator]
+    return families(names).get(indicator, [indicator])
 
 
 def load_allow(path):
@@ -267,15 +279,12 @@ def select(found, in_feed, cache, today, recheck_days=30, *, allow=ALLOWED_SUFFI
     def busiest(indicators, count):
         return sorted((i for i in indicators if fresh(i)), key=lambda i: -count(i))
 
-    by_apex = {}
-    for name in candidate_names(outbound, allow):
-        by_apex.setdefault(apex(name), []).append(name)
-    names = {}  # entry (a family apex or a lone host) -> how often it was reached
-    for family, hosts in by_apex.items():
-        if len(hosts) >= FAMILY_HOSTS:
-            names[family] = sum(outbound[h]["count"] for h in hosts)
-        else:
-            names.update((h, outbound[h]["count"]) for h in hosts)
+    candidates = candidate_names(outbound, allow)
+    grouped = families(candidates)
+    in_family = {h for hosts in grouped.values() for h in hosts}
+    # entry (a family apex or a lone host) -> how often it was reached
+    names = {family: sum(outbound[h]["count"] for h in hosts) for family, hosts in grouped.items()}
+    names.update((h, outbound[h]["count"]) for h in candidates if h not in in_family)
     ips = [i for i in outbound if _ip(i) is not None and outbound[i]["count"] >= min_ip_hits]
     inbound = [i for i in found["inbound"] if found["inbound"][i] >= min_inbound_hits]
     return {
@@ -338,8 +347,9 @@ def check(found, feed_path, cache_path, fetch, *, today=None, max_lookups=None, 
         if r.status == "added":
             report["added"].append(r.indicator)
         elif r.status == "would-add":
-            devices = sorted({d for h in members(names, r.indicator) for d in found["outbound"][h]["devices"]})
-            report["outbound_hits"].append((r.indicator, r.detail.split(" -> ")[0], devices))
+            hosts = members(names, r.indicator)
+            devices = sorted({d for h in hosts for d in found["outbound"][h]["devices"]})
+            report["outbound_hits"].append((r.indicator, r.detail.split(" -> ")[0], devices, hosts))
         elif r.status == "clean":
             report["clean"] += 1
         elif r.status == "quota":
@@ -363,7 +373,8 @@ def main(argv=None):
                         help="outbound addresses (no name) are looked up once reached this often (default 3)")
     parser.add_argument("--min-inbound-hits", type=int, default=5,
                         help="inbound sources are looked up once they probed this often (default 5)")
-    parser.add_argument("--max-inbound", type=int, default=20, help="inbound sources looked up per run (default 20)")
+    parser.add_argument("--max-inbound", type=int, default=20,
+                        help="inbound sources looked up per run, busiest first (default 20)")
     parser.add_argument("--max-ips", type=int, default=40,
                         help="outbound addresses looked up per run, busiest first (default 40)")
     parser.add_argument("--recheck-days", type=int, default=30, help="days before an indicator is looked up again")
@@ -381,8 +392,8 @@ def main(argv=None):
     thresholds = dict(min_ip_hits=args.min_ip_hits, min_inbound_hits=args.min_inbound_hits, max_inbound=args.max_inbound,
                       max_ips=args.max_ips)
     groups = select(found, in_feed, cache, today, args.recheck_days, allow=allow, **thresholds)
-    names = candidate_names(found["outbound"], allow)
-    hosts = {entry: members(names, entry) for entry in groups["names"]}
+    grouped = families(candidate_names(found["outbound"], allow))
+    hosts = {entry: grouped.get(entry, [entry]) for entry in groups["names"]}
     apexes = sum(1 for h in hosts.values() if len(h) > 1)
     say = lambda *a: print(*a, flush=True)
     say(f"{len(found['inbound'])} inbound sources and {len(found['outbound'])} outbound destinations in the last "
@@ -421,8 +432,10 @@ def main(argv=None):
                    delay=args.delay, out=say)
     say(f"Added to the feed: {len(report['added'])}  clean: {report['clean']}  unknown to VirusTotal: {report['not_found']}"
         f"  left for another day: {len(report['skipped'])}")
-    for indicator, ratio, devices in report["outbound_hits"]:
+    for indicator, ratio, devices, family in report["outbound_hits"]:
         say(f"OUTBOUND HIT  {indicator}  ({ratio})  reached by {', '.join(devices)}  <- check these devices")
+        if len(family) > 1:
+            say(f"  the family's hosts: {', '.join(family)}")
     if report["quota"]:
         say("VirusTotal quota reached; rerun tomorrow for the rest.")
         return 1

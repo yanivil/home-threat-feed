@@ -76,6 +76,26 @@ TRUSTED_MAX_AGE = 90
 SEEN_MAX_AGE = 180
 SEEN_REFRESH_DAYS = 30
 RECHECK_TYPES = ("IP", "Domain", "URL", "MD5", "SHA1", "SHA256")
+# Hosts whose apex is a shared platform: an attacker's page there is one tenant among millions, so a
+# bare entry would block the platform and the platform's own verdict says nothing about a tenant. A
+# specific sub-host (x.netlify.app) is the indicator. cyberint_xlsx.py drops the bare apexes with
+# this list; spark_logs.py never collapses hosts under one of them into a family.
+SHARED_PLATFORMS = {
+    "github.com", "githubusercontent.com", "gitlab.com", "google.com", "googleapis.com", "drive.google.com",
+    "docs.google.com", "dropbox.com", "microsoft.com", "live.com", "onedrive.live.com", "sharepoint.com",
+    "amazonaws.com", "cloudfront.net", "azurewebsites.net", "workers.dev", "pages.dev", "netlify.app",
+    "vercel.app", "herokuapp.com", "telegram.org", "t.me", "discord.com", "discordapp.com", "ngrok.io",
+    "ngrok-free.app", "pastebin.com", "mega.nz", "anydesk.com", "teamviewer.com", "cloudflare.com",
+    "bit.ly", "tinyurl.com", "wetransfer.com", "box.com", "icloud.com", "apple.com", "facebook.com",
+    "twitter.com", "x.com", "youtube.com", "linkedin.com", "reddit.com", "medium.com", "wordpress.com",
+    "blogspot.com", "weebly.com", "wixsite.com", "simplex.im", "proton.me", "protonmail.com", "gmail.com",
+    "somee.com", "sendit.sh", "firebaseio.com", "storyblok.com", "onehub.com",
+    "transfer.sh", "fex.net", "sendspace.com", "premiumize.com", "gofile.io", "file.io", "anonfiles.com",
+    "mediafire.com", "pixeldrain.com", "catbox.moe", "ufile.io", "filetransfer.io", "temp.sh",
+    # e-mail providers that ransomware notes name as contact channels
+    "cyberfear.com", "tutanota.com", "tuta.io", "tuta.com", "onionmail.org", "mailfence.com", "cock.li",
+    "skiff.com", "outlook.com", "yahoo.com", "mail.ru", "yandex.ru", "zoho.com",
+}
 # Engines that must flag an indicator before it is added or kept, per TYPE. IPs
 # get a higher bar: hosting addresses collect a few blocklist hits just for being
 # on a busy provider, and a wrongly blocked IP breaks more than a wrong domain.
