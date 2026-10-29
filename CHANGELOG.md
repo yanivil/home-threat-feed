@@ -25,6 +25,9 @@ All notable changes to this feed are recorded here.
 - The repository names nothing of the owner's network: fixtures and docs use stand-in addresses
   and a stand-in gateway name. `actions/checkout` is pinned to a commit (v4.4.0), and the
   repository's Actions settings require every action to be pinned that way.
+- The COMMENT column names no vendor: 1,230 rows that read `<vendor> export <date>` or named a
+  national alert now read `External export <date>` or `External alert phishing` (the group and
+  the dates are unchanged), and `cyberint_xlsx.py` writes the External label from now on.
 - `syslog_receiver.py` keeps only the gateway's datagrams (`--source`, by default the default
   route's gateway) and writes one capture line per datagram.
 - The Spark's system log lines, now forwarded with the security logs, are recognised and never

@@ -117,12 +117,12 @@ class ConvertTest(unittest.TestCase):
         kept, dropped = cyberint_xlsx.convert(self.path)
 
         self.assertEqual(kept, [
-            ("213.145.86.112", "APT29\tCyberint export 2026-10-22"),
-            ("evil-update.com", "APT29\tCyberint export 2026-10-22"),
-            ("https://fileportalshare.netlify.app", "APT29\tCyberint export 2026-10-22"),
-            ("Evil.COM.", "APT29\tCyberint export 2026-10-22"),
-            ("16db04b632668dae081359fc07c97e5a9b79dad61713642e48b1c2d3e4f5a6b7", "APT29\tCyberint export 2026-10-22"),
-            ("44d88612fea8a8f36de82e1278abb02f", "APT29\tCyberint export 2026-10-22"),
+            ("213.145.86.112", "APT29\tExternal export 2026-10-22"),
+            ("evil-update.com", "APT29\tExternal export 2026-10-22"),
+            ("https://fileportalshare.netlify.app", "APT29\tExternal export 2026-10-22"),
+            ("Evil.COM.", "APT29\tExternal export 2026-10-22"),
+            ("16db04b632668dae081359fc07c97e5a9b79dad61713642e48b1c2d3e4f5a6b7", "APT29\tExternal export 2026-10-22"),
+            ("44d88612fea8a8f36de82e1278abb02f", "APT29\tExternal export 2026-10-22"),
         ])
         self.assertEqual(
             dropped,
@@ -134,7 +134,7 @@ class ConvertTest(unittest.TestCase):
     def test_tsv_lines_are_tab_separated_for_vt_check(self):
         lines = cyberint_xlsx.tsv_lines(self.path)
 
-        self.assertEqual(lines[0], "213.145.86.112\tAPT29\tCyberint export 2026-10-22")
+        self.assertEqual(lines[0], "213.145.86.112\tAPT29\tExternal export 2026-10-22")
 
 
 if __name__ == "__main__":

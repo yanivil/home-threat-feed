@@ -168,8 +168,8 @@ with the reasoning.
 
 ### D5. Rows added without a VirusTotal check join the clock after 90 days; IPs seen in our own logs run a longer clock from their last sighting (decided and built 2026-10-28)
 
-As of 2026-10-28, 1,111 of the feed's 1,783 rows were added without a check (Cyberint exports,
-2026-10-22), and `--recheck` never looks at them. Requested: apply the same expiration logic
+As of 2026-10-28, 1,111 of the feed's 1,783 rows were added without a check (external exports
+of 2026-10-22), and `--recheck` never looks at them. Requested: apply the same expiration logic
 to indicators brought in by hand, with a first check after 90 days; and treat an IP that has
 appeared in the gateway's own logs differently, because a probe of this network is first-hand
 evidence of an attack, where VirusTotal's count for a scanner decays while the scanning goes on.
@@ -560,11 +560,15 @@ runs under (3.9 on the Mac, newer on Actions: a character assigned after Unicode
 hidden on the Mac only, and `is_global` differs for a few special-purpose blocks);
 `vt_check.refang` runs once, so a doubly defanged value typed by hand is reported as not normalised
 rather than repaired; the rows the writers produce have no round-trip test of their own through the
-lint, the committed feed (every row of it theirs) and the bot's tests standing in for one. Still
-the owner's: two-factor
-authentication, the scope and expiry of the token the Mac pushes with, the e-mail privacy
-toggles, BotFather's `/setjoingroups`, and whether the vendor exports named in the feed's COMMENT
-column may be republished.
+lint, the committed feed (every row of it theirs) and the bot's tests standing in for one. The
+owner's items were settled on 2026-10-29: two-factor authentication is on, both e-mail privacy
+toggles are on, the bot cannot be added to groups (BotFather's `/setjoingroups`), the token the
+Mac pushes with stays a classic token by the owner's choice (the tooling then works on the whole
+account; the risk accepted is a token in this Mac's Keychain that reaches every repository), and
+the vendor exports are not named: every COMMENT that read `<vendor> export <date>` or named a
+national alert now reads `External export <date>` or `External alert phishing`, `cyberint_xlsx.py`
+writes the External label, and no new row names where it came from. The rows themselves stay
+public; what is withheld is whose export they were.
 
 ## 5. Operating it
 

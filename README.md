@@ -126,7 +126,8 @@ python3 vt_check.py --trusted -f iocs.tsv
 ```
 
 For **Cyberint IOC exports** (`Cyberint_<Group>_IOCs_<date>.xlsx`), `cyberint_xlsx.py` turns the
-spreadsheets into that list, labelling each row with the group and export date, and drops what a
+spreadsheets into that list, labelling each row with the group and `External export <date>` (the
+feed names no vendor in its COMMENT column: the rows are republished, the export is not), and drops what a
 blocking feed must not contain: shared platforms (an apex like `somee.com`, relays like
 `smp10.simplex.im`; an attacker's own sub-host such as `x.netlify.app` is kept), CDN front-end
 addresses (Cloudflare, Google, Akamai, Fastly, CloudFront), Tor addresses, placeholders like

@@ -7,7 +7,8 @@
 
 An export is one sheet with the columns Type, Created at, Updated at, Value; the group and
 export date come from the file name (Cyberint_<Group>_IOCs_<YYYY-MM-DD>.xlsx). Each output
-line is `<value>\\t<group>\\tCyberint export <date>`. Values that would block something
+line is `<value>\\t<group>\\tExternal export <date>`: the feed's COMMENT column names no vendor,
+so that the rows are republished without the export they came from. Values that would block something
 legitimate (bare shared-platform hosts) or that a gateway cannot act on (Tor addresses,
 anything vt_check.classify rejects) are dropped and listed on stderr. Reads the workbook
 with the standard library only, so no spreadsheet package is needed.
@@ -147,7 +148,7 @@ def drop_reason(value):
 def convert(path):
     """(kept, dropped): kept = [(value, label)], dropped = [(value, reason)]."""
     group, date = group_and_date(path)
-    label = f"{group}\tCyberint export {date}"
+    label = f"{group}\tExternal export {date}"
     kept, dropped, seen = [], [], set()
     for row in read_rows(path):
         value = row.get("Value", "").strip()
