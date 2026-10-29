@@ -682,9 +682,12 @@ repository and origin with a stub agent and a stub brief: the quiet day, the com
 and content, the dry run and `DRY_RUN=0`, `MAX_CANDIDATES` and a bad one, each failure's notice,
 exit code and lock state, the rows committed before a quota or lookup failure, the lock wait and
 the stale take-over, a failed pull and a failed push, the plist's label, program, schedule and
-log). The whole suite stands at 611 tests. Still the owner's to do, since the key is theirs:
-the first dry run (`DRY_RUN=1 bash news_check.sh`) and the plist's installation (README,
-"News agent"); the first week's `news usage:` lines then decide the caps (open item 4).
+log). The whole suite stands at 611 tests. The first dry run was made on 2026-10-29
+(`news usage: input=338499 output=14993 searches=8 fetches=4 seconds=162`, about $1.73 a run,
+above the cost ceiling; 100 candidates named, 40 kept, all from two reports, 26 would-add) and
+the LaunchAgent was installed and loaded the same day, as is: the owner chose to review the
+cost after a week rather than lower the caps first. The first scheduled run is 2026-10-30 06:30;
+the first week's `news usage:` lines then decide the caps (open item 4).
 
 ### D8. The public repository names nothing of the owner's network, lints the feed before every commit and pins its workflow (decided 2026-10-28, built 2026-10-28/29)
 
