@@ -854,8 +854,11 @@ Outcome: built 2026-10-29 test-first (15 tests in `tests/test_unifi_list.py`, am
 that fails whenever the committed list is out of step with the committed feed; the suite
 stands at 629 and passes, also under `python3 -I`); the first render holds 487 entries, the
 feed's 485 addresses and its two /24 ranges. README ("UniFi gateways"), the wiki ("Using the
-feed with other gateways", Home, the FAQ) and the poll in Discussions point at the list. The
-workflow's first run on GitHub is still to be seen after the push.
+feed with other gateways", Home, the FAQ) and the poll in Discussions point at the list.
+Pushed the same evening on the owner's word; the raw URL served the 487 lines at once, and
+the workflow's first run (dispatched by hand) rendered "487 entries, unchanged" and committed
+nothing, as it should. Its push-triggered path is first exercised by the next job that adds
+rows to the feed.
 
 ## 5. Operating it
 
