@@ -1,4 +1,4 @@
-# spark-ioc-feed
+# home-threat-feed
 
 Custom Indicators of Compromise (IoC) feed for a Check Point Quantum Spark gateway
 (locally managed, Threat Prevention → IoC Feeds).
