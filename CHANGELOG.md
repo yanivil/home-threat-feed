@@ -20,8 +20,10 @@ All notable changes to this feed are recorded here.
   security reporting lists for home networks (consumer phishing, commodity malware delivery and
   control, fake installers, scam domains); the repository's code drops vendor and shared-platform
   names, stale reports, duplicates and recently checked values and keeps at most 40; VirusTotal
-  admits them at the usual bar. Rows carry `News <report date> <theme>` and never name a
-  publication. See the README, "News agent", and `docs/system-design.md`, D7.
+  admits them at the usual bar and the verdicts go to `syslog/news-checked.json`, the job's own
+  cache, so the daily check's thirty-day memory is untouched. Rows carry `News <report date>
+  <theme>`, the theme reduced to plain words, and never name a publication. See the README,
+  "News agent", and `docs/system-design.md`, D7.
 - `feed_lint.py`: the checks the feed passes before any commit (the exact header, seven fields
   with all but the COMMENT filled in, a VALUE of its TYPE and normalised, no duplicates, no
   hidden characters, none of the hosts this system needs). The daily check, the Telegram bot and

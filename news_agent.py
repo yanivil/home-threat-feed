@@ -8,21 +8,27 @@
 One Opus 5.5 call with web search (at most MAX_SEARCHES) and web fetch (at most MAX_FETCHES pages)
 reads the reporting of the last REPORT_DAYS days and ends its reply with one JSON object of
 candidates: {"candidates": [{"indicator", "report_date", "theme", "source"}, ...]}. The model's
-output decides nothing by itself: select() keeps IPs, domains and URLs only, drops vendor domains,
-shared-platform apexes, hosts this system needs, stale or undated reports, duplicates, feed members
-and anything looked up in the last RECENT_DAYS days, caps the rest at MAX_CANDIDATES (newest report
-first) and labels each `News <report date> <theme>`, the theme cleaned as a Telegram label is and
-never a URL. The candidates file is `indicator<TAB>label`, the format `vt_check.py -f` reads.
---check runs the same lookups as `vt_check.py -f` (vt_check.run, default thresholds) and records
-every outcome in syslog/checked.json, the daily check's cache. news_check.sh runs both steps, the
-model call outside the feed lock and the lookups inside it.
+output decides nothing by itself: select() keeps IPs, domains and URLs only (URLs on a public host),
+drops vendor domains, shared-platform apexes, hosts this system needs, stale or undated reports,
+duplicates, feed members and anything looked up in the last RECENT_DAYS days, caps the rest at
+MAX_CANDIDATES (newest report first) and labels each `News <report date> <theme>`, the theme reduced
+to plain words (no host, URL, date or outlet name, none of the feed's own notes). The candidates file
+is `indicator<TAB>label`, the format `vt_check.py -f` reads. --check runs the same lookups as
+`vt_check.py -f` (vt_check.run, default thresholds) and records every verdict in
+syslog/news-checked.json, the news job's own cache: it reads the daily check's checked.json too but
+never writes it, since a clean verdict there keeps the daily check from looking a destination up for
+thirty days, and a report's indicator found clean today may well be flagged next week. news_check.sh
+runs both steps, the model call outside the feed lock and the lookups inside it.
 
 Standard library only (Python 3.9). The Anthropic key comes from the Keychain (ANTHROPIC_API_KEY,
 service spark-ioc-feed), the VirusTotal key as vt_check reads it. Exit codes: 0 done, 2 the model
-could not be reached, 3 a key is missing, 4 the VirusTotal quota stopped the check.
+gave no usable answer (an error status, a refusal, a reply cut short or without the JSON object) or,
+with --check, VirusTotal refused the key or lookups failed (the rows done so far are in the feed),
+3 a key is missing, 4 the VirusTotal quota stopped the check.
 """
 
 import argparse
+import ipaddress
 import json
 import re
 import sys
@@ -43,16 +49,29 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 ANTHROPIC_BETA = "server-side-fallback-2026-07-01"
 MODEL = "claude-opus-5-5"
-MAX_TOKENS = 8000  # forty candidates with their sources are a few thousand tokens
+MAX_TOKENS = 16000  # the model's reasoning counts against it; forty candidates are a few thousand tokens
 MAX_SEARCHES = 8
 MAX_FETCHES = 4
 FETCH_TOKENS = 20000  # per fetched page
 ASK_TIMEOUT = 600  # eight searches and four pages, then the answer
+RETRY_STATUSES = (429, 500, 502, 503, 529)  # a passing trouble: tried once more
+RETRY_WAIT = 30  # seconds before that one more try
 REPORT_DAYS = 7  # a report older than this is not current
 RECENT_DAYS = 3  # an indicator looked up this recently is not looked up again
 MAX_CANDIDATES = 40  # the news job's share of the free key's 500 lookups a day
 THEME_LIMIT = 60
+URL_LIMIT = 2048  # a longer URL is not something the gateway matches
 DEFAULT_DIR = Path(__file__).resolve().parent / "syslog"
+NEWS_CACHE_NAME = "news-checked.json"  # the news job's verdicts; the daily check's CACHE_NAME is read only
+# A URL on one of these is a device on somebody's LAN (router exploit paths in botnet reports), not an indicator.
+PRIVATE_SUFFIXES = ("localhost", "local", "lan", "internal", "home.arpa", "localdomain")
+# The feed's own notes, which expiry (vt_check.row_due) and the brief (spark_brief.origin) read from COMMENT:
+# a theme that contains one is dropped whole, so the model's text can never pass for one of them.
+NOTE_PHRASES = ("spark syslog", "seen in spark logs", "sent from telegram", "added without virustotal check")
+# Labels of a source's host that name nothing: the rest name the outlet, which no row may carry.
+GENERIC_LABELS = {"www", "blog", "blogs", "news", "research", "security", "labs", "media", "static", "cdn",
+                  "docs", "assets", "pages", "sites", "en"}
+DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 SYSTEM_PROMPT = """You find network indicators for the owner of a home network behind a Check Point Spark gateway. \
 The gateway blocks what a custom feed lists: IP addresses, domains and URLs. Once a day you search current public \
@@ -77,11 +96,8 @@ End your reply with one JSON object and nothing after it:
 "theme": "<three to six words on the campaign; no source names, no URLs>", "source": "<the report's url>"}]}
 An empty list is a fine answer on a quiet day."""
 
-URLISH_RE = re.compile(r"[A-Za-z0-9]\.[A-Za-z0-9]")
-
-
 class NewsUnavailable(Exception):
-    """The model did not answer: an error status from the API."""
+    """The model gave no usable answer: an error status, a refusal, a reply cut short or unreadable."""
 
 
 def _count_of(usage, *keys):
@@ -90,11 +106,14 @@ def _count_of(usage, *keys):
     return usage if isinstance(usage, int) and not isinstance(usage, bool) else 0
 
 
-def ask_claude(today, api_key, http, max_continuations=3, report=None, clock=time.monotonic):
+def ask_claude(today, api_key, http, max_continuations=3, report=None, clock=time.monotonic, sleep=None):
     """The model's reply (its text blocks joined) to the day's request. `http(url, data, headers, timeout)`
     returns (status, body_dict). A reply that paused its turn is sent back with the model's own content so it
-    carries on, at most `max_continuations` times; a refusal is "". `report(line)` gets one "news usage: ..."
-    line once a reply came back. Raises NewsUnavailable for an error status; network errors propagate."""
+    carries on, at most `max_continuations` times. `report(line)` gets one "news usage: ..." line once a reply
+    came back. Raises NewsUnavailable for an error status (one of RETRY_STATUSES is tried once more after
+    RETRY_WAIT seconds of `sleep`), a refusal, a reply cut at MAX_TOKENS or an unreadable body; network errors
+    propagate."""
+    sleep = sleep or time.sleep
     since = (date.fromisoformat(today) - timedelta(days=REPORT_DAYS)).isoformat()
     headers = {"x-api-key": api_key, "anthropic-version": ANTHROPIC_VERSION, "anthropic-beta": ANTHROPIC_BETA}
     messages = [{"role": "user", "content":
@@ -102,7 +121,7 @@ def ask_claude(today, api_key, http, max_continuations=3, report=None, clock=tim
                  "indicators of the kinds in scope, read the most useful ones, and end with the JSON object."}]
     text = ""
     used = {"input": 0, "output": 0, "searches": 0, "fetches": 0}
-    started, replies = clock(), 0
+    started, replies, retried = clock(), 0, False
     try:
         for _ in range(max_continuations + 1):
             body = {
@@ -119,9 +138,15 @@ def ask_claude(today, api_key, http, max_continuations=3, report=None, clock=tim
                 "messages": messages,
             }
             status, reply = http(ANTHROPIC_URL, body, headers, ASK_TIMEOUT)
+            if status in RETRY_STATUSES and not retried:
+                retried = True
+                sleep(RETRY_WAIT)
+                status, reply = http(ANTHROPIC_URL, body, headers, ASK_TIMEOUT)
             if status != 200:
                 error = reply.get("error") if isinstance(reply, dict) else None
                 raise NewsUnavailable((error.get("message") if isinstance(error, dict) else None) or f"HTTP {status}")
+            if not isinstance(reply, dict):
+                raise NewsUnavailable("the reply could not be read")
             replies += 1
             usage = reply.get("usage")
             used["input"] += _count_of(usage, "input_tokens")
@@ -130,7 +155,9 @@ def ask_claude(today, api_key, http, max_continuations=3, report=None, clock=tim
             used["fetches"] += _count_of(usage, "server_tool_use", "web_fetch_requests")
             stop = reply.get("stop_reason")
             if stop == "refusal":
-                return ""
+                raise NewsUnavailable("the model refused the request")
+            if stop == "max_tokens":
+                raise NewsUnavailable(f"the reply was cut at {MAX_TOKENS} tokens (MAX_TOKENS in news_agent.py)")
             text += "".join(block.get("text", "") for block in reply.get("content", []) if block.get("type") == "text")
             if stop != "pause_turn":
                 break
@@ -143,17 +170,22 @@ def ask_claude(today, api_key, http, max_continuations=3, report=None, clock=tim
 
 
 def parse_candidates(text):
-    """The objects in the last {"candidates": [...]} of `text`; [] when there is none or it is cut short."""
+    """The objects in the {"candidates": [...]} that ends `text`: the last such object, the model's own answer
+    (an earlier one, quoted from a page, does not count), or the object enclosing it when that one has the key
+    too. None when there is no such object (prose only, JSON cut short); [] when the list is empty or not one."""
     decoder = json.JSONDecoder()
+    found = None  # (start, end, the candidates value)
     for start in reversed([m.start() for m in re.finditer(r"\{", text)]):
         try:
-            found, _ = decoder.raw_decode(text, start)
+            value, end = decoder.raw_decode(text, start)
         except ValueError:
             continue
-        if isinstance(found, dict) and "candidates" in found:
-            items = found["candidates"]
-            return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
-    return []
+        if isinstance(value, dict) and "candidates" in value and (found is None or end > found[0]):
+            found = (start, end, value["candidates"])
+    if found is None:
+        return None
+    items = found[2]
+    return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
 
 
 def _hidden(char):
@@ -161,17 +193,34 @@ def _hidden(char):
     return char == '"' or unicodedata.category(char).startswith("C")
 
 
-def clean_theme(theme):
-    """`theme` as a label part: quotes and hidden characters removed, commas made spaces, any word that looks
-    like a URL or a host name dropped, whitespace collapsed, at most THEME_LIMIT characters."""
+def _outlet_labels(source):
+    """The labels of the source URL's host that could name the outlet (`www`, `blog` and such left out)."""
+    try:
+        host = urlsplit(source).hostname if isinstance(source, str) else None
+    except ValueError:
+        host = None
+    return {label for label in (host or "").lower().split(".") if len(label) >= 5 and label not in GENERIC_LABELS}
+
+
+def clean_theme(theme, source=None):
+    """`theme` as a label part: normalised (NFKC, so look-alike dots are dots), quotes and hidden characters
+    removed, commas made spaces, only words of letters, digits, hyphens and apostrophes kept (no host name, URL,
+    path or defanged form survives), dates dropped, whitespace collapsed, at most THEME_LIMIT characters. A theme
+    that names the source's outlet or contains one of the feed's own notes (NOTE_PHRASES) is dropped whole: the
+    first would put a publication's name in a public row, the second would be read by expiry or the brief."""
     if not isinstance(theme, str):
         return ""
     words = []
-    for word in theme.replace(",", " ").split():
+    for word in unicodedata.normalize("NFKC", theme).replace(",", " ").split():
         word = "".join(c for c in word if not _hidden(c))
-        if word and "/" not in word and not URLISH_RE.search(word):
+        if word and all(c.isalnum() or c in "-'’" for c in word) and not DATE_RE.search(word):
             words.append(word)
-    return " ".join(words)[:THEME_LIMIT].rstrip()
+    cleaned = " ".join(words)
+    lowered = cleaned.lower()
+    squashed = lowered.replace(" ", "").replace("-", "")
+    if any(phrase in lowered for phrase in NOTE_PHRASES) or any(label in squashed for label in _outlet_labels(source)):
+        return ""
+    return cleaned[:THEME_LIMIT].rstrip()
 
 
 def _report_date(value, today):
@@ -202,13 +251,33 @@ def _host(ioc_type, value):
     return host
 
 
+def _private_host(host):
+    """A URL's host that is no indicator: a private, loopback or reserved address (the test classify applies
+    to a bare IP), a name without a dot, or one under PRIVATE_SUFFIXES."""
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return "." not in host or any(host == s or host.endswith("." + s) for s in PRIVATE_SUFFIXES)
+    try:
+        vt_check.classify(str(address))
+    except ValueError:
+        return True
+    return False
+
+
 def _reason_to_drop(ioc_type, value, allow):
     host = _host(ioc_type, value)
     if host is None:
         return None
+    if ioc_type == "URL":
+        if len(value) > URL_LIMIT:
+            return "too long"
+        if _private_host(host):
+            return "private host"
     if spark_logs.allowed(host, allow):
         return "vendor domain"
-    if ioc_type == "Domain" and host in vt_check.SHARED_PLATFORMS:
+    apex = host[4:] if host.startswith("www.") else host
+    if ioc_type == "Domain" and apex in vt_check.SHARED_PLATFORMS:
         return "shared platform"
     if feed_lint.never_block_problem(value, ioc_type):
         return "never block"
@@ -262,7 +331,7 @@ def select(candidates, *, today, feed_text, cache, allow=spark_logs.ALLOWED_SUFF
         if isinstance(checked, str) and checked >= cutoff:
             dropped[f"checked in the last {recent_days} days"] += 1
             continue
-        label = f"News {day.isoformat()} {clean_theme(candidate.get('theme'))}".rstrip()
+        label = f"News {day.isoformat()} {clean_theme(candidate.get('theme'), candidate.get('source'))}".rstrip()
         kept.append((day, value, label))
     kept.sort(key=lambda item: item[0], reverse=True)
     if len(kept) > max_candidates:
@@ -292,15 +361,39 @@ def write_candidates(path, kept, today):
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def recent_lookups(directory):
+    """The daily check's cache and the news job's own, merged (the later check of a value wins): what either
+    job looked up lately is not looked up again."""
+    merged = spark_logs.load_cache(directory / spark_logs.CACHE_NAME)
+    for value, entry in spark_logs.load_cache(directory / NEWS_CACHE_NAME).items():
+        known = merged.get(value)
+        if isinstance(entry, dict) and (not isinstance(known, dict)
+                                        or str(entry.get("checked", "")) > str(known.get("checked", ""))):
+            merged[value] = entry
+    return merged
+
+
+def _answering(fetch):
+    """`fetch` with a network failure answered as an error status: one lookup's failure is one "error" result
+    (not cached, so tried another day), and the run goes on to the next candidate instead of ending."""
+    def wrapped(path):
+        try:
+            return fetch(path)
+        except OSError as e:  # URLError, timeouts
+            return 0, {"error": {"code": str(getattr(e, "reason", None) or e)}}
+    return wrapped
+
+
 def check(candidates_path, feed_path, cache_path, fetch, *, today=None, dry_run=False,
           delay=vt_check.FREE_API_DELAY, sleep=None, out=print):
     """Look the candidates file up as `vt_check.py -f` would (vt_check.run, default thresholds), adding the
-    flagged ones to the feed, and record every verdict in `cache_path` (the daily check's cache) so the
-    next days skip them. A dry run looks up and changes nothing on disk."""
+    flagged ones to the feed, and record every verdict (added, clean, not found; never an error) in
+    `cache_path`, the news job's cache, so the next days skip them. A dry run looks up and changes nothing on
+    disk. A refused key (vt_check.VTError) ends the run; a network failure costs one lookup."""
     today = today or date.today().isoformat()
     entries = vt_check.read_indicators([str(candidates_path)], [])
-    results = vt_check.run(entries, feed_path, fetch, dry_run=dry_run, delay=delay, sleep=sleep or time.sleep,
-                           today=today, out=out)
+    results = vt_check.run(entries, feed_path, _answering(fetch), dry_run=dry_run, delay=delay,
+                           sleep=sleep or time.sleep, today=today, out=out)
     if not dry_run:
         cache = spark_logs.load_cache(cache_path)
         for r in results:
@@ -332,9 +425,12 @@ def _find(args, http, say):
         say(f"news agent: {getattr(e, 'reason', None) or e}")
         return 2
     candidates = parse_candidates(text)
+    if candidates is None:
+        say("news agent: the reply holds no candidates object" + (f"; it ends: {_visible(text[-120:])}" if text.strip() else ""))
+        return 2
     kept, dropped = select(candidates, today=args.today, feed_text=Path(args.feed).read_text(),
-                           cache=spark_logs.load_cache(args.dir / spark_logs.CACHE_NAME),
-                           allow=spark_logs.load_allow(args.dir / "allow.txt"), max_candidates=args.max_candidates)
+                           cache=recent_lookups(args.dir), allow=spark_logs.load_allow(args.dir / "allow.txt"),
+                           max_candidates=args.max_candidates)
     path = args.out or args.dir / f"news-{args.today}.txt"
     write_candidates(path, kept, args.today)
     noun = "candidate" if len(kept) == 1 else "candidates"
@@ -359,16 +455,20 @@ def _check(args, say):
     say(f"Checking {len(entries)} indicators against VirusTotal (min {vt_check.DEFAULT_MIN_MALICIOUS} malicious "
         f"detections, IPs {vt_check.MIN_MALICIOUS['IP']}" + (", dry run)" if args.dry_run else ")"))
     try:
-        results = check(args.check, args.feed, args.dir / spark_logs.CACHE_NAME, vt_check.make_fetch(key),
+        results = check(args.check, args.feed, args.dir / NEWS_CACHE_NAME, vt_check.make_fetch(key),
                         today=args.today, dry_run=args.dry_run, delay=args.delay, out=say)
     except vt_check.VTError as e:
-        say(f"news agent: {e}")
+        say(f"news agent: {e}; the rows added before it are in the feed")
         return 2
     counts = Counter(r.status for r in results)
     say("News check: " + ", ".join(f"{n} {status}" for status, n in counts.most_common()))
     if counts["quota"]:
         say(f"VirusTotal quota reached; {counts['unchecked'] + 1} candidates still need checking.")
         return 4
+    if counts["error"]:
+        say(f"news agent: {counts['error']} lookups failed (VirusTotal unreachable or an error status, see above); "
+            "they are candidates again tomorrow")
+        return 2
     return 0
 
 

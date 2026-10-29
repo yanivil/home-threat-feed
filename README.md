@@ -538,7 +538,7 @@ The free VirusTotal key allows 500 lookups a day and 4 a minute. The daily check
 (`MAX_CANDIDATES`, "News agent" below); your checks through the bot (one lookup per
 indicator), each `/who` and each attacker note (one lookup each) share the remaining 60. While
 a check is writing the feed (`syslog/.feed-lock` exists: the daily check until its push, the news
-check from its first lookup until its push, or the bot's own check), notes and `/who` do not ask
+check from before its pull until its push, or the bot's own check), notes and `/who` do not ask
 VirusTotal, so they cannot push a check over the
 4 a minute; their facts then say `VirusTotal: skipped (a feed check is running)`. The daily check
 gives the lock back before its brief, so the brief's notes do ask it. A lookup that still meets a
@@ -600,24 +600,29 @@ decides what reaches the feed:
 - Out go names under the vendor suffixes (`spark_logs.ALLOWED_SUFFIXES` and `syslog/allow.txt`),
   the bare apexes of shared platforms (`netlify.app`, `pages.dev`, …), the hosts this system
   needs (the `feed_lint.py` list), private and reserved addresses, candidates with no report date
-  or one more than seven days old, duplicates, values already in the feed, and anything
-  `syslog/checked.json` shows looked up within the last three days.
+  or one more than seven days old, duplicates, values already in the feed, URLs on private or
+  single-label hosts, and anything `syslog/checked.json` (the daily check's cache) or
+  `syslog/news-checked.json` (this job's) shows looked up within the last three days.
 - At most 40 are kept, newest report first, and written to `syslog/news-<date>.txt` as
   `indicator<TAB>label`, the `vt_check.py -f` format, so you can run them by hand. The label is
-  `News <report date> <theme>`: the theme is a few words from the model, cleaned as a Telegram
-  label is and cut at 60 characters, and never holds a URL or an outlet's name. The source URLs
-  are printed in the run log only, so no feed row names a publication.
+  `News <report date> <theme>`: the theme is a few words from the model reduced to plain words
+  (letters, digits, hyphens, apostrophes) and cut at 60 characters; a host, URL, date or the
+  outlet's name never survives, and a theme that reads like one of the feed's own notes is
+  dropped whole. The source URLs are printed in the run log only, so no feed row names a
+  publication.
 - `python3 news_agent.py --check syslog/news-<date>.txt` looks them up exactly as `vt_check.py -f`
   would (3 engines for a domain or URL, 5 for an IP) and records every verdict in
-  `syslog/checked.json`, so the following days skip them; with `--dry-run` nothing is recorded or
-  written.
+  `syslog/news-checked.json`, so the following days skip them. It never writes the daily check's
+  `syslog/checked.json`: a clean verdict there would keep the daily check from looking that
+  destination up for thirty days, and a reported indicator is often clean on VirusTotal the first
+  day and flagged a week later. With `--dry-run` nothing is recorded or written.
 
 Setting it up, once:
 
 1. Both keys in the login Keychain: `VT_API_KEY` ("Daily check on this Mac" above) and
    `ANTHROPIC_API_KEY` ("Setting it up" under Telegram, step 5).
-2. A dry run by hand, which reads the week's reporting, looks the candidates up and changes
-   nothing:
+2. A dry run by hand, which reads the week's reporting, looks the candidates up and commits and
+   pushes nothing (the feed and the caches are left as they were):
    ```
    DRY_RUN=1 bash news_check.sh
    ```
@@ -646,11 +651,13 @@ What a run does:
   `Committed: …`, `Pushed to origin/main`, `News check done`.
 - A run that fails sends one Telegram line, `News check failed: <reason>` (printed in the log
   without a bot token), raises a macOS notification and exits 1. The reasons: no
-  `ANTHROPIC_API_KEY` in the Keychain; the model could not be reached; the feed on main fails
-  its lint (fix `spark-ioc-feed.csv`, nothing was looked up); no `VT_API_KEY`; the VirusTotal
-  quota reached (the rows done so far are committed and pushed first; the rest are candidates
-  again the next morning while a report still names them); the feed locked for over twenty
-  minutes; a pull or push that failed (the commit stays local and the next run pushes it).
+  `ANTHROPIC_API_KEY` in the Keychain; the model call failed (an error after one retry, a
+  refusal, a reply cut short or without the candidates list; the log has the detail); the feed on
+  main fails its lint (fix `spark-ioc-feed.csv`, nothing was looked up); no `VT_API_KEY`; the
+  VirusTotal quota reached, or VirusTotal refused the key or some lookups failed (in each case
+  the rows done so far are committed and pushed first; the rest are candidates again the next
+  morning while a report still names them); the feed locked for over twenty minutes; a pull or
+  push that failed (the commit stays local and the next run pushes it).
 - By hand: `MAX_CANDIDATES=10 bash news_check.sh` lowers the cap for the day;
   `python3 news_agent.py` alone writes today's candidates file and prints them, their labels and
   sources, without a lookup; `python3 news_agent.py --check syslog/news-<date>.txt --dry-run`

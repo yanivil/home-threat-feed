@@ -217,7 +217,33 @@ class NewsCheckTest(unittest.TestCase):
         self.assertEqual(check["args"], ["--check", f"syslog/news-{TODAY}.txt", "--dry-run"])
         self.assertEqual(self.head(), before)
         self.assertIn("dry run", proc.stdout)
+        self.assertIn("Dry run: nothing committed or pushed", proc.stdout)
         self.assertIn("News check done", proc.stdout)
+
+    def test_a_dry_run_leaves_commits_already_ahead_for_the_next_run(self):
+        (self.repo / "other.txt").write_text("edited by hand\n")
+        self.git("commit", "-q", "-am", "Edit other.txt by hand", cwd=self.repo)
+        before = self.head()
+
+        proc = self.run_script(DRY_RUN=1)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(self.head(), before)
+        self.assertNotEqual(self.head(self.origin), before, "a dry run pushes nothing")
+
+    def test_dry_run_zero_is_not_a_dry_run(self):
+        proc = self.run_script(DRY_RUN=0, STUB_ADD=1)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(self.calls("agent")[1]["args"], ["--check", f"syslog/news-{TODAY}.txt"])
+        self.assertEqual(self.subject(), f"Add 1 indicator from news {TODAY}")
+
+    def test_a_max_candidates_that_is_not_a_number_fails_before_the_model_call(self):
+        proc = self.run_script(MAX_CANDIDATES="ten")
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(self.calls("agent"), [])
+        self.assertEqual(self.notices(), ["News check failed: MAX_CANDIDATES must be a number, not 'ten'"])
 
     def test_max_candidates_in_the_environment_is_passed_on(self):
         proc = self.run_script(MAX_CANDIDATES=10)
@@ -245,7 +271,7 @@ class NewsCheckTest(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 1)
         self.assertEqual(len(self.calls("agent")), 1)
-        self.assertEqual(self.notices(), ["News check failed: the model could not be reached, nothing was looked up "
+        self.assertEqual(self.notices(), ["News check failed: the model call failed, nothing was looked up "
                                           "(see " + os.path.expanduser("~/Library/Logs/spark-ioc-feed/news-check.log") + ")"])
         self.assertIn("news agent: Overloaded", proc.stdout, "the agent's reason is in the log")
 
@@ -259,6 +285,17 @@ class NewsCheckTest(unittest.TestCase):
         self.assertIn("exited 4", notice)
         self.assertIn("quota", notice)
         self.assertFalse(self.lock.exists())
+
+    def test_failed_lookups_still_commit_what_was_added_but_fail(self):
+        proc = self.run_script(STUB_ADD=1, STUB_CHECK_EXIT=2)
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(self.subject(), f"Add 1 indicator from news {TODAY}")
+        self.assertEqual(self.head(self.origin), self.head())
+        [notice] = self.notices()
+        self.assertIn("exited 2", notice)
+        self.assertIn("VirusTotal refused the key or lookups failed; the rows done so far are in", notice)
+        self.assertFalse(self.calls("brief")[0]["locked"], "the lock is given back before the notice")
 
     def test_a_missing_vt_key_fails_the_check_with_a_notice(self):
         proc = self.run_script(STUB_CHECK_EXIT=3)
@@ -281,7 +318,6 @@ class NewsCheckTest(unittest.TestCase):
         self.assertEqual(proc.stdout.count("waiting up to twenty minutes"), 1)
         self.assertEqual(self.notices(), ["News check failed: the feed is locked for over twenty minutes"])
         self.assertTrue(self.lock.is_dir(), "the lock is not ours to remove")
-        self.assertFalse(self.calls("brief")[0]["locked"] and False)  # the notice goes out without a lock of ours
 
     def test_a_stale_lock_is_taken_over(self):
         self.hold_lock(hours_ago=4)

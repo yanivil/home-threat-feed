@@ -14,9 +14,11 @@
 #                          stops the run here, and the notice says what to fix
 #   4. news_agent.py --check  look the candidates up on VirusTotal (the same lookups as vt_check.py -f,
 #                          default thresholds: 5 engines for an IP, 3 otherwise), add the flagged ones,
-#                          record every verdict in syslog/checked.json so the next days skip them
+#                          record every verdict in syslog/news-checked.json so the next days skip them
 #   5. git commit + push   spark-ioc-feed.csv only, when the check added rows, after feed_lint.py
-#                          passed it again; a feed that fails stays uncommitted
+#                          passed it again; a feed that fails stays uncommitted. A check that stopped
+#                          early (the quota, a refused key, lookups that failed) still gets its rows
+#                          committed and pushed, then the run fails and says why.
 # A run that fails sends one line to Telegram, "News check failed: <reason>" (spark_brief.py --send
 # --notice; printed here when there is no bot token). The job sends no brief: the 07:30 daily check's
 # brief counts the rows it added ("from news"). A quiet day (no candidates) takes no lock and ends.
@@ -28,7 +30,7 @@
 # not be pushed stays local and is pushed by the next run (this one's or the daily check's).
 #
 #   bash news_check.sh                  # from anywhere: works on the repository it lives in
-#   DRY_RUN=1 bash news_check.sh        # look the candidates up, change nothing (the first run to make)
+#   DRY_RUN=1 bash news_check.sh        # look the candidates up; commit and push nothing (the first run to make)
 #   MAX_CANDIDATES=10 bash news_check.sh
 
 set -u
@@ -40,6 +42,7 @@ LOG_FILE=$HOME/Library/Logs/spark-ioc-feed/news-check.log
 TODAY=$(date '+%Y-%m-%d')
 CANDIDATES=syslog/news-$TODAY.txt
 DRY_RUN=${DRY_RUN:-}
+case $DRY_RUN in 0) DRY_RUN= ;; esac   # DRY_RUN=0 means no dry run
 MAX_CANDIDATES=${MAX_CANDIDATES:-}
 
 lock=syslog/.feed-lock
@@ -82,6 +85,9 @@ fail() {
 }
 
 log "News check starting${DRY_RUN:+ (dry run)}${MAX_CANDIDATES:+, up to $MAX_CANDIDATES candidates}"
+case $MAX_CANDIDATES in
+    ''|*[!0-9]*) [ -z "$MAX_CANDIDATES" ] || fail "MAX_CANDIDATES must be a number, not '$MAX_CANDIDATES'" ;;
+esac
 mkdir -p syslog || fail "cannot create syslog/"
 
 # 1. The model call, outside the lock. The agent prints its usage line, what it kept and why it
@@ -91,7 +97,7 @@ agent_status=$?
 case $agent_status in
     0) ;;
     3) fail "no ANTHROPIC_API_KEY in the Keychain, the news agent cannot run (README, \"News agent\")" ;;
-    2) fail "the model could not be reached, nothing was looked up (see $LOG_FILE)" ;;
+    2) fail "the model call failed, nothing was looked up (see $LOG_FILE)" ;;
     *) fail "news_agent.py exited $agent_status, nothing was looked up (see $LOG_FILE)" ;;
 esac
 count=$(grep -v '^#' "$CANDIDATES" | grep -c .)
@@ -126,37 +132,42 @@ if ! lint; then
     fail "the feed $where fails its lint, nothing was looked up: $lint_problem; fix $FEED"
 fi
 
-# 4. The lookups. Exit 3 and 2 mean nothing was looked up; 4 (quota) and anything else happen after
-#    some rows may have been added, which are committed below before the run is judged.
+# 4. The lookups. Exit 3 means nothing was looked up; 4 (the quota), 2 (a refused key, lookups that
+#    failed) and anything else happen after some rows may have been added, which are committed below
+#    before the run is judged.
 python3 news_agent.py --check "$CANDIDATES" ${DRY_RUN:+--dry-run} 2>&1
 check_status=$?
-case $check_status in
-    3) fail "no VT_API_KEY in the Keychain, nothing was looked up (README, \"Daily check on this Mac\")" ;;
-    2) fail "VirusTotal refused the key or could not be reached, nothing was looked up (see $LOG_FILE)" ;;
-esac
+[ "$check_status" -ne 3 ] || fail "no VT_API_KEY in the Keychain, nothing was looked up (README, \"Daily check on this Mac\")"
 
-# 5. Commit and push what the check added.
-if git diff --quiet -- "$FEED"; then
-    log "Feed unchanged"
+# 5. Commit and push what the check added. A dry run added nothing and leaves the pushing to the next run.
+if [ -n "$DRY_RUN" ]; then
+    log "Dry run: nothing committed or pushed"
 else
-    lint || fail "the rows the check added fail the lint and stay uncommitted in $FEED: $lint_problem"
-    read -r added removed _ < <(git diff --numstat -- "$FEED")
-    if [ "$removed" -eq 0 ]; then
-        plural=s; [ "$added" -eq 1 ] && plural=
-        message="Add $added indicator$plural from news $TODAY"
+    if git diff --quiet -- "$FEED"; then
+        log "Feed unchanged"
     else
-        message="Update the feed from the news check (+$added/-$removed lines)"
+        lint || fail "the rows the check added fail the lint and stay uncommitted in $FEED: $lint_problem"
+        read -r added removed _ < <(git diff --numstat -- "$FEED")
+        if [ "$removed" -eq 0 ]; then
+            plural=s; [ "$added" -eq 1 ] && plural=
+            message="Add $added indicator$plural from news $TODAY"
+        else
+            message="Update the feed from the news check (+$added/-$removed lines)"
+        fi
+        git commit --quiet -m "$message" -- "$FEED" || fail "git commit of $FEED failed"
+        log "Committed: $message"
     fi
-    git commit --quiet -m "$message" -- "$FEED" || fail "git commit of $FEED failed"
-    log "Committed: $message"
-fi
-if [ "$(git rev-list --count '@{upstream}..HEAD')" -gt 0 ]; then
-    git push --quiet || fail "git push failed; the commit stays local and the next run will push it"
-    log "Pushed to $(git rev-parse --abbrev-ref '@{upstream}')"
+    if [ "$(git rev-list --count '@{upstream}..HEAD')" -gt 0 ]; then
+        git push --quiet || fail "git push failed; the commit stays local and the next run will push it"
+        log "Pushed to $(git rev-parse --abbrev-ref '@{upstream}')"
+    fi
 fi
 release_lock
 
-if [ "$check_status" -ne 0 ]; then
-    fail "news_agent.py --check exited $check_status (4 = VirusTotal quota reached, rows done so far are in; else see above)"
-fi
+case $check_status in
+    0) ;;
+    4) fail "news_agent.py --check exited 4: the VirusTotal quota is reached; the rows done so far are in, the rest are candidates again tomorrow" ;;
+    2) fail "news_agent.py --check exited 2: VirusTotal refused the key or lookups failed; the rows done so far are in (see $LOG_FILE)" ;;
+    *) fail "news_agent.py --check exited $check_status; the rows done so far are in (see $LOG_FILE)" ;;
+esac
 log "News check done"

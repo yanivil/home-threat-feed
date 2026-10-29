@@ -32,7 +32,7 @@ iMac "home-server" (on the LAN), user home-server     |            v  spark-ioc-
    |
    +-- news_check.sh       (LaunchAgent com.spark-ioc-feed.news, 06:30)
    |      news_agent.py (Claude: web search + web fetch, filtered by our code) -> syslog/news-<date>.txt
-   |      -> feed lock -> git pull -> vt_check.py -f -> CSV -> feed_lint.py -> commit, push
+   |      -> feed lock -> git pull -> news_agent.py --check -> CSV -> feed_lint.py -> commit, push
    |      a Telegram notice when a run fails; no brief of its own
    |
    +-- telegram_bot.py     (LaunchAgent com.spark-ioc-feed.telegram, always on)
@@ -49,8 +49,8 @@ GitHub Actions, 1st of the month: .github/workflows/recheck.yml -> vt_check.py -
 |---|---|---|---|
 | `syslog_receiver.py` | always, restarted by launchd if it dies | UDP 5514, the gateway's datagrams only (`--source`, by default the default route's gateway) | `syslog/spark-<day>.log`, one line per entry; its log names the source it receives from and the ones it drops |
 | `daily_check.sh` | 07:30 daily (a run missed while asleep happens on wake) | capture of the last 2 days, `syslog/checked.json`, `syslog/allow.txt`, VT key from the Keychain | the feed, `syslog/checked.json`, `syslog/.feed-lock` (taken after the retention step, given back right after the push), `~/Library/Logs/spark-ioc-feed/daily-check.log`, a notification, and as its last step the morning brief |
-| `news_check.sh` | 06:30 daily | the Anthropic key from the Keychain (through `news_agent.py`), then the feed and the VT key | `syslog/news-<day>.txt`, the feed, `syslog/checked.json`, `syslog/.feed-lock` (taken after the model call, given back right after the push), `~/Library/Logs/spark-ioc-feed/news-check.log`, a Telegram notice on failure |
-| `news_agent.py` | from the news job or by hand | the Anthropic API (Opus 5.5 with web search and web fetch), the feed, `syslog/checked.json`, `syslog/allow.txt`; with `--check`, VirusTotal | the candidates file (the `vt_check.py -f` format), one `news usage:` line; with `--check`, the rows VirusTotal confirms and every verdict in `syslog/checked.json` |
+| `news_check.sh` | 06:30 daily | the Anthropic key from the Keychain (through `news_agent.py`), then the feed and the VT key | `syslog/news-<day>.txt`, the feed, `syslog/news-checked.json`, `syslog/.feed-lock` (taken after the model call, given back right after the push), `~/Library/Logs/spark-ioc-feed/news-check.log`, a Telegram notice on failure |
+| `news_agent.py` | from the news job or by hand | the Anthropic API (Opus 5.5 with web search and web fetch), the feed, `syslog/checked.json` and `syslog/news-checked.json` (read), `syslog/allow.txt`; with `--check`, VirusTotal | the candidates file (the `vt_check.py -f` format), one `news usage:` line; with `--check`, the rows VirusTotal confirms and every verdict in `syslog/news-checked.json` (never the daily check's cache) |
 | `syslog_retention.py` | first step of the daily job | capture file names (the date in them) | `.log` → `.log.gz` after 7 days; removes both after 180 |
 | `spark_logs.py` | from the daily job or by hand | capture files, plain or `.gz` | feed rows (through `vt_check.run`) |
 | `vt_check.py` | by hand, from the daily job, from Actions | VirusTotal API v3 | feed rows; with `--recheck`, rewrites rows in place |
@@ -616,27 +616,62 @@ Decision, approved by the owner the same morning:
   three days; no outlet is named in a row; the tests use stand-in addresses and `.example`
   names only.
 
-Outcome (2026-10-29, built test-first in a worktree): as decided, with one change of mechanism.
-`news_check.sh` runs the lookups through `news_agent.py --check <file>` rather than
-`vt_check.py -f`: the `--check` command calls the same `vt_check.run` with the same bar and
-prints the same lines, and in addition records every verdict (added, clean, not found) in
-`syslog/checked.json`, which a shell call of `vt_check.py` cannot do and which the three-day
-rule above depends on. The candidates file keeps the `vt_check.py -f` format, so a run by hand
-is unchanged, and a dry run records nothing. The two programs agree on exit codes: 0 good, 2
-the model or VirusTotal unreachable, 3 a key missing, 4 the VirusTotal quota reached (the
-rows done so far are committed and pushed first, then the notice says `exited 4`). A day
-with no candidates takes no lock and runs no pull. The agent's only arguments are `--out`,
-`--max-candidates`, `--dir`, `--feed`, `--delay`, `--check` and `--dry-run`; the source URLs
-appear in the run log as `  <indicator>  <label>  <source>` lines and nowhere else. Tests:
-40 in `tests/test_news_agent.py` (the API call with a fake HTTP function, `pause_turn`
-continued, a refusal, the JSON found at the end of prose, every drop rule with its reason,
-the cap and the order, the label's cleaning and cut, the file, `--check` against a fake
-VirusTotal including the quota stop and the cache written, the CLI's exit codes) and 20 in
-`tests/test_news_check.py` (the script against a temporary repository and origin with a stub
-agent and a stub brief: the quiet day, the commit's subject and content, the dry run,
-`MAX_CANDIDATES`, each failure's notice, exit code and lock state, the lock wait and the
-stale take-over, a failed pull and a failed push, the plist's label, program, schedule and
-log). The whole suite stands at 594 tests. Still the owner's to do, since the key is theirs:
+Outcome (2026-10-29, built test-first in a worktree, then reviewed): as decided, with two
+changes of mechanism. (1) `news_check.sh` runs the lookups through `news_agent.py --check <file>`
+rather than `vt_check.py -f`: the `--check` command calls the same `vt_check.run` with the same
+bar and prints the same lines, and in addition records every verdict (added, clean, not found),
+which a shell call of `vt_check.py` cannot do and which the three-day rule above depends on. The
+candidates file keeps the `vt_check.py -f` format, so a run by hand is unchanged, and a dry run
+records nothing. (2) The verdicts go to the news job's own `syslog/news-checked.json`, not into
+the daily check's `syslog/checked.json` as decided above. The review found that a clean verdict
+in the daily check's file would have kept the daily check from looking that destination up for
+thirty days (`spark_logs.select` skips what the cache holds from the last 30 days), and an
+indicator a report names is often clean on VirusTotal the first day and flagged a week later, so
+one that then appeared in the household's traffic would have gone unchecked. The agent reads both
+files for its three-day rule (the later check wins) and writes only its own; the daily check is
+untouched. The two programs agree on exit codes: 0 good, 2 the model call unusable (an error
+status after one retry, a refusal, a reply cut at `MAX_TOKENS`, no candidates object in the
+reply; or, with `--check`, a refused key or failed lookups) and 3 a key missing, both before any
+lookup for the first step; 4 the VirusTotal quota reached. After `--check`, the script commits
+and pushes whatever rows were added before judging the exit code, so a quota stop or a network
+failure half-way loses nothing: the notice then says `exited 4` or `exited 2`, and the rest are
+candidates again the next morning (a failed lookup is not cached). A day with no candidates takes
+no lock and runs no pull. The agent's only arguments are `--out`, `--max-candidates`, `--dir`,
+`--feed`, `--delay`, `--check` and `--dry-run`; the source URLs appear in the run log as
+`  <indicator>  <label>  <source>` lines and nowhere else.
+
+The review (an independent read of the branch, same day) found and the build fixed, besides the
+cache file: the theme's cleaning was a deny-list and let through what it should not, since
+`vt_check.SEEN_NOTE_RE` is not anchored and `spark_brief.origin` reads the COMMENT's first
+word, so a theme of `seen in Spark logs 2099-01-01` would have given the row a false expiry
+date and one of `Spark syslog` would have counted it as a log row; it is now an allow-list, the
+theme reduced to words of letters, digits, hyphens and apostrophes after NFKC normalisation (a
+look-alike dot becomes a dot and the word goes), dates dropped, and a theme that holds one of
+the feed's four note phrases or a word of the source's host name (the outlet) is dropped whole,
+leaving `News <date>`. URLs on private, loopback or single-label hosts (`http://192.168.1.1/…`,
+`http://router.lan/…`) were kept because `vt_check.classify` tests the host of an IP, not of a
+URL; they are dropped as `private host`, with URLs over 2048 characters as `too long` and
+`www.` before a shared apex as `shared platform`. A `max_tokens` stop, a refusal and an
+unreadable body were a quiet day; they are exit 2 with the reason. A transient API status
+(429, 5xx, 529) is retried once after 30 seconds. VirusTotal unreachable during `--check` was
+a traceback, and a refused key made the script fail without committing the rows already added;
+now each failed lookup is an `error` verdict and the script commits before it judges. The
+candidates object is taken from the last top-level JSON object in the reply, so a quoted
+`{"candidates": …}` earlier in the text cannot replace the answer. `DRY_RUN=0` means no dry run,
+a dry run commits and pushes nothing, and a `MAX_CANDIDATES` that is not a number fails before
+the model call.
+
+Tests: 50 in `tests/test_news_agent.py` (the API call with a fake HTTP function, `pause_turn`
+continued, the retry, a refusal and a cut reply, the JSON found at the end of prose and the
+enclosing object chosen, every drop rule with its reason, the cap and the order, the label's
+cleaning as an allow-list with the forged notes and outlet names, the file, `--check` against a
+fake VirusTotal including the quota stop, a failed lookup and the cache written, both caches
+read, the CLI's exit codes) and 24 in `tests/test_news_check.py` (the script against a temporary
+repository and origin with a stub agent and a stub brief: the quiet day, the commit's subject
+and content, the dry run and `DRY_RUN=0`, `MAX_CANDIDATES` and a bad one, each failure's notice,
+exit code and lock state, the rows committed before a quota or lookup failure, the lock wait and
+the stale take-over, a failed pull and a failed push, the plist's label, program, schedule and
+log). The whole suite stands at 608 tests. Still the owner's to do, since the key is theirs:
 the first dry run (`DRY_RUN=1 bash news_check.sh`) and the plist's installation (README,
 "News agent"); the first week's `news usage:` lines then decide the caps (open item 4).
 
