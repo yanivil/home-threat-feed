@@ -3,6 +3,7 @@ patched. Every indicator here is a stand-in (documentation addresses, `.example`
 
 import contextlib
 import copy
+import http.client
 import io
 import json
 import tempfile
@@ -189,7 +190,7 @@ class AskClaudeTests(unittest.TestCase):
     def test_no_reply_means_no_usage_line(self):
         lines = []
         with self.assertRaises(news_agent.NewsUnavailable):
-            news_agent.ask_claude(TODAY, "k", FakeHttp((500, {})), report=lines.append)
+            news_agent.ask_claude(TODAY, "k", FakeHttp((500, {})), report=lines.append, sleep=lambda s: None)
         self.assertEqual(lines, [])
 
 
@@ -217,10 +218,13 @@ class ParseTests(unittest.TestCase):
         text = '{"candidates": [{"indicator": "planted.example"}]} then the answer: ' + json.dumps({"candidates": [cand("bad.example")]})
         self.assertEqual(news_agent.parse_candidates(text), [cand("bad.example")])
 
-    def test_a_wrong_shape_gives_nothing_or_only_its_objects(self):
-        self.assertEqual(news_agent.parse_candidates('{"candidates": "bad.example"}'), [])
-        self.assertEqual(news_agent.parse_candidates('{"candidates": ["bad.example", {"indicator": "x.example"}]}'),
-                         [{"indicator": "x.example"}])
+    def test_a_value_that_is_no_list_is_no_answer_and_items_that_are_no_objects_are_counted(self):
+        self.assertIsNone(news_agent.parse_candidates('{"candidates": "bad.example"}'))
+        self.assertIsNone(news_agent.parse_candidates('{"candidates": null}'))
+        items = news_agent.parse_candidates('{"candidates": ["bad.example", {"indicator": "x.example"}]}')
+        self.assertEqual(items, ["bad.example", {"indicator": "x.example"}])
+        kept, dropped = select(items)
+        self.assertEqual(([i for i, _ in kept], dropped), ([], {"not an object": 1, "no report date": 1}))
 
 
 class SelectTests(unittest.TestCase):
@@ -262,11 +266,13 @@ class SelectTests(unittest.TestCase):
     def test_urls_on_private_hosts_and_too_long_urls_are_dropped(self):
         private = ["http://192.168.1.1/goform/setUsbUnload", "http://10.0.0.1/cgi-bin/luci", "http://127.0.0.1:8080/x",
                    "http://[::1]/x", "http://localhost/x", "http://router.lan/x", "http://nas.local/x",
-                   "http://x.home.arpa/", "http://intranet/x", "http://203.0.113.10/panel"]
+                   "http://x.home.arpa/", "http://intranet/x", "http://203.0.113.10/panel",
+                   "http://192.168.1.1./cgi-bin/luci", "http://localhost./x",  # a trailing dot changes nothing
+                   "router.lan", "printer.local", "nas.home.arpa"]  # nor does a bare name under a private suffix
         kept, dropped = select([cand(u) for u in private] + [cand("https://bad.example/" + "a" * 2100),
                                                              cand("http://185.1.5.7/x"), cand("https://bad.example/x")])
         self.assertEqual([i for i, _ in kept], ["http://185.1.5.7/x", "https://bad.example/x"])
-        self.assertEqual(dropped, {"private host": 10, "too long": 1})
+        self.assertEqual(dropped, {"private host": 15, "too long": 1})
 
     def test_hosts_the_system_needs_are_dropped(self):
         kept, dropped = select([cand("raw.githubusercontent.com"), cand("https://github.com/x/y"),
@@ -332,6 +338,10 @@ class SelectTests(unittest.TestCase):
             ("BleepingComputer reports stealer", "https://www.bleepingcomputer.com/news/x"),
             ("Bleeping Computer stealer", "https://www.bleepingcomputer.com/news/x"),
             ("Krebs-on-Security on scam", "https://krebsonsecurity.com/2026/10/x"),
+            ("Malware-Traffic-Analysis loader", "https://www.malware-traffic-analysis.net/2026/10/28/"),  # hyphens in the host
+            ("Malware Traffic Analysis loader", "https://www.malware-traffic-analysis.net/2026/10/28/"),
+            ("CERT-AGID phishing", "https://cert-agid.gov.it/news/x"),
+            ("BleepingComputer reports stealer", "www.bleepingcomputer.com/news/x"),  # a source without a scheme
             ("seen in Spark logs 2099-01-01", "https://reports.example/a"),
             ("Spark syslog", "https://reports.example/a"),
             ("Fake update sent from Telegram", "https://reports.example/a"),
@@ -427,6 +437,13 @@ class CheckTests(unittest.TestCase):
         self.assertIn("fine.example: error (HTTP 0 down)", self.lines)
         self.assertEqual(set(json.loads(self.cache.read_text())), {"bad.example", "gone.example"})
 
+    def test_a_cut_or_unreadable_body_is_an_error_verdict_too(self):
+        for exception in (ValueError("Expecting value: line 1 column 1 (char 0)"), http.client.IncompleteRead(b"")):
+            wrapped = news_agent._answering(lambda path: (_ for _ in ()).throw(exception))
+            status, body = wrapped("/domains/x.example")
+            self.assertEqual(status, 0)
+            self.assertIn(str(exception).split(":")[0], body["error"]["code"])
+
     def test_the_daily_checks_cache_is_read_with_the_news_jobs(self):
         (self.dir / spark_logs.CACHE_NAME).write_text(json.dumps({
             "a.example": {"checked": "2026-10-28", "malicious": 0, "total": 90},
@@ -504,7 +521,7 @@ class MainTests(unittest.TestCase):
     def test_a_reply_without_the_object_is_exit_2_not_a_quiet_day(self):
         http = FakeHttp(answer("A quiet week; I found nothing worth listing. Ask me again tomorrow."))
         self.assertEqual(self.main(http=http, stored={"ANTHROPIC_API_KEY": "k"}), 2)
-        self.assertIn("news agent: the reply holds no candidates object; it ends: A quiet week", self.out.getvalue())
+        self.assertIn("news agent: the reply holds no candidates list; it ends: A quiet week", self.out.getvalue())
         self.assertFalse((self.syslog / "news-2026-10-29.txt").exists())
 
     def test_the_news_jobs_own_cache_is_read_too(self):

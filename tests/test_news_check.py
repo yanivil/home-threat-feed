@@ -286,6 +286,29 @@ class NewsCheckTest(unittest.TestCase):
         self.assertIn("quota", notice)
         self.assertFalse(self.lock.exists())
 
+    def test_a_quota_stop_in_a_dry_run_says_nothing_was_committed(self):
+        before = self.head()
+
+        proc = self.run_script(DRY_RUN=1, STUB_ADD=1, STUB_CHECK_EXIT=4)
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(self.head(), before)
+        [notice] = self.notices()
+        self.assertIn("exited 4", notice)
+        self.assertIn("a dry run, nothing was committed", notice)
+        self.assertNotIn("rows done so far", notice)
+
+    def test_a_failed_push_after_a_failed_check_names_both(self):
+        self.refuse_pushes()
+
+        proc = self.run_script(STUB_ADD=1, STUB_CHECK_EXIT=2)
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(self.subject(), f"Add 1 indicator from news {TODAY}")  # the rows are committed all the same
+        [notice] = self.notices()
+        self.assertIn("git push failed", notice)
+        self.assertIn("news_agent.py --check itself exited 2", notice)
+
     def test_failed_lookups_still_commit_what_was_added_but_fail(self):
         proc = self.run_script(STUB_ADD=1, STUB_CHECK_EXIT=2)
 

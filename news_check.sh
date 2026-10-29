@@ -140,13 +140,16 @@ check_status=$?
 [ "$check_status" -ne 3 ] || fail "no VT_API_KEY in the Keychain, nothing was looked up (README, \"Daily check on this Mac\")"
 
 # 5. Commit and push what the check added. A dry run added nothing and leaves the pushing to the next run.
+#    A failure here names the check's own failure too, so a refused key is not hidden behind a refused push.
+check_note=
+[ "$check_status" -eq 0 ] || check_note="; news_agent.py --check itself exited $check_status (see $LOG_FILE)"
 if [ -n "$DRY_RUN" ]; then
     log "Dry run: nothing committed or pushed"
 else
     if git diff --quiet -- "$FEED"; then
         log "Feed unchanged"
     else
-        lint || fail "the rows the check added fail the lint and stay uncommitted in $FEED: $lint_problem"
+        lint || fail "the rows the check added fail the lint and stay uncommitted in $FEED: $lint_problem$check_note"
         read -r added removed _ < <(git diff --numstat -- "$FEED")
         if [ "$removed" -eq 0 ]; then
             plural=s; [ "$added" -eq 1 ] && plural=
@@ -154,20 +157,22 @@ else
         else
             message="Update the feed from the news check (+$added/-$removed lines)"
         fi
-        git commit --quiet -m "$message" -- "$FEED" || fail "git commit of $FEED failed"
+        git commit --quiet -m "$message" -- "$FEED" || fail "git commit of $FEED failed$check_note"
         log "Committed: $message"
     fi
     if [ "$(git rev-list --count '@{upstream}..HEAD')" -gt 0 ]; then
-        git push --quiet || fail "git push failed; the commit stays local and the next run will push it"
+        git push --quiet || fail "git push failed; the commit stays local and the next run will push it$check_note"
         log "Pushed to $(git rev-parse --abbrev-ref '@{upstream}')"
     fi
 fi
 release_lock
 
+rows="the rows done so far are in"
+[ -z "$DRY_RUN" ] || rows="a dry run, nothing was committed"
 case $check_status in
     0) ;;
-    4) fail "news_agent.py --check exited 4: the VirusTotal quota is reached; the rows done so far are in, the rest are candidates again tomorrow" ;;
-    2) fail "news_agent.py --check exited 2: VirusTotal refused the key or lookups failed; the rows done so far are in (see $LOG_FILE)" ;;
-    *) fail "news_agent.py --check exited $check_status; the rows done so far are in (see $LOG_FILE)" ;;
+    4) fail "news_agent.py --check exited 4: the VirusTotal quota is reached; $rows, the rest are candidates again tomorrow" ;;
+    2) fail "news_agent.py --check exited 2: VirusTotal refused the key or lookups failed; $rows (see $LOG_FILE)" ;;
+    *) fail "news_agent.py --check exited $check_status; $rows (see $LOG_FILE)" ;;
 esac
 log "News check done"

@@ -28,6 +28,7 @@ with --check, VirusTotal refused the key or lookups failed (the rows done so far
 """
 
 import argparse
+import http.client
 import ipaddress
 import json
 import re
@@ -172,7 +173,8 @@ def ask_claude(today, api_key, http, max_continuations=3, report=None, clock=tim
 def parse_candidates(text):
     """The objects in the {"candidates": [...]} that ends `text`: the last such object, the model's own answer
     (an earlier one, quoted from a page, does not count), or the object enclosing it when that one has the key
-    too. None when there is no such object (prose only, JSON cut short); [] when the list is empty or not one."""
+    too, with its list as it is (select drops what is not an object, and says so). None when there is no such
+    object (prose only, JSON cut short) or its value is not a list."""
     decoder = json.JSONDecoder()
     found = None  # (start, end, the candidates value)
     for start in reversed([m.start() for m in re.finditer(r"\{", text)]):
@@ -182,10 +184,7 @@ def parse_candidates(text):
             continue
         if isinstance(value, dict) and "candidates" in value and (found is None or end > found[0]):
             found = (start, end, value["candidates"])
-    if found is None:
-        return None
-    items = found[2]
-    return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+    return found[2] if found is not None and isinstance(found[2], list) else None
 
 
 def _hidden(char):
@@ -194,12 +193,14 @@ def _hidden(char):
 
 
 def _outlet_labels(source):
-    """The labels of the source URL's host that could name the outlet (`www`, `blog` and such left out)."""
+    """The labels of the source URL's host that could name the outlet (`www`, `blog` and such left out), hyphens
+    removed as they are from the theme they are looked for in; a source without a scheme is read as a host."""
     try:
-        host = urlsplit(source).hostname if isinstance(source, str) else None
+        host = urlsplit(source if "//" in source else "//" + source).hostname if isinstance(source, str) else None
     except ValueError:
         host = None
-    return {label for label in (host or "").lower().split(".") if len(label) >= 5 and label not in GENERIC_LABELS}
+    labels = {label.replace("-", "") for label in (host or "").lower().split(".")}
+    return {label for label in labels if len(label) >= 5 and label not in GENERIC_LABELS}
 
 
 def clean_theme(theme, source=None):
@@ -252,8 +253,9 @@ def _host(ioc_type, value):
 
 
 def _private_host(host):
-    """A URL's host that is no indicator: a private, loopback or reserved address (the test classify applies
-    to a bare IP), a name without a dot, or one under PRIVATE_SUFFIXES."""
+    """A host that is no indicator: a private, loopback or reserved address (the test classify applies to a
+    bare IP), a name without a dot, or one under PRIVATE_SUFFIXES; a trailing dot does not change that."""
+    host = host.rstrip(".")
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
@@ -269,11 +271,10 @@ def _reason_to_drop(ioc_type, value, allow):
     host = _host(ioc_type, value)
     if host is None:
         return None
-    if ioc_type == "URL":
-        if len(value) > URL_LIMIT:
-            return "too long"
-        if _private_host(host):
-            return "private host"
+    if ioc_type == "URL" and len(value) > URL_LIMIT:
+        return "too long"
+    if _private_host(host):
+        return "private host"
     if spark_logs.allowed(host, allow):
         return "vendor domain"
     apex = host[4:] if host.startswith("www.") else host
@@ -297,6 +298,9 @@ def select(candidates, *, today, feed_text, cache, allow=spark_logs.ALLOWED_SUFF
     seen = set()
     kept = []
     for candidate in candidates:
+        if not isinstance(candidate, dict):
+            dropped["not an object"] += 1
+            continue
         raw = candidate.get("indicator")
         if not isinstance(raw, str):
             dropped["not an IP, domain or URL"] += 1
@@ -374,12 +378,13 @@ def recent_lookups(directory):
 
 
 def _answering(fetch):
-    """`fetch` with a network failure answered as an error status: one lookup's failure is one "error" result
-    (not cached, so tried another day), and the run goes on to the next candidate instead of ending."""
+    """`fetch` with a network failure, a cut body or a body that is not JSON answered as an error status: one
+    lookup's failure is one "error" result (not cached, so tried another day), and the run goes on to the next
+    candidate instead of ending."""
     def wrapped(path):
         try:
             return fetch(path)
-        except OSError as e:  # URLError, timeouts
+        except (OSError, ValueError, http.client.HTTPException) as e:  # URLError, timeouts, IncompleteRead, bad JSON
             return 0, {"error": {"code": str(getattr(e, "reason", None) or e)}}
     return wrapped
 
@@ -426,7 +431,7 @@ def _find(args, http, say):
         return 2
     candidates = parse_candidates(text)
     if candidates is None:
-        say("news agent: the reply holds no candidates object" + (f"; it ends: {_visible(text[-120:])}" if text.strip() else ""))
+        say("news agent: the reply holds no candidates list" + (f"; it ends: {_visible(text[-120:])}" if text.strip() else ""))
         return 2
     kept, dropped = select(candidates, today=args.today, feed_text=Path(args.feed).read_text(),
                            cache=recent_lookups(args.dir), allow=spark_logs.load_allow(args.dir / "allow.txt"),

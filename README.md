@@ -600,8 +600,9 @@ decides what reaches the feed:
 - Out go names under the vendor suffixes (`spark_logs.ALLOWED_SUFFIXES` and `syslog/allow.txt`),
   the bare apexes of shared platforms (`netlify.app`, `pages.dev`, …), the hosts this system
   needs (the `feed_lint.py` list), private and reserved addresses, candidates with no report date
-  or one more than seven days old, duplicates, values already in the feed, URLs on private or
-  single-label hosts, and anything `syslog/checked.json` (the daily check's cache) or
+  or one more than seven days old, duplicates, values already in the feed, names and URL hosts
+  that are private (`router.lan`, `nas.local`, `http://192.168.1.1/…`), and anything
+  `syslog/checked.json` (the daily check's cache) or
   `syslog/news-checked.json` (this job's) shows looked up within the last three days.
 - At most 40 are kept, newest report first, and written to `syslog/news-<date>.txt` as
   `indicator<TAB>label`, the `vt_check.py -f` format, so you can run them by hand. The label is

@@ -659,19 +659,30 @@ now each failed lookup is an `error` verdict and the script commits before it ju
 candidates object is taken from the last top-level JSON object in the reply, so a quoted
 `{"candidates": …}` earlier in the text cannot replace the answer. `DRY_RUN=0` means no dry run,
 a dry run commits and pushes nothing, and a `MAX_CANDIDATES` that is not a number fails before
-the model call.
+the model call. A second read of the fixes found the outlet check matching nothing when the
+host has hyphens (the theme had them removed, the host's labels not; now both do) and a test
+that slept the retry's thirty seconds for real; and, smaller: a source without a scheme gave
+no outlet to check, a trailing dot or a bare name under a private suffix (`router.lan`) was
+kept, a candidates value that was not a list or held strings counted as a quiet day (now exit
+2, or `not an object` in the summary), a VirusTotal body cut short or not JSON was a traceback
+(now an `error` verdict), a dry run's quota notice spoke of rows committed, and a refused push
+hid the check's own failure (the notice now names both). Left as known limits: an outlet name
+of four letters or fewer (`ESET`, `CISA`) passes the theme check, as does a look-alike letter
+for a dot; a shortened or octal address in a URL's host (`http://127.1/`) is kept and costs a
+lookup; a theme word that is also a common label of the source's host (`cloud`, `abuse`) loses
+the theme, never the indicator.
 
-Tests: 50 in `tests/test_news_agent.py` (the API call with a fake HTTP function, `pause_turn`
+Tests: 51 in `tests/test_news_agent.py` (the API call with a fake HTTP function, `pause_turn`
 continued, the retry, a refusal and a cut reply, the JSON found at the end of prose and the
 enclosing object chosen, every drop rule with its reason, the cap and the order, the label's
 cleaning as an allow-list with the forged notes and outlet names, the file, `--check` against a
 fake VirusTotal including the quota stop, a failed lookup and the cache written, both caches
-read, the CLI's exit codes) and 24 in `tests/test_news_check.py` (the script against a temporary
+read, the CLI's exit codes) and 26 in `tests/test_news_check.py` (the script against a temporary
 repository and origin with a stub agent and a stub brief: the quiet day, the commit's subject
 and content, the dry run and `DRY_RUN=0`, `MAX_CANDIDATES` and a bad one, each failure's notice,
 exit code and lock state, the rows committed before a quota or lookup failure, the lock wait and
 the stale take-over, a failed pull and a failed push, the plist's label, program, schedule and
-log). The whole suite stands at 608 tests. Still the owner's to do, since the key is theirs:
+log). The whole suite stands at 611 tests. Still the owner's to do, since the key is theirs:
 the first dry run (`DRY_RUN=1 bash news_check.sh`) and the plist's installation (README,
 "News agent"); the first week's `news usage:` lines then decide the caps (open item 4).
 
