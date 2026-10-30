@@ -11,10 +11,10 @@ from pathlib import Path
 import unifi_list
 
 HEADER = "# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT\n"
-IP = "vt-ip-0011223344,185.1.2.7,IP,medium,high,AB,Inbound probe of WAN - VT 6/94 malicious 2026-10-02\n"
-IP2 = "vt-ip-5566778899,185.1.3.47,IP,high,high,AB,Inbound probe of WAN - VT 11/94 malicious 2026-10-03\n"
+IP = "vt-ip-0011223344,185.1.2.7,IP,medium,high,AB,Inbound probe of WAN - confirmed 2026-10-02\n"
+IP2 = "vt-ip-5566778899,185.1.3.47,IP,high,high,AB,Inbound probe of WAN - confirmed 2026-10-03\n"
 RANGE = "scanner-example-net,185.1.4.0-185.1.4.255,IP Range,high,medium,AB,Example scanner - port sweeps\n"
-DOMAIN = "vt-domain-1a2b3c4d5e,evil.example,Domain,high,high,AB,MuddyWater - VT 9/94 malicious 2026-10-01\n"
+DOMAIN = "vt-domain-1a2b3c4d5e,evil.example,Domain,high,high,AB,MuddyWater - confirmed 2026-10-01\n"
 URL = "trusted-url-5566778899,https://evil.example/login.php?id=1,URL,high,high,AB,Phishing kit\n"
 MD5 = "trusted-md5-aabbccddee,44d88612fea8a8f36de82e1278abb02f,MD5,high,high,AV,EICAR test file MD5\n"
 

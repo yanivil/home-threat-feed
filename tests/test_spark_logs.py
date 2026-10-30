@@ -404,7 +404,7 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertTrue(rows[0].startswith("vt-ip-"))
         self.assertIn(",31.14.32.6,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - "
-                      "seen in Spark logs 2026-10-20 - VT 10/90", rows[0])
+                      "seen in Spark logs 2026-10-20 - confirmed 2026-10-20", rows[0])
         self.assertEqual(report["added"], ["31.14.32.6"])
         self.assertEqual(report["outbound_hits"], [("evil.example", "Domain 9/89 malicious", ["192.168.1.101"], ["evil.example"])])
         cache = json.loads(self.cache.read_text())
@@ -413,7 +413,7 @@ class CheckTest(unittest.TestCase):
         self.assertNotIn("evil.example", self.feed.read_text())
 
     def test_inbound_sources_already_in_the_feed_are_stamped_as_seen_without_a_lookup(self):
-        self.feed.write_text(HEADER + "vt-ip-1,31.14.32.6,IP,high,high,AB,VT 10/90 malicious 2026-09-01\n")
+        self.feed.write_text(HEADER + "vt-ip-1,31.14.32.6,IP,high,high,AB,confirmed 2026-09-01\n")
         fake = FakeVT({})
         found = {"inbound": {"31.14.32.6": 2}, "outbound": {}}
 
@@ -422,7 +422,7 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(fake.calls, [])
         self.assertEqual(report["stamped"], ["31.14.32.6"])
         self.assertEqual(self.feed.read_text().splitlines()[1],
-                         "vt-ip-1,31.14.32.6,IP,high,high,AB,seen in Spark logs 2026-10-20 - VT 10/90 malicious 2026-09-01")
+                         "vt-ip-1,31.14.32.6,IP,high,high,AB,seen in Spark logs 2026-10-20 - confirmed 2026-09-01")
 
     def test_lookups_go_to_inbound_then_recurring_addresses_then_outbound_names(self):
         fake = FakeVT({})

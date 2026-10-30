@@ -16,7 +16,7 @@ REPO = Path(__file__).resolve().parent.parent
 SCRIPT = REPO / "news_check.sh"
 PLIST = REPO / "launchd" / "com.spark-ioc-feed.news.plist"
 HEADER = "# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT\n"
-SEED_ROW = "vt-ip-7b3f0a9c21,185.1.5.7,IP,medium,high,AB,VT 6/86 malicious 2026-07-15\n"
+SEED_ROW = "vt-ip-7b3f0a9c21,185.1.5.7,IP,medium,high,AB,confirmed 2026-07-15\n"
 TODAY = date.today().isoformat()
 
 # Stands in for news_agent.py: records each call (its arguments, whether the feed lock was held) in
@@ -46,7 +46,7 @@ if "--check" in args:
         with feed.open("a") as f:
             for i in range(start, start + int(os.environ.get("STUB_ADD", "0"))):
                 f.write(f"vt-domain-{i:010},bad{i}.example,Domain,medium,high,AB,"
-                        "News 2026-10-28 Fake parcel SMS - VT 7/95 malicious 2026-10-29\\n")
+                        "News 2026-10-28 Fake parcel SMS - confirmed 2026-10-29\\n")
             if os.environ.get("STUB_BAD_ROW"):
                 f.write("stub-bad,github.com,Domain,high,high,AB,a row the gateway must never see\\n")
     print("News check: 1 added, 1 clean")

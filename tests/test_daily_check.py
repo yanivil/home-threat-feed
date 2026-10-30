@@ -16,7 +16,7 @@ REPO = Path(__file__).resolve().parent.parent
 SCRIPT = REPO / "daily_check.sh"
 PLIST = REPO / "launchd" / "com.spark-ioc-feed.daily.plist"
 HEADER = "# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT\n"
-SEED_ROW = "vt-ip-7b3f0a9c21,185.1.5.7,IP,medium,high,AB,VT 6/86 malicious 2026-07-15\n"  # feed_lint wants a public IP
+SEED_ROW = "vt-ip-7b3f0a9c21,185.1.5.7,IP,medium,high,AB,confirmed 2026-07-15\n"  # feed_lint wants a public IP
 
 # Stands in for spark_logs.py: records its arguments and whether the feed lock is held while it
 # runs, appends STUB_ADD rows to the feed beside it, prints STUB_OUTBOUND outbound hits the way
@@ -42,7 +42,7 @@ def main():
     with feed.open("a") as f:
         for i in range(start, start + int(os.environ.get("STUB_ADD", "0"))):
             f.write(f"vt-ip-{i:010},185.1.4.{i},IP,medium,high,AB,"
-                    "Inbound probe of WAN - Spark syslog 2026-10-21 - VT 7/95 malicious 2026-10-21\\n")
+                    "Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21\\n")
         if os.environ.get("STUB_BAD_ROW"):
             f.write("stub-bad,github.com,Domain,high,high,AB,a row the gateway must never see\\n")
     print("3 inbound sources and 2 outbound destinations in the last 2 day(s); 3 and 2 still to check")
@@ -189,7 +189,7 @@ class DailyCheckTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertNotEqual(self.head(), before)
         self.assertEqual(self.subject(), "Add 2 WAN-probe sources mined from the Spark's syslog, "
-                                         "each flagged by 5+ VirusTotal engines")
+                                         "each flagged by 5+ engines")
         self.assertEqual(self.head_files(), {"spark-ioc-feed.csv"})
         self.assertEqual(self.head(self.origin), self.head())
         self.assertIn("other.txt", self.git("diff", "--cached", "--name-only", cwd=self.repo))
@@ -201,7 +201,7 @@ class DailyCheckTest(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertEqual(self.subject(), "Add 1 WAN-probe source mined from the Spark's syslog, "
-                                         "each flagged by 5+ VirusTotal engines")
+                                         "each flagged by 5+ engines")
 
     def test_unchanged_feed_makes_no_commit(self):
         before = self.head()

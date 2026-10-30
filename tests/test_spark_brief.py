@@ -30,7 +30,7 @@ DAY = date(2026, 10, 28)  # a Wednesday: the day the brief reports, sent on the 
 TODAY = date(2026, 10, 29)
 HEAVY, LIGHT, NEW = "93.152.221.36", "109.205.211.205", "47.79.34.208"
 FEED = HEADER + (f"vt-ip-0a1b2c3d4e,{HEAVY},IP,high,high,AB,"
-                 "Inbound probe of WAN - Spark syslog 2026-09-01 - VT 12/94 malicious 2026-09-01\n")
+                 "Inbound probe of WAN - Spark syslog 2026-09-01 - confirmed 2026-09-01\n")
 RUN_LOG = """2026-10-29 07:30:01 Daily check starting: last 2 day(s)
 47.79.34.208: added (IP 11/94 malicious)
 118.69.26.133: clean (IP 1/94 malicious)
@@ -249,13 +249,13 @@ class EnteredTest(unittest.TestCase):
 
     def test_rows_are_counted_by_the_origin_their_comment_names(self):
         rows = [
-            self.row("Inbound probe of WAN - Spark syslog 2026-10-29 - VT 11/94 malicious 2026-10-29"),
-            self.row("Inbound probe of WAN - Spark syslog 2026-10-29 - VT 9/94 malicious 2026-10-29"),
-            self.row("News digest - Qilin 2026-10-29 - VT 9/94 malicious 2026-10-29"),
-            self.row("Cousin - sent from Telegram - VT 9/94 malicious 2026-10-29"),
+            self.row("Inbound probe of WAN - Spark syslog 2026-10-29 - confirmed 2026-10-29"),
+            self.row("Inbound probe of WAN - Spark syslog 2026-10-29 - confirmed 2026-10-29"),
+            self.row("News digest - Qilin 2026-10-29 - confirmed 2026-10-29"),
+            self.row("Cousin - sent from Telegram - confirmed 2026-10-29"),
             self.row("sent from Telegram"),
-            self.row("added without VirusTotal check 2026-10-29"),
-            self.row("INCD alert - VT 9/94 malicious 2026-10-29"),
+            self.row("added unchecked 2026-10-29"),
+            self.row("INCD alert - confirmed 2026-10-29"),
         ]
 
         self.assertEqual(spark_brief.entered(rows), {"logs": 2, "news": 1, "hand": 3, "other": 1})
@@ -274,24 +274,24 @@ class NextRecheckTest(unittest.TestCase):
 
     def test_next_recheck_is_the_earliest_due_date(self):
         feed = (HEADER
-                + f"vt-ip-1,203.0.113.7,IP,medium,high,AB,VT 6/86 malicious {aged(50)}\n"
-                + f"vt-domain-1,evil.com,Domain,high,high,AB,APT28 - VT 12/93 malicious {aged(100)}\n")
+                + f"vt-ip-1,203.0.113.7,IP,medium,high,AB,confirmed {aged(50)}\n"
+                + f"vt-domain-1,evil.com,Domain,high,high,AB,APT28 - confirmed {aged(100)}\n")
 
         self.assertEqual(spark_brief.next_recheck(feed, self.TODAY), self.TODAY + timedelta(days=10))
 
     def test_a_feed_without_dated_rows_has_no_next_recheck(self):
-        feed = HEADER + "x,198.51.100.1,IP,high,high,AB,Modat\n" + f"h,{'a' * 64},SHA256,high,high,AV,VT 60/65 malicious {aged(500)}\n"
+        feed = HEADER + "x,198.51.100.1,IP,high,high,AB,Modat\n" + f"h,{'a' * 64},SHA256,high,high,AV,confirmed {aged(500)}\n"
 
         self.assertIsNone(spark_brief.next_recheck(feed, self.TODAY))
         self.assertIsNone(spark_brief.next_recheck("", self.TODAY))
 
     def test_rows_already_overdue_are_due_today(self):
-        feed = HEADER + f"vt-ip-1,203.0.113.7,IP,medium,high,AB,VT 6/86 malicious {aged(90)}\n"
+        feed = HEADER + f"vt-ip-1,203.0.113.7,IP,medium,high,AB,confirmed {aged(90)}\n"
 
         self.assertEqual(spark_brief.next_recheck(feed, self.TODAY), self.TODAY)
 
     def test_comments_and_short_lines_are_skipped(self):
-        feed = HEADER + f"# VT 6/86 malicious {aged(90)}\nshort,line\n" + f"x,1.2.3.4,IP,high,high,AB,VT 6/86 malicious {aged(40)}\n"
+        feed = HEADER + f"# confirmed {aged(90)}\nshort,line\n" + f"x,1.2.3.4,IP,high,high,AB,confirmed {aged(40)}\n"
 
         self.assertEqual(spark_brief.next_recheck(feed, self.TODAY), self.TODAY + timedelta(days=20))
 
@@ -482,7 +482,7 @@ class ComposeTest(unittest.TestCase):
 
     def test_the_brief_is_built_from_the_capture_the_run_log_and_the_feed(self):
         write_capture(self.dir, DAY, CAPTURE)
-        row = f"vt-ip-1,{NEW},IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-29 - VT 11/94 malicious 2026-10-29"
+        row = f"vt-ip-1,{NEW},IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-29 - confirmed 2026-10-29"
 
         text = self.compose([row])
 
@@ -877,7 +877,7 @@ class SendTest(unittest.TestCase):
         self.main()
         first = self.sent[0]
         self.sent.clear()
-        commit_feed(self.dir, FEED + "x,198.51.100.77,IP,high,high,AB,Cousin - sent from Telegram - VT 9/94 malicious 2026-10-29\n")
+        commit_feed(self.dir, FEED + "x,198.51.100.77,IP,high,high,AB,Cousin - sent from Telegram - confirmed 2026-10-29\n")
 
         self.main()
 

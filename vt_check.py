@@ -13,13 +13,14 @@ label fields are joined with " - ". Blank lines and lines starting with # are sk
 Defanged input (evil[.]com, hxxps://...) is accepted.
 
 --recheck looks up again every feed row that is due by the dates in its COMMENT: IPs
-60 days after their "VT n/m malicious YYYY-MM-DD" note, domains and URLs 180, rows
-"added without VirusTotal check YYYY-MM-DD" 90 days after that, hashes never; an IP
+60 days after their "confirmed YYYY-MM-DD" note, domains and URLs 180, rows
+"added unchecked YYYY-MM-DD" 90 days after that, hashes never; an IP
 "seen in Spark logs YYYY-MM-DD" (the daily check's note for feed IPs that probed the
 WAN) is besides never due before 180 days after that sighting. --max-age DAYS applies
-DAYS to every row's own date. Rows still flagged by enough engines get a fresh ratio,
-date and confidence (an unchecked row becomes a checked one), rows that fell below are
-removed. Rows without any date (hand-written ones) are never touched.
+DAYS to every row's own date. Rows still flagged by enough engines get a fresh date
+and confidence (an unchecked row becomes a confirmed one), rows that fell below are
+removed. Rows without any date (hand-written ones) are never touched. The notes name
+no service: the engine counts stay in this program's output and never reach the feed.
 """
 
 import argparse
@@ -27,6 +28,7 @@ import base64
 import hashlib
 import ipaddress
 import json
+import os
 import re
 import sys
 import time
@@ -57,12 +59,13 @@ KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT = keychain.SERVICE, "VT_API_KEY"
 NO_KEY_HELP = (f"set the VT_API_KEY environment variable to your VirusTotal API key, or store it in the "
                f"Keychain: security add-generic-password -s {KEYCHAIN_SERVICE} -a {KEYCHAIN_ACCOUNT} -w '<key>' -U")
 
-# The notes that close a COMMENT: feed_row() ends it with the VirusTotal ratio and date,
-# add_trusted() with the day the row was added unchecked. --recheck reads its clock from
+# The notes that close a COMMENT: feed_row() ends it with the day the lookup confirmed the
+# row, add_trusted() with the day the row was added unchecked. --recheck reads its clock from
 # them. "seen in Spark logs <date>" sits before the closing note (stamp_seen) and says when
-# the IP last probed this network.
-VT_NOTE_RE = re.compile(r"VT (\d+)/(\d+) malicious (\d{4}-\d{2}-\d{2})$")
-TRUSTED_NOTE_RE = re.compile(r"added without VirusTotal check (\d{4}-\d{2}-\d{2})$")
+# the IP last probed this network. Neither note names the service or carries its counts
+# (feed_lint refuses a COMMENT that does): the public feed says what was done, not where.
+CONFIRMED_NOTE_RE = re.compile(r"confirmed (\d{4}-\d{2}-\d{2})$")
+TRUSTED_NOTE_RE = re.compile(r"added unchecked (\d{4}-\d{2}-\d{2})$")
 SEEN_NOTE_RE = re.compile(r"seen in Spark logs (\d{4}-\d{2}-\d{2})")
 # Days after which --recheck looks a row up again, per TYPE. Attacker IPs are
 # re-leased within weeks and domains re-registered after a year or so, while a
@@ -168,7 +171,7 @@ def feed_row(ioc_type, value, stats, label, today):
     malicious = stats.get("malicious", 0)
     name = f"vt-{ioc_type.lower()}-{hashlib.sha1(value.encode()).hexdigest()[:10]}"
     product = "AV" if ioc_type in HASH_TYPES.values() else "AB"
-    comment = f"VT {malicious}/{sum(stats.values())} malicious {today}"
+    comment = f"confirmed {today}"
     label = " ".join(label.replace(",", " ").split())
     if label:
         comment = f"{label} - {comment}"
@@ -333,7 +336,7 @@ def add_trusted(indicators, feed_path, *, today=None, out=print):
             else:
                 name = f"trusted-{ioc_type.lower()}-{hashlib.sha1(value.encode()).hexdigest()[:10]}"
                 product = "AV" if ioc_type in HASH_TYPES.values() else "AB"
-                comment = f"added without VirusTotal check {today}"
+                comment = f"added unchecked {today}"
                 label = " ".join(label.replace(",", " ").split())
                 if label:
                     comment = f"{label} - {comment}"
@@ -380,18 +383,18 @@ def recheck_due(ioc_type, checked, trusted, last_seen, max_age=None):
 
 
 def _closing_note(comment):
-    """(VirusTotal note, unchecked note) matches of the note that closes `comment`; the one it
+    """(confirmed note, unchecked note) matches of the note that closes `comment`; the one it
     does not end with is None."""
-    note = VT_NOTE_RE.search(comment)
+    note = CONFIRMED_NOTE_RE.search(comment)
     return note, None if note else TRUSTED_NOTE_RE.search(comment)
 
 
 def row_due(ioc_type, comment, max_age=None):
     """The day the feed row with this TYPE and COMMENT comes up for re-verification (see
     recheck_due), or None when it never does: a TYPE --recheck skips, or a COMMENT with no
-    VirusTotal, unchecked or sighting date."""
+    confirmed, unchecked or sighting date."""
     note, trusted = _closing_note(comment)
-    checked = _note_date(note, 3) if note else _note_date(trusted)
+    checked = _note_date(note or trusted)
     last_seen = _note_date(SEEN_NOTE_RE.search(comment))
     if ioc_type not in RECHECK_TYPES or (checked is None and last_seen is None):
         return None
@@ -454,8 +457,7 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False
         malicious = stats.get("malicious", 0)
         total = sum(stats.values())
         note, trusted = _closing_note(comment)
-        before = f"{note.group(1)}/{note.group(2)}" if note else "unchecked"
-        change = f"{ioc_type} {before} -> {malicious}/{total} malicious"
+        change = f"{ioc_type} {'unchecked -> ' if trusted else ''}{malicious}/{total} malicious"
         if malicious < min_for(ioc_type, min_malicious):
             record(value, "would-remove" if dry_run else "removed", change)
             if not dry_run:
@@ -463,7 +465,7 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False
                 save()
             continue
         closing = note or trusted  # a hand-written row carrying only a sighting has neither
-        fresh = f"VT {malicious}/{total} malicious {today}"
+        fresh = f"confirmed {today}"
         fields[3] = confidence(malicious)
         fields[6] = comment[:closing.start()] + fresh if closing else f"{comment} - {fresh}"
         done, would = ("verified", "would-verify") if trusted else ("refreshed", "would-refresh")
@@ -503,7 +505,7 @@ def stamp_seen(feed_path, addresses, *, today=None, refresh_after=SEEN_REFRESH_D
                 continue
             comment = comment[:seen.start(1)] + today + comment[seen.end(1):]
         else:
-            closing = VT_NOTE_RE.search(comment) or TRUSTED_NOTE_RE.search(comment)
+            closing = CONFIRMED_NOTE_RE.search(comment) or TRUSTED_NOTE_RE.search(comment)
             sighting = f"seen in Spark logs {today}"
             comment = (comment[:closing.start()] + sighting + " - " + comment[closing.start():] if closing
                        else f"{comment} - {sighting}")
@@ -517,9 +519,12 @@ def stamp_seen(feed_path, addresses, *, today=None, refresh_after=SEEN_REFRESH_D
 
 
 def api_key(environ=None, run=None):
-    """The VirusTotal key: VT_API_KEY from `environ` (default os.environ), else the Keychain
-    item KEYCHAIN_ACCOUNT (keychain.item); "" when neither has one."""
-    return keychain.item(KEYCHAIN_ACCOUNT, "VT_API_KEY", environ, run)
+    """The VirusTotal key: REPUTATION_API_KEY (the name the public workflow's secret carries) or
+    VT_API_KEY from `environ` (default os.environ), else the Keychain item KEYCHAIN_ACCOUNT
+    (keychain.item); "" when none has one."""
+    environ = os.environ if environ is None else environ
+    generic = environ.get("REPUTATION_API_KEY", "").strip()
+    return generic or keychain.item(KEYCHAIN_ACCOUNT, "VT_API_KEY", environ, run)
 
 
 def make_fetch(api_key):

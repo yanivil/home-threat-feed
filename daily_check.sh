@@ -142,7 +142,7 @@ else
     read -r added removed _ < <(git diff --numstat -- "$FEED")
     if [ "$removed" -eq 0 ]; then
         plural=s; [ "$added" -eq 1 ] && plural=
-        message="Add $added WAN-probe source$plural mined from the Spark's syslog, each flagged by 5+ VirusTotal engines"
+        message="Add $added WAN-probe source$plural mined from the Spark's syslog, each flagged by 5+ engines"
     else
         message="Update the feed from the Spark's syslog check (+$added/-$removed lines)"
     fi

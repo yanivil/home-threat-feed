@@ -68,7 +68,7 @@ NEWS_CACHE_NAME = "news-checked.json"  # the news job's verdicts; the daily chec
 PRIVATE_SUFFIXES = ("localhost", "local", "lan", "internal", "home.arpa", "localdomain")
 # The feed's own notes, which expiry (vt_check.row_due) and the brief (spark_brief.origin) read from COMMENT:
 # a theme that contains one is dropped whole, so the model's text can never pass for one of them.
-NOTE_PHRASES = ("spark syslog", "seen in spark logs", "sent from telegram", "added without virustotal check")
+NOTE_PHRASES = ("spark syslog", "seen in spark logs", "sent from telegram", "added unchecked")
 # Labels of a source's host that name nothing: the rest name the outlet, which no row may carry.
 GENERIC_LABELS = {"www", "blog", "blogs", "news", "research", "security", "labs", "media", "static", "cdn",
                   "docs", "assets", "pages", "sites", "en"}

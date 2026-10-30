@@ -21,16 +21,16 @@ jobs:
       # repository's Actions settings can require SHA pinning. Bump the SHA and the comment together.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
-      - name: Re-verify stale rows on VirusTotal
+      - name: Re-verify stale rows
         id: recheck
         # A quota stop exits 1 but leaves refreshed rows worth committing.
         continue-on-error: true
         env:
-          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          REPUTATION_API_KEY: ${{ secrets.REPUTATION_API_KEY }}
           MAX_AGE: ${{ inputs.max_age }}
         run: |
-          if [ -z "$VT_API_KEY" ]; then
-            echo "::warning::VT_API_KEY secret is not set; add it under Settings > Secrets and variables > Actions"
+          if [ -z "$REPUTATION_API_KEY" ]; then
+            echo "::warning::REPUTATION_API_KEY secret is not set; add it under Settings > Secrets and variables > Actions"
             exit 0
           fi
           python3 vt_check.py --recheck ${MAX_AGE:+--max-age "$MAX_AGE"}
@@ -51,7 +51,7 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Re-verify stale indicators on VirusTotal" -- spark-ioc-feed.csv unifi-blocklist.txt
+          git commit -m "Re-verify stale indicators" -- spark-ioc-feed.csv unifi-blocklist.txt
           git push
 
       - name: Fail the job if the re-check stopped early

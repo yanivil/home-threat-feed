@@ -140,7 +140,7 @@ class WatcherTest(unittest.TestCase):
 
         self.assertEqual(self.watcher.describe(alerts[0]),
                          f"09:15:02 — {DEVICE} tried to reach c2.example.net "
-                         "(MuddyWater - VT 9/94 malicious 2026-10-01) — drop; 2× today")
+                         "(MuddyWater - confirmed 2026-10-01) — drop; 2× today")
 
     def test_the_count_starts_again_at_midnight(self):
         self.watcher.scan([OUTBOUND_TO_C2, OUTBOUND_TO_C2])
@@ -154,13 +154,13 @@ class WatcherTest(unittest.TestCase):
     def test_a_row_added_to_the_feed_is_seen_without_a_restart(self):
         self.assertEqual(self.watcher.scan([OUTBOUND_TO_C2.replace("c2.example.net", "new.example.org")]), [])
         with self.feed_path.open("a") as f:
-            f.write("x,new.example.org,Domain,high,high,AB,News - VT 7/94 malicious 2026-10-28\n")
+            f.write("x,new.example.org,Domain,high,high,AB,News - confirmed 2026-10-28\n")
         later = time.time() + 5
         os.utime(self.feed_path, (later, later))
 
         [alert] = self.watcher.scan([OUTBOUND_TO_C2.replace("c2.example.net", "new.example.org")])
 
-        self.assertIn("(News - VT 7/94 malicious 2026-10-28)", self.watcher.describe(alert))
+        self.assertIn("(News - confirmed 2026-10-28)", self.watcher.describe(alert))
 
     def test_system_log_lines_raise_no_alert_and_nothing_else(self):
         alerts = self.watcher.scan(SYSTEM_LINES + [OUTBOUND_TO_C2] + SYSTEM_LINES)

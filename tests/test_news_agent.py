@@ -20,7 +20,7 @@ import vt_check
 TODAY = "2026-10-29"
 HEADER = "# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT\n"
 FEED_ROWS = (
-    "vt-domain-0000000001,known.example,Domain,high,high,AB,VT 12/93 malicious 2026-10-01\n"
+    "vt-domain-0000000001,known.example,Domain,high,high,AB,confirmed 2026-10-01\n"
     "range-0000000001,185.1.3.0-185.1.3.255,IP Range,high,high,AB,a blocked range\n"
 )
 
@@ -345,7 +345,7 @@ class SelectTests(unittest.TestCase):
             ("seen in Spark logs 2099-01-01", "https://reports.example/a"),
             ("Spark syslog", "https://reports.example/a"),
             ("Fake update sent from Telegram", "https://reports.example/a"),
-            ("added without VirusTotal check", "https://reports.example/a"),
+            ("added unchecked", "https://reports.example/a"),
         ]:
             self.assertEqual(news_agent.clean_theme(theme, source), "", theme)
             kept, _ = select([cand("bad.example", theme=theme, source=source)])
@@ -403,7 +403,7 @@ class CheckTests(unittest.TestCase):
                          [("bad.example", "added"), ("fine.example", "clean"), ("gone.example", "not-found")])
         rows = self.feed.read_text().splitlines()
         self.assertEqual(len(rows), 4)
-        self.assertTrue(rows[-1].endswith(",Domain,medium,high,AB,News 2026-10-28 Fake parcel SMS - VT 9/90 malicious 2026-10-29"), rows[-1])
+        self.assertTrue(rows[-1].endswith(",Domain,medium,high,AB,News 2026-10-28 Fake parcel SMS - confirmed 2026-10-29"), rows[-1])
         self.assertEqual(spark_brief.origin(rows[-1].split(",")[6]), "news")
         self.assertEqual(json.loads(self.cache.read_text()), {
             "bad.example": {"checked": TODAY, "malicious": 9, "total": 90},

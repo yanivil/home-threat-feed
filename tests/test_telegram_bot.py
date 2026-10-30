@@ -80,9 +80,9 @@ OUTBOUND_EMULATION = detection("10:22:00", "detect", LAN_DEVICE, "185.1.2.72", "
 OUTBOUND_IPS = detection("10:23:00", "drop", LAN_DEVICE, "185.1.2.73", "IPS", "Header Spoofing")
 
 FEED = (HEADER
-        + "vt-domain-c2,c2.example.net,Domain,high,high,AB,MuddyWater - VT 9/94 malicious 2026-10-01\n"
-        + "vt-ip-scanner,93.152.221.36,IP,medium,high,AB,VT 6/86 malicious 2026-10-19\n"
-        + "trusted-ip-x,185.1.2.7,IP,high,high,AB,Cyberint - added without VirusTotal check 2026-10-01\n"
+        + "vt-domain-c2,c2.example.net,Domain,high,high,AB,MuddyWater - confirmed 2026-10-01\n"
+        + "vt-ip-scanner,93.152.221.36,IP,medium,high,AB,confirmed 2026-10-19\n"
+        + "trusted-ip-x,185.1.2.7,IP,high,high,AB,Cyberint - added unchecked 2026-10-01\n"
         + "colocatel,45.155.205.0-45.155.205.255,IP Range,high,medium,AB,Colocatel\n")
 
 DAILY_LOG = """\
@@ -330,7 +330,7 @@ class AddTest(BotTestCase):
         self.send("evil[.]com 185.1.2.9 MuddyWater - Unit 42")
 
         self.assertTrue(self.feed.read_text().endswith(
-            ",evil.com,Domain,high,high,AB,MuddyWater - Unit 42 - sent from Telegram - VT 11/94 malicious 2026-10-28\n"))
+            ",evil.com,Domain,high,high,AB,MuddyWater - Unit 42 - sent from Telegram - confirmed 2026-10-28\n"))
         commit = self.git.calls[4]
         self.assertEqual(commit, ["git", "commit", "-m", "Add 1 indicator sent from Telegram: MuddyWater - Unit 42",
                                   "--", "spark-ioc-feed.csv"])
@@ -348,7 +348,7 @@ class AddTest(BotTestCase):
     def test_a_label_less_check_is_marked_sent_from_telegram(self):
         self.send("evil.com")
 
-        self.assertIn(",AB,sent from Telegram - VT 11/94 malicious 2026-10-28\n", self.feed.read_text())
+        self.assertIn(",AB,sent from Telegram - confirmed 2026-10-28\n", self.feed.read_text())
         self.assertEqual(self.git.calls[4][3], "Add 1 indicator sent from Telegram")
 
     def test_trust_adds_without_a_lookup(self):
@@ -357,7 +357,7 @@ class AddTest(BotTestCase):
         self.assertEqual(self.vt.calls, [])
         row = self.feed.read_text().splitlines()[-1]
         self.assertTrue(row.endswith(",185.1.2.10,IP,high,high,AB,Cyberint - sent from Telegram - "
-                                     "added without VirusTotal check 2026-10-28"), row)
+                                     "added unchecked 2026-10-28"), row)
         self.assertEqual(self.git.commands(), ["pull", "diff", "diff", "add", "commit", "push"])
         self.assertEqual(self.tg.sent[-1].splitlines()[-2:], ["1 added, 0 already in the feed", "Committed and pushed."])
 
@@ -374,7 +374,7 @@ class AddTest(BotTestCase):
     def test_rows_an_interrupted_check_left_are_committed_by_the_next_one(self):
         # A SIGTERM after the rows were written and before the commit: the replayed message finds them in-feed.
         with self.feed.open("a") as f:
-            f.write("vt-domain-1,evil.com,Domain,high,high,AB,sent from Telegram - VT 11/94 malicious 2026-10-28\n")
+            f.write("vt-domain-1,evil.com,Domain,high,high,AB,sent from Telegram - confirmed 2026-10-28\n")
 
         self.send("evil.com")
 
@@ -447,7 +447,7 @@ class AddTest(BotTestCase):
         self.send('/trust 185.1.2.10 "Unit\x1b 42"\u202e\u200b')
 
         row = self.feed.read_text().splitlines()[-1]
-        self.assertEqual(row.split(",")[6], "Unit 42 - sent from Telegram - added without VirusTotal check 2026-10-28")
+        self.assertEqual(row.split(",")[6], "Unit 42 - sent from Telegram - added unchecked 2026-10-28")
         self.assertEqual(self.git.calls[4], ["git", "commit", "-m", "Add 1 indicator sent from Telegram: Unit 42",
                                              "--", "spark-ioc-feed.csv"])
         for text in (row, self.git.calls[4][3]):
@@ -569,7 +569,7 @@ class AddTest(BotTestCase):
             "stopped: <urlopen error timed out>",
             "1 added, 0 clean, 0 unknown to VirusTotal, 0 already in the feed",
             "Committed and pushed."])
-        self.assertIn(",evil.com,Domain,high,high,AB,sent from Telegram - VT 11/94 malicious 2026-10-28\n",
+        self.assertIn(",evil.com,Domain,high,high,AB,sent from Telegram - confirmed 2026-10-28\n",
                       self.feed.read_text())
         self.assertEqual(self.git.calls[4][3], "Add 1 indicator sent from Telegram")
         self.assertFalse(self.lock.exists())
@@ -897,7 +897,7 @@ class AlertTest(BotTestCase):
             self.deliver(alerts)
 
         self.assertEqual(self.tg.sent, ["09:15:02 — 192.168.2.121 tried to reach c2.example.net "
-                                        "(MuddyWater - VT 9/94 malicious 2026-10-01) — drop; 1× today", "note on c2"])
+                                        "(MuddyWater - confirmed 2026-10-01) — drop; 1× today", "note on c2"])
         note.assert_called_once_with("c2.example.net", self.syslog, "2026-10-28", report=telegram_bot.log)
 
     def test_an_inbound_detection_gets_the_note_on_its_source(self):
@@ -941,8 +941,8 @@ class AlertTest(BotTestCase):
             self.deliver(alerts)
 
         self.assertEqual([text.split(" — ")[1] if " — " in text else text for text in self.tg.sent], [
-            "192.168.2.121 tried to reach c2.example.net (MuddyWater - VT 9/94 malicious 2026-10-01)",
-            "192.168.2.121 tried to reach 185.1.2.7 (Cyberint - added without VirusTotal check 2026-10-01)",
+            "192.168.2.121 tried to reach c2.example.net (MuddyWater - confirmed 2026-10-01)",
+            "192.168.2.121 tried to reach 185.1.2.7 (Cyberint - added unchecked 2026-10-01)",
             "Threat Prevention: Anti-Malware Scanner from 185.1.2.66 to 203.0.113.47",
             "note on c2.example.net", "note on 185.1.2.7", "note on 185.1.2.66"])
 
@@ -1056,7 +1056,7 @@ class RealGitTest(unittest.TestCase):
                          ["Add 1 indicator sent from Telegram: Unit 42", "Edit other.txt elsewhere", "seed"])
         self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD", cwd=self.repo), "spark-ioc-feed.csv")
         self.assertEqual(self.git("rev-parse", "main", cwd=self.origin), self.git("rev-parse", "HEAD", cwd=self.repo))
-        self.assertIn(",185.1.2.10,IP,high,high,AB,Unit 42 - sent from Telegram - added without VirusTotal check",
+        self.assertIn(",185.1.2.10,IP,high,high,AB,Unit 42 - sent from Telegram - added unchecked",
                       self.git("show", "HEAD:spark-ioc-feed.csv", cwd=self.repo))
         self.assertIn("other.txt", self.git("status", "--porcelain", cwd=self.repo), "the owner's edit is kept")
 

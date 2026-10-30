@@ -15,15 +15,15 @@ HEADER_PROBLEM = ("line 1: the header must be exactly "
                   "`# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT`")
 # One row of every TYPE, as the tools write them.
 ROWS = (
-    "vt-domain-1a2b3c4d5e,evil.example,Domain,high,high,AB,MuddyWater - VT 9/94 malicious 2026-10-01\n"
-    "vt-ip-0011223344,185.1.2.7,IP,medium,high,AB,Inbound probe of WAN - VT 6/94 malicious 2026-10-02\n"
+    "vt-domain-1a2b3c4d5e,evil.example,Domain,high,high,AB,MuddyWater - confirmed 2026-10-01\n"
+    "vt-ip-0011223344,185.1.2.7,IP,medium,high,AB,Inbound probe of WAN - confirmed 2026-10-02\n"
     "scanner-example-net,185.1.2.0-185.1.2.255,IP Range,high,medium,AB,Example scanner - port sweeps 2026-10-03\n"
     "trusted-url-5566778899,https://evil.example/login.php?id=1,URL,high,high,AB,"
-    "Phishing kit - added without VirusTotal check 2026-10-04\n"
+    "Phishing kit - added unchecked 2026-10-04\n"
     "trusted-md5-aabbccddee,44d88612fea8a8f36de82e1278abb02f,MD5,high,high,AV,EICAR test file MD5 - safe to keep\n"
     "trusted-sha1-ffeeddccbb,3395856ce81f2b7382dee72602f798b642f14140,SHA1,high,high,AV,EICAR test file SHA1\n"
     "vt-sha256-1234567890,275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f,SHA256,low,high,AV,"
-    "EICAR - VT 60/70 malicious 2026-10-05\n"
+    "EICAR - confirmed 2026-10-05\n"
 )
 GOOD = HEADER + ROWS  # 8 lines: a new row is line 9
 
@@ -128,6 +128,22 @@ class FeedLintTest(unittest.TestCase):
                                  [f"line 9: VALUE {value} would block {needed}, a host this system needs (never block)"])
         # A URL on such a parent blocks one page, not the host.
         self.assertEqual(problems(GOOD + "x-1,https://telegram.org/malware.exe,URL,high,high,AB,c\n"), [])
+
+    def test_the_comment_names_no_lookup_service(self):
+        # The rows say what was done (`confirmed <date>`, `added unchecked <date>`), not where.
+        cases = [
+            ("x-1,other.example,Domain,high,high,AB,APT28 - VT 12/93 malicious 2026-10-01", "VT"),
+            ("x-1,other.example,Domain,high,high,AB,checked on VirusTotal 2026-10-01", "VirusTotal"),
+            ("x-1,other.example,Domain,high,high,AB,Phishing kit - added without virustotal check 2026-10-04",
+             "virustotal"),
+            ("x-1,other.example,Domain,high,high,AB,vt said so", "vt"),
+        ]
+        for row, word in cases:
+            with self.subTest(row=row):
+                self.assertEqual(problems(GOOD + row + "\n"),
+                                 [f"line 9: COMMENT mentions {word}: the feed names no vendor or lookup service"])
+        # Only the word itself: VTX, a name with the letters inside, is not it.
+        self.assertEqual(problems(GOOD + "x-1,other.example,Domain,high,high,AB,VTX report - confirmed 2026-10-01\n"), [])
 
     def test_a_value_appears_once_whatever_its_case(self):
         self.assertEqual(problems(GOOD + "x-1,evil.example,Domain,high,high,AB,c\n"),

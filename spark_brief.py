@@ -126,7 +126,7 @@ def origin(comment):
         return "logs"
     if comment.startswith("News"):
         return "news"
-    if "sent from Telegram" in comment or "added without VirusTotal check" in comment:
+    if "sent from Telegram" in comment or "added unchecked" in comment:
         return "hand"
     return "other"
 

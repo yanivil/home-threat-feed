@@ -48,11 +48,11 @@ def aged(days):
 
 # Rows as vt_check.py writes them, dated relative to TODAY. --recheck looks IPs up
 # again after 60 days, domains and URLs after 180, hashes never.
-OLD = "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - VT 12/93 malicious 2026-03-01\n"  # 232 days
-OLD_IP = "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,VT 6/86 malicious 2026-07-15\n"  # 96 days
-OLD_URL = "vt-url-5a1d6f0c2e,https://bad.example/x,URL,medium,high,AB,VT 9/90 malicious 2026-02-01\n"  # 260 days
-OLD_HASH = f"vt-sha256-9634a68018,{SHA256},SHA256,high,high,AV,VT 60/65 malicious 2026-06-30\n"  # 111 days
-RECENT = "vt-domain-ec0f4e8e0a,bad.example.net,Domain,high,high,AB,VT 11/91 malicious 2026-10-01\n"  # 18 days
+OLD = "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - confirmed 2026-03-01\n"  # 232 days
+OLD_IP = "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,confirmed 2026-07-15\n"  # 96 days
+OLD_URL = "vt-url-5a1d6f0c2e,https://bad.example/x,URL,medium,high,AB,confirmed 2026-02-01\n"  # 260 days
+OLD_HASH = f"vt-sha256-9634a68018,{SHA256},SHA256,high,high,AV,confirmed 2026-06-30\n"  # 111 days
+RECENT = "vt-domain-ec0f4e8e0a,bad.example.net,Domain,high,high,AB,confirmed 2026-10-01\n"  # 18 days
 
 
 def vt_object(obj_type, obj_id, malicious, suspicious=0, undetected=20, harmless=60):
@@ -198,7 +198,7 @@ class RunTest(unittest.TestCase):
         self.assertEqual(
             self.feed.read_text(),
             HEADER + EXISTING
-            + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,VT 12/93 malicious 2026-10-19\n",
+            + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,confirmed 2026-10-19\n",
         )
 
     def test_an_address_inside_a_feed_ip_range_is_in_feed_and_not_looked_up(self):
@@ -219,7 +219,7 @@ class RunTest(unittest.TestCase):
         self.assertEqual(
             row,
             "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,"
-            "APT28 via CISA AA26-201A - VT 12/93 malicious 2026-10-19",
+            "APT28 via CISA AA26-201A - confirmed 2026-10-19",
         )
 
     def test_hashes_go_to_antivirus_and_ips_to_antibot(self):
@@ -233,8 +233,8 @@ class RunTest(unittest.TestCase):
 
         added = self.feed.read_text().splitlines()[2:]
         self.assertEqual(added, [
-            f"vt-sha256-9634a68018,{sha256},SHA256,high,high,AV,VT 60/65 malicious 2026-10-19",
-            "vt-ip-2d2878d281,8.8.4.4,IP,medium,high,AB,VT 5/85 malicious 2026-10-19",
+            f"vt-sha256-9634a68018,{sha256},SHA256,high,high,AV,confirmed 2026-10-19",
+            "vt-ip-2d2878d281,8.8.4.4,IP,medium,high,AB,confirmed 2026-10-19",
         ])
 
     def test_ips_need_five_engines_and_other_types_three(self):
@@ -428,7 +428,7 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(
             self.feed.read_text(),
             HEADER + EXISTING
-            + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - VT 11/91 malicious 2026-10-19\n",
+            + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - confirmed 2026-10-19\n",
         )
 
     def test_confidence_follows_the_new_detection_count(self):
@@ -471,7 +471,7 @@ class RecheckTest(unittest.TestCase):
 
     def test_each_type_has_its_own_default_age(self):
         def row(name, value, ioc_type, days):
-            return f"{name},{value},{ioc_type},high,high,AB,VT 9/90 malicious {aged(days)}\n"
+            return f"{name},{value},{ioc_type},high,high,AB,confirmed {aged(days)}\n"
 
         self.feed.write_text(
             HEADER
@@ -543,7 +543,7 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(self.feed.read_bytes().split(b"\n")[0], HEADER.rstrip("\n").encode())
         self.assertEqual(self.feed.read_text().splitlines(), [
             HEADER.rstrip("\n"),
-            "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,VT 6/86 malicious 2026-10-19",
+            "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,confirmed 2026-10-19",
             EXISTING.rstrip("\n"),
         ])
 
@@ -565,7 +565,7 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(
             self.feed.read_text(),
             HEADER
-            + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - VT 11/91 malicious 2026-10-19\n"
+            + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - confirmed 2026-10-19\n"
             + OLD_IP + OLD_URL,
         )
 
@@ -613,7 +613,7 @@ class RecheckTest(unittest.TestCase):
     def trusted(self, value, ioc_type, days, name="trusted-x"):
         product = "AV" if ioc_type in ("MD5", "SHA1", "SHA256") else "AB"
         return (f"{name},{value},{ioc_type},high,high,{product},"
-                f"MuddyWater - Cyberint export - added without VirusTotal check {aged(days)}\n")
+                f"MuddyWater - Cyberint export - added unchecked {aged(days)}\n")
 
     def test_trusted_row_verified_after_90_days_becomes_a_checked_row(self):
         self.feed.write_text(HEADER + self.trusted("157.230.234.35", "IP", 90))
@@ -624,7 +624,7 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(self.statuses(results)["157.230.234.35"], "verified")
         self.assertEqual(
             self.feed.read_text(),
-            HEADER + "trusted-x,157.230.234.35,IP,medium,high,AB,MuddyWater - Cyberint export - VT 7/87 malicious 2026-10-19\n",
+            HEADER + "trusted-x,157.230.234.35,IP,medium,high,AB,MuddyWater - Cyberint export - confirmed 2026-10-19\n",
         )
 
     def test_trusted_row_not_flagged_after_90_days_is_removed(self):
@@ -649,7 +649,7 @@ class RecheckTest(unittest.TestCase):
     # days after its last sighting, however old its VirusTotal check is.
     def seen_ip(self, checked_days, seen_days):
         return (f"vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,Inbound probe of WAN - Spark syslog - "
-                f"seen in Spark logs {aged(seen_days)} - VT 6/86 malicious {aged(checked_days)}\n")
+                f"seen in Spark logs {aged(seen_days)} - confirmed {aged(checked_days)}\n")
 
     def test_an_ip_seen_in_the_logs_waits_180_days_from_its_last_sighting(self):
         self.feed.write_text(HEADER + self.seen_ip(checked_days=70, seen_days=100))
@@ -670,7 +670,7 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(
             self.feed.read_text().splitlines()[1],
             f"vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,Inbound probe of WAN - Spark syslog - "
-            f"seen in Spark logs {aged(180)} - VT 8/88 malicious 2026-10-19",
+            f"seen in Spark logs {aged(180)} - confirmed 2026-10-19",
         )
 
     def test_max_age_overrides_the_trusted_and_sighting_clocks(self):
@@ -693,30 +693,30 @@ class RowDueTest(unittest.TestCase):
         return vt_check.row_due(ioc_type, comment, max_age)
 
     def test_a_checked_row_is_due_when_its_types_clock_has_run(self):
-        self.assertEqual(self.due("IP", f"VT 6/86 malicious {aged(50)}"), date.fromisoformat(aged(50 - 60)))
-        self.assertEqual(self.due("Domain", f"APT28 - VT 12/93 malicious {aged(100)}"), date.fromisoformat(aged(100 - 180)))
-        self.assertEqual(self.due("URL", f"VT 9/90 malicious {aged(10)}"), date.fromisoformat(aged(10 - 180)))
+        self.assertEqual(self.due("IP", f"confirmed {aged(50)}"), date.fromisoformat(aged(50 - 60)))
+        self.assertEqual(self.due("Domain", f"APT28 - confirmed {aged(100)}"), date.fromisoformat(aged(100 - 180)))
+        self.assertEqual(self.due("URL", f"confirmed {aged(10)}"), date.fromisoformat(aged(10 - 180)))
 
     def test_a_row_added_without_a_check_is_due_after_90_days(self):
-        self.assertEqual(self.due("Domain", f"Qilin - Cyberint export - added without VirusTotal check {aged(20)}"),
+        self.assertEqual(self.due("Domain", f"Qilin - Cyberint export - added unchecked {aged(20)}"),
                          date.fromisoformat(aged(20 - 90)))
 
     def test_an_ip_seen_in_the_logs_is_not_due_before_180_days_from_the_sighting(self):
-        comment = f"Inbound probe of WAN - seen in Spark logs {aged(5)} - VT 6/86 malicious {aged(70)}"
+        comment = f"Inbound probe of WAN - seen in Spark logs {aged(5)} - confirmed {aged(70)}"
 
         self.assertEqual(self.due("IP", comment), date.fromisoformat(aged(5 - 180)))
 
     def test_max_age_replaces_the_clocks_and_reaches_hashes(self):
-        self.assertEqual(self.due("IP", f"VT 6/86 malicious {aged(50)}", max_age=10), date.fromisoformat(aged(50 - 10)))
-        self.assertEqual(self.due("SHA256", f"VT 60/65 malicious {aged(50)}", max_age=10), date.fromisoformat(aged(50 - 10)))
+        self.assertEqual(self.due("IP", f"confirmed {aged(50)}", max_age=10), date.fromisoformat(aged(50 - 10)))
+        self.assertEqual(self.due("SHA256", f"confirmed {aged(50)}", max_age=10), date.fromisoformat(aged(50 - 10)))
 
     def test_rows_that_are_never_rechecked_are_not_due(self):
-        self.assertIsNone(self.due("SHA256", f"VT 60/65 malicious {aged(500)}"))
-        self.assertIsNone(self.due("IP Range", f"Modat - VT 6/86 malicious {aged(500)}"))
+        self.assertIsNone(self.due("SHA256", f"confirmed {aged(500)}"))
+        self.assertIsNone(self.due("IP Range", f"Modat - confirmed {aged(500)}"))
 
     def test_a_comment_with_no_date_is_not_due(self):
         self.assertIsNone(self.due("IP", "Modat"))
-        self.assertIsNone(self.due("IP", "VT 6/86 malicious 2026-13-45"))
+        self.assertIsNone(self.due("IP", "confirmed 2026-13-45"))
         self.assertIsNone(self.due("IP", "", max_age=10))
 
 
@@ -729,20 +729,20 @@ class StampSeenTest(unittest.TestCase):
         self.feed = Path(tmp.name) / "feed.csv"
 
     def test_stamps_an_ip_row_before_its_closing_note(self):
-        trusted = f"trusted-ip-1,198.51.100.9,IP,high,high,AB,Cyberint - added without VirusTotal check {aged(5)}\n"
+        trusted = f"trusted-ip-1,198.51.100.9,IP,high,high,AB,Cyberint - added unchecked {aged(5)}\n"
         self.feed.write_text(HEADER + OLD_IP + trusted)
 
         stamped = vt_check.stamp_seen(self.feed, ["203.0.113.7", "198.51.100.9"], today=TODAY)
 
         self.assertEqual(stamped, ["203.0.113.7", "198.51.100.9"])
         self.assertEqual(self.feed.read_text(), HEADER
-                         + "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,seen in Spark logs 2026-10-19 - VT 6/86 malicious 2026-07-15\n"
+                         + "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,seen in Spark logs 2026-10-19 - confirmed 2026-07-15\n"
                          + f"trusted-ip-1,198.51.100.9,IP,high,high,AB,Cyberint - seen in Spark logs 2026-10-19 - "
-                           f"added without VirusTotal check {aged(5)}\n")
+                           f"added unchecked {aged(5)}\n")
 
     def test_refreshes_a_stamp_older_than_30_days_and_leaves_a_fresh_one(self):
         def row(value, days):
-            return f"vt-ip-{value[-1]},{value},IP,medium,high,AB,seen in Spark logs {aged(days)} - VT 6/86 malicious 2026-07-15\n"
+            return f"vt-ip-{value[-1]},{value},IP,medium,high,AB,seen in Spark logs {aged(days)} - confirmed 2026-07-15\n"
         self.feed.write_text(HEADER + row("203.0.113.1", 30) + row("203.0.113.2", 29))
 
         stamped = vt_check.stamp_seen(self.feed, ["203.0.113.1", "203.0.113.2"], today=TODAY)
@@ -783,6 +783,15 @@ class ApiKeyTest(unittest.TestCase):
 
     def test_blank_environment_variable_counts_as_unset(self):
         self.assertEqual(vt_check.api_key({"VT_API_KEY": "  "}, run=keychain_with("from-keychain")), "from-keychain")
+
+    def test_the_generic_variable_name_the_workflow_sets_wins(self):
+        # The public workflow stores the key as REPUTATION_API_KEY, a name that says nothing of the service.
+        run = Mock()
+
+        self.assertEqual(vt_check.api_key({"REPUTATION_API_KEY": " abc "}, run=run), "abc")
+        run.assert_not_called()
+        self.assertEqual(vt_check.api_key({"REPUTATION_API_KEY": "  ", "VT_API_KEY": "v"}, run=run), "v")
+        self.assertEqual(vt_check.api_key({"REPUTATION_API_KEY": "  "}, run=keychain_with("k")), "k")
 
     def test_missing_keychain_item_yields_nothing(self):
         self.assertEqual(vt_check.api_key({}, run=keychain_with(None)), "")
@@ -894,9 +903,9 @@ class TrustedTest(unittest.TestCase):
             self.feed.read_text(),
             HEADER + EXISTING
             + "trusted-domain-e3daa29865,evil.com,Domain,high,high,AB,"
-              "APT29 - Cyberint export 2026-10-22 - added without VirusTotal check 2026-10-19\n"
+              "APT29 - Cyberint export 2026-10-22 - added unchecked 2026-10-19\n"
             + f"trusted-sha256-9634a68018,{SHA256},SHA256,high,high,AV,"
-              "APT29 - Cyberint export 2026-10-22 - added without VirusTotal check 2026-10-19\n",
+              "APT29 - Cyberint export 2026-10-22 - added unchecked 2026-10-19\n",
         )
 
     def test_skips_feed_members_duplicates_and_invalid_values(self):
@@ -926,7 +935,7 @@ class TrustedTest(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("evil.com: added", proc.stdout)
-        self.assertIn(",evil.com,Domain,high,high,AB,added without VirusTotal check", self.feed.read_text())
+        self.assertIn(",evil.com,Domain,high,high,AB,added unchecked", self.feed.read_text())
 
 
 if __name__ == "__main__":

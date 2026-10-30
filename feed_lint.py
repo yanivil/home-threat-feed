@@ -11,6 +11,7 @@ the next daily run then fails its lint and its morning notice names the line to 
 """
 
 import ipaddress
+import re
 import sys
 import unicodedata
 from pathlib import Path
@@ -29,6 +30,9 @@ PRODUCTS = ("AB", "AV")
 # notes and VirusTotal. The bot refuses them at intake (Bot.never_block); the lint, in the file.
 NEVER_BLOCK = frozenset({"github.com", "raw.githubusercontent.com", "api.telegram.org", "api.anthropic.com",
                          "www.virustotal.com"})
+# The public rows say what was done (`confirmed <date>`, `added unchecked <date>`), never where: the
+# lookup service's terms keep its results private, so its name and its counts stay out of the file.
+SERVICE_RE = re.compile(r"virustotal|\bvt\b", re.IGNORECASE)
 _AN = {"IP", "IP Range", "MD5"}
 # The hidden characters most often typed or pasted, named for the owner; the rest get their Unicode
 # name, or their category's when they have none (a lone surrogate is how read() keeps a byte that is
@@ -140,7 +144,7 @@ def problems(text):
             hint = " (a comma in the COMMENT?)" if len(fields) > 7 else ""
             found.append(f"line {number}: {len(fields)} field{'s' if len(fields) != 1 else ''}, expected 7{hint}")
             continue
-        name, value, kind, confidence, severity, product, _ = fields
+        name, value, kind, confidence, severity, product, comment = fields
         if not name:
             found.append(f"line {number}: UNIQ-NAME is empty")
         elif name in names:
@@ -172,6 +176,9 @@ def problems(text):
                 found.append(f"line {number}: VALUE {value} repeats line {values[value.lower()]}")
             else:
                 values[value.lower()] = number
+        named = SERVICE_RE.search(comment)
+        if named:
+            found.append(f"line {number}: COMMENT mentions {named.group()}: the feed names no vendor or lookup service")
     return found
 
 
