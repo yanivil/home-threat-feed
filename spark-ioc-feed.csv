@@ -1783,3 +1783,28 @@ vt-ip-90864734cf,85.217.140.46,IP,high,high,AB,Inbound probe of WAN - Spark dash
 vt-ip-b8d203b1d8,84.54.73.46,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 6/92 malicious 2026-10-22
 vt-ip-5ec142e840,62.150.237.107,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - VT 8/92 malicious 2026-10-22
 vt-ip-b077b152ac,171.225.216.46,IP,medium,high,AB,bot test - sent from Telegram - VT 5/92 malicious 2026-10-29
+vt-domain-1f6ea701e9,81service.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 3/92 malicious 2026-10-30
+vt-domain-f80f7eeee0,imanagec.online,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 10/92 malicious 2026-10-30
+vt-domain-a52944aa44,applypointguides.in,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 15/92 malicious 2026-10-30
+vt-domain-d723ad843e,cancelcardprotection.online,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 4/92 malicious 2026-10-30
+vt-domain-2cd22a4e7f,cancelcpservice.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 3/92 malicious 2026-10-30
+vt-domain-d9ef7230f4,cancelservice.in,Domain,medium,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 7/92 malicious 2026-10-30
+vt-domain-1a7b5e9929,cardplan.online,Domain,medium,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 7/92 malicious 2026-10-30
+vt-domain-118d2254d2,cardprotections.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 3/92 malicious 2026-10-30
+vt-domain-d1d5f8bb53,cardsprotection.in,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 10/92 malicious 2026-10-30
+vt-domain-0fa0f10252,cpmanaged.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 3/92 malicious 2026-10-30
+vt-domain-344041d128,deactivatecpplan.in,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 10/92 malicious 2026-10-30
+vt-domain-1d417bf0bd,deactivatecpservice.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 3/92 malicious 2026-10-30
+vt-domain-228b42eab6,hamzaansari1612-ux.github.io,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 14/92 malicious 2026-10-30
+vt-domain-aefa23160f,hdmanage.online,Domain,medium,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 9/92 malicious 2026-10-30
+vt-domain-456edc5db2,icppuser.online,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 13/92 malicious 2026-10-30
+vt-domain-6801539444,icservice.online,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 13/92 malicious 2026-10-30
+vt-domain-f67261f954,icuser.online,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 12/92 malicious 2026-10-30
+vt-domain-74c768a2f3,idcare.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 3/92 malicious 2026-10-30
+vt-domain-85593c0556,idfcare.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 3/92 malicious 2026-10-30
+vt-domain-e0e359f5a1,idservice.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 3/92 malicious 2026-10-30
+vt-domain-a3ac663cc1,imobilelite.in,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 11/92 malicious 2026-10-30
+vt-domain-ea0f925177,inducare.online,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 10/92 malicious 2026-10-30
+vt-domain-7acb177625,managebworld.com,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 11/92 malicious 2026-10-30
+vt-domain-fd1680a6cd,managecare.online,Domain,medium,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 8/92 malicious 2026-10-30
+vt-domain-a16e921210,managecp.co.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 3/92 malicious 2026-10-30
