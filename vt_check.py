@@ -64,8 +64,8 @@ NO_KEY_HELP = (f"set the VT_API_KEY environment variable to your reputation-serv
 # them. "seen in Spark logs <date>" sits before the closing note (stamp_seen) and says when
 # the IP last probed this network. Neither note names the service or carries its counts
 # (feed_lint refuses a COMMENT that does): the public feed says what was done, not where.
-CONFIRMED_NOTE_RE = re.compile(r"confirmed (\d{4}-\d{2}-\d{2})$")
-TRUSTED_NOTE_RE = re.compile(r"added unchecked (\d{4}-\d{2}-\d{2})$")
+CONFIRMED_NOTE_RE = re.compile(r"(?<![A-Za-z])confirmed (\d{4}-\d{2}-\d{2})$")  # not "unconfirmed"
+TRUSTED_NOTE_RE = re.compile(r"(?<![A-Za-z])added unchecked (\d{4}-\d{2}-\d{2})$")
 SEEN_NOTE_RE = re.compile(r"seen in Spark logs (\d{4}-\d{2}-\d{2})")
 # Days after which --recheck looks a row up again, per TYPE. Attacker IPs are
 # re-leased within weeks and domains re-registered after a year or so, while a

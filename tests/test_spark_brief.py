@@ -226,10 +226,10 @@ class ParseRunLogTest(unittest.TestCase):
     def test_a_run_that_could_not_start_reads_as_its_error(self):
         # spark_logs.py without a VirusTotal key: argparse's "error:" line and exit 2, no lookup at all.
         text = ("usage: spark_logs.py [-h] [--dir DIR] [--days DAYS] [--check]\n"
-                "spark_logs.py: error: set the VT_API_KEY environment variable to your VirusTotal API key\n")
+                "spark_logs.py: error: set the VT_API_KEY environment variable to your reputation-service API key\n")
 
         self.assertEqual(spark_brief.parse_run_log(text)["errors"],
-                         ["spark_logs.py: error: set the VT_API_KEY environment variable to your VirusTotal API key"])
+                         ["spark_logs.py: error: set the VT_API_KEY environment variable to your reputation-service API key"])
 
     def test_an_ordinary_run_has_no_errors(self):
         log = check_output({"/domains/evil.example": vt_object("domain", "evil.example", malicious=0)})

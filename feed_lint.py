@@ -178,7 +178,7 @@ def problems(text):
                 values[value.lower()] = number
         named = SERVICE_RE.search(comment)
         if named:
-            found.append(f"line {number}: COMMENT mentions {named.group()}: the feed names no vendor or lookup service")
+            found.append(f"line {number}: COMMENT mentions {named.group()}: the feed names no lookup service")
     return found
 
 

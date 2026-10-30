@@ -23,7 +23,7 @@ SHA256 = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
 
 def cli_env(env_key=None):
     """A subprocess environment with no VT_API_KEY and a `security` that finds no Keychain item."""
-    env = {k: v for k, v in os.environ.items() if k != "VT_API_KEY"}
+    env = {k: v for k, v in os.environ.items() if k not in ("VT_API_KEY", "REPUTATION_API_KEY")}
     env["PATH"] = f"{STUBS}{os.pathsep}{env.get('PATH', '')}"
     if env_key:
         env["VT_API_KEY"] = env_key
@@ -714,6 +714,12 @@ class RowDueTest(unittest.TestCase):
         self.assertIsNone(self.due("SHA256", f"confirmed {aged(500)}"))
         self.assertIsNone(self.due("IP Range", f"Modat - confirmed {aged(500)}"))
 
+    def test_a_word_that_merely_ends_in_a_note_is_not_a_closing_note(self):
+        # A hand-written comment like this must not be re-checked, rewritten or removed as a confirmed row.
+        self.assertIsNone(self.due("IP", f"hand note unconfirmed {aged(500)}"))
+        self.assertIsNone(self.due("Domain", f"readded unchecked {aged(500)}"))
+        self.assertEqual(self.due("IP", f"confirmed {aged(500)}"), date.fromisoformat(aged(500 - 60)))
+
     def test_a_comment_with_no_date_is_not_due(self):
         self.assertIsNone(self.due("IP", "Modat"))
         self.assertIsNone(self.due("IP", "confirmed 2026-13-45"))
@@ -927,7 +933,7 @@ class TrustedTest(unittest.TestCase):
         self.assertEqual([r.status for r in results], ["in-feed", "added"])
 
     def test_command_line_needs_no_api_key(self):
-        env = {k: v for k, v in os.environ.items() if k != "VT_API_KEY"}
+        env = {k: v for k, v in os.environ.items() if k not in ("VT_API_KEY", "REPUTATION_API_KEY")}
         proc = subprocess.run(
             [sys.executable, str(REPO / "vt_check.py"), "--trusted", "--feed", str(self.feed), "evil.com"],
             capture_output=True, text=True, env=env, cwd=REPO,

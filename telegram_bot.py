@@ -267,7 +267,12 @@ class Bot:
     def add(self, indicators, label, trusted):
         """Add the indicators to the feed, after a VirusTotal check unless `trusted`, then commit and
         push the feed; returns the reply. At most MAX_INDICATORS are taken, and one the gateway must
-        never block (never_block) is refused."""
+        never block (never_block) is refused, and so is a label that names the lookup service: the
+        lint would refuse the row after the fact and stall every later commit until a hand edit."""
+        named = feed_lint.SERVICE_RE.search(label)
+        if named:
+            return (f"refused: the label names a lookup service ({named.group()}); "
+                    "the feed names none, send the indicators with another label")
         taken, rest = indicators[:MAX_INDICATORS], len(indicators) - MAX_INDICATORS
         refused = [f"refused: {value} is on the never-block list" for value in taken if self.never_block(value)]
         taken = [value for value in taken if not self.never_block(value)]

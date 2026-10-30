@@ -346,7 +346,7 @@ def main(argv=None):
     parser.add_argument("--dir", type=Path, default=DEFAULT_DIR, help="syslog capture directory")
     parser.add_argument("--days", type=int, default=1, help="how many daily files to read, ending today (default 1)")
     parser.add_argument("--check", action="store_true",
-                        help="look the candidates up on VirusTotal (key from VT_API_KEY or the Keychain)")
+                        help="look the candidates up (key from REPUTATION_API_KEY, VT_API_KEY or the Keychain)")
     parser.add_argument("--max-lookups", type=int, default=400,
                         help="lookups per run: inbound sources, then outbound addresses, then outbound names (default 400)")
     parser.add_argument("--min-ip-hits", type=int, default=3,

@@ -346,6 +346,9 @@ class SelectTests(unittest.TestCase):
             ("Spark syslog", "https://reports.example/a"),
             ("Fake update sent from Telegram", "https://reports.example/a"),
             ("added unchecked", "https://reports.example/a"),
+            # the lookup service's name: the lint would refuse the row after the fact, so drop it before
+            ("Loader samples uploaded to VirusTotal", "https://reports.example/a"),
+            ("Stealer seen on VT", "https://reports.example/a"),
         ]:
             self.assertEqual(news_agent.clean_theme(theme, source), "", theme)
             kept, _ = select([cand("bad.example", theme=theme, source=source)])
@@ -572,7 +575,8 @@ class MainTests(unittest.TestCase):
     def test_check_without_a_vt_key_is_exit_3(self):
         path = self.syslog / "news-2026-10-29.txt"
         news_agent.write_candidates(path, [("bad.example", "News")], TODAY)
-        self.assertEqual(self.main("--check", str(path)), 3)
+        with patch.dict("os.environ", {}, clear=True):  # no key in this shell's environment either
+            self.assertEqual(self.main("--check", str(path)), 3)
         self.assertIn("no VT_API_KEY", self.out.getvalue())
 
     def test_check_of_an_empty_file_does_nothing(self):

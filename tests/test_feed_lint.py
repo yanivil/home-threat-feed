@@ -141,7 +141,7 @@ class FeedLintTest(unittest.TestCase):
         for row, word in cases:
             with self.subTest(row=row):
                 self.assertEqual(problems(GOOD + row + "\n"),
-                                 [f"line 9: COMMENT mentions {word}: the feed names no vendor or lookup service"])
+                                 [f"line 9: COMMENT mentions {word}: the feed names no lookup service"])
         # Only the word itself: VTX, a name with the letters inside, is not it.
         self.assertEqual(problems(GOOD + "x-1,other.example,Domain,high,high,AB,VTX report - confirmed 2026-10-01\n"), [])
 

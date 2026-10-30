@@ -3,7 +3,7 @@
 
     python3 cyberint_xlsx.py ~/Downloads/Cyberint_*_IOCs_2026-10-22.xlsx > iocs.tsv
     python3 vt_check.py --trusted -f iocs.tsv        # the user vouches for the source
-    python3 vt_check.py -f iocs.tsv                  # ... or check them on VirusTotal first
+    python3 vt_check.py -f iocs.tsv                  # ... or look them up first
 
 An export is one sheet with the columns Type, Created at, Updated at, Value; the group and
 export date come from the file name (Cyberint_<Group>_IOCs_<YYYY-MM-DD>.xlsx). Each output

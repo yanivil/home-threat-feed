@@ -924,14 +924,17 @@ feed's band, published without the count or the service's name). One rewrite of 
 feed: 697 confirmed rows, 1,111 unchecked rows, and the 46 rows that credited that outlet now say
 `External report`. (b) `vt_check.py` writes and reads only the new notes, `spark_brief.py` and
 `news_agent.py` recognise them, and `feed_lint.py` refuses a `COMMENT` that contains the
-service's name or abbreviation, so the old form cannot return by any insert path. (c) The
+service's name or abbreviation, so the old form cannot return by any insert path; the bot
+refuses a label that names it and the news agent drops such a theme, so no row ever needs
+the lint to catch it (a row it refused would stall every later commit). (c) The
 daily check's commit message says "each flagged by 5+ engines", the monthly workflow's
 "Re-verify stale indicators", and the workflow's secret is `REPUTATION_API_KEY`, which
 `vt_check.api_key` reads before the environment variable and Keychain account it has always
 used (both unchanged, so the Mac's jobs need nothing). (d) The README, the CHANGELOG, this
-document, the plan files, the wiki pages and Discussions #2, #3 and #5 describe "a reputation
-service" and "engines". (e) What the programs print and send says the same, so that the
-documentation quotes what they really say: the bot's replies and `/help` (`Checking 2
+document and the plan files describe "a reputation service" and "engines"; the wiki pages and
+Discussions #2, #3 and #5 are reworded the same way and go out with the push. (e) What the
+programs print and send says the same, so that the documentation quotes what they really
+say: the bot's replies and `/help` (`Checking 2
 indicators, about 1 minute.`, `unknown to the service`), the morning brief's `SENT TO BLOCK`
 heading and its bare `11/94` ratios, the attacker notes' `Reputation service:` line, the jobs'
 log and failure lines (`Lookup quota reached`, `N candidates for lookup from M named`) and the
@@ -947,7 +950,7 @@ repository was not worth its cost. The monthly workflow's log, public like the r
 still lists each re-checked row with its engine count; making the job print only its summary
 is a follow-up if the owner wants it. The band is derived from the count, so a reader who
 knows the code can still infer the service; the terms are about what is distributed, and the
-count no longer is. 208 other rows added by hand still credit the public report they came
+count no longer is. About 250 other rows added by hand still credit the public report they came
 from by its outlet or agency (Unit 42, Group-IB, Kaspersky Securelist, Cisco
 Talos, Morphisec, CISA, CERT-UA and others);
 news-agent rows never do (D7), and whether a hand-added row may is the owner's decision: if
@@ -956,9 +959,9 @@ not, it is one more rewrite to `External report` plus a lint rule.
 **Outcome.** Built 2026-10-30 in a worktree, test-first: 631 tests green both ways, the feed
 lint clean (1,811 rows, 0 mentions), `unifi-blocklist.txt` unchanged (489 entries). Merged to
 main and the bot restarted the same day. The push, the wiki pages and the Discussions follow
-on the owner's word. The owner adds the `REPUTATION_API_KEY` secret under Settings → Secrets
-and variables → Actions before the next monthly run (2026-11-01, 03:17 UTC); until then the
-workflow warns and exits without re-checking.
+on the owner's word. The workflow reads the `REPUTATION_API_KEY` secret and, while it is
+missing, the old one, so the monthly run of 2026-11-01 is unaffected; the owner adds the new
+secret under Settings → Secrets and variables → Actions and deletes the old one at leisure.
 
 ## 5. Operating it
 

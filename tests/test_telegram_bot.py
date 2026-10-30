@@ -468,6 +468,19 @@ class AddTest(BotTestCase):
         self.assertEqual(self.feed.read_text(), FEED)
         self.assertFalse(self.lock.exists())
         self.assertFalse(self.bot.never_block("https://[::1"), "a URL without a readable host is no refusal")
+
+    def test_a_label_that_names_a_lookup_service_is_refused_before_anything_runs(self):
+        # The lint refuses such a row after the fact, which would stall every later commit until the
+        # file is fixed by hand; so the bot refuses the label at intake, before the lock or a lookup.
+        for text, word in [("/trust 185.1.5.7 seen on VT", "VT"), ("185.1.5.7 checked on VirusTotal", "VirusTotal")]:
+            with self.subTest(text=text):
+                self.send(text)
+
+                self.assertEqual(self.tg.sent[-1], f"refused: the label names a lookup service ({word}); "
+                                                   "the feed names none, send the indicators with another label")
+        self.assertEqual((self.git.calls, self.vt.calls), ([], []))
+        self.assertEqual(self.feed.read_text(), FEED)
+        self.assertFalse(self.lock.exists())
         self.assertFalse(self.bot.never_block("notgithub.com"))
         self.assertFalse(self.bot.never_block("https://telegram.org/malware.exe"), "a URL blocks one page")
 

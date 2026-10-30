@@ -677,7 +677,8 @@ class NoteTest(CaptureTestCase):
         self.assertTrue(err.getvalue().startswith("note usage: "), err.getvalue())
 
     def test_the_keys_come_from_the_keychain(self):
-        self.note(http=FakeHttp(answer("ok")))
+        with patch.dict("os.environ", {}, clear=True):  # and not from this shell's environment
+            self.note(http=FakeHttp(answer("ok")))
 
         self.assertEqual(self.fetch.headers[VT_URL], VT_HEADERS)
         self.assertEqual(self.fetch.headers[GREYNOISE_URL], {"key": "g"})

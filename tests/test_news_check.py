@@ -92,7 +92,7 @@ class NewsCheckTest(unittest.TestCase):
         self.bin.mkdir()
         (self.bin / "osascript").write_text(STUB_OSASCRIPT)
         (self.bin / "osascript").chmod(0o755)
-        self.env = {k: v for k, v in os.environ.items() if k not in ("VT_API_KEY", "DRY_RUN", "MAX_CANDIDATES")}
+        self.env = {k: v for k, v in os.environ.items() if k not in ("VT_API_KEY", "REPUTATION_API_KEY", "DRY_RUN", "MAX_CANDIDATES")}
         self.env.update({
             "PATH": f"{self.bin}{os.pathsep}{self.env.get('PATH', '')}",
             "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",

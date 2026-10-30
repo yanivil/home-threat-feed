@@ -207,8 +207,9 @@ def clean_theme(theme, source=None):
     """`theme` as a label part: normalised (NFKC, so look-alike dots are dots), quotes and hidden characters
     removed, commas made spaces, only words of letters, digits, hyphens and apostrophes kept (no host name, URL,
     path or defanged form survives), dates dropped, whitespace collapsed, at most THEME_LIMIT characters. A theme
-    that names the source's outlet or contains one of the feed's own notes (NOTE_PHRASES) is dropped whole: the
-    first would put a publication's name in a public row, the second would be read by expiry or the brief."""
+    that names the source's outlet, the lookup service (feed_lint.SERVICE_RE) or contains one of the feed's own
+    notes (NOTE_PHRASES) is dropped whole: the first would put a publication's name in a public row, the second
+    a row the lint refuses after the fact, the third would be read by expiry or the brief."""
     if not isinstance(theme, str):
         return ""
     words = []
@@ -219,7 +220,8 @@ def clean_theme(theme, source=None):
     cleaned = " ".join(words)
     lowered = cleaned.lower()
     squashed = lowered.replace(" ", "").replace("-", "")
-    if any(phrase in lowered for phrase in NOTE_PHRASES) or any(label in squashed for label in _outlet_labels(source)):
+    if (any(phrase in lowered for phrase in NOTE_PHRASES) or feed_lint.SERVICE_RE.search(cleaned)
+            or any(label in squashed for label in _outlet_labels(source))):
         return ""
     return cleaned[:THEME_LIMIT].rstrip()
 

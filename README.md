@@ -98,7 +98,8 @@ seven fields in every row with all but the COMMENT filled in (the gateway's defa
 by accident), a VALUE of its TYPE and normalised (lower-case domains and hashes, public
 addresses, ranges as `a.b.c.d-a.b.c.e`), no VALUE or UNIQ-NAME twice, no hidden character, and
 none of the hosts this system itself needs (github.com, raw.githubusercontent.com,
-api.telegram.org, api.anthropic.com, www.virustotal.com) nor a Domain that covers one of them.
+api.telegram.org, api.anthropic.com, www.virustotal.com) nor a Domain that covers one of them,
+and no COMMENT that names the lookup service (the feed says `confirmed <date>`, not where).
 Every writer runs it before committing: the daily check (after its pull and again before its
 commit), the Telegram bot and the monthly re-check; a hand edit is committed the same way
 (`python3 feed_lint.py && git commit …`, as in the recipes below). By hand, `python3 feed_lint.py`
