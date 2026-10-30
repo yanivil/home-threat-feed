@@ -419,12 +419,12 @@ vt-ip-63bd0fecf8,142.91.102.186,IP,medium,high,AB,Inbound probe of WAN - Spark l
 vt-ip-4340ee0980,64.89.160.135,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-29 - VT 8/92 malicious 2026-10-20
 vt-ip-607b6ccf5d,35.203.211.47,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - VT 5/92 malicious 2026-10-20
 vt-ip-703820c29f,170.64.134.120,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - VT 13/92 malicious 2026-10-20
-vt-ip-e5064c3b12,176.65.149.67,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - VT 8/92 malicious 2026-10-20
+vt-ip-e5064c3b12,176.65.149.67,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-30 - VT 8/92 malicious 2026-10-20
 vt-ip-172185de7a,135.148.63.92,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-29 - VT 6/92 malicious 2026-10-20
-vt-ip-68be4b65f8,194.88.98.115,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - VT 8/92 malicious 2026-10-20
+vt-ip-68be4b65f8,194.88.98.115,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-30 - VT 8/92 malicious 2026-10-20
 vt-ip-db89d83e69,198.235.24.238,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-29 - VT 13/92 malicious 2026-10-20
 vt-ip-8cd0895d8d,203.25.208.145,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - VT 12/92 malicious 2026-10-20
-vt-ip-fa46c979f1,182.40.103.253,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - VT 9/92 malicious 2026-10-20
+vt-ip-fa46c979f1,182.40.103.253,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-30 - VT 9/92 malicious 2026-10-20
 vt-ip-57d3d1093b,31.14.32.8,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - VT 12/92 malicious 2026-10-20
 vt-ip-7d5187c1dd,92.118.39.71,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-29 - VT 14/92 malicious 2026-10-20
 vt-ip-8ff45314be,78.128.112.30,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - VT 11/92 malicious 2026-10-20
@@ -433,7 +433,7 @@ vt-ip-05d480b6bf,186.244.214.71,IP,medium,high,AB,Inbound probe of WAN - Spark l
 vt-ip-2f79cee21a,183.36.126.68,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - VT 9/92 malicious 2026-10-20
 vt-ip-244bcc0105,147.185.133.140,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-29 - VT 7/92 malicious 2026-10-20
 vt-ip-a689bfba91,108.84.235.97,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - VT 12/92 malicious 2026-10-20
-vt-ip-db6f88a3a4,66.132.224.18,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - VT 11/92 malicious 2026-10-20
+vt-ip-db6f88a3a4,66.132.224.18,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - seen in Spark logs 2026-10-30 - VT 11/92 malicious 2026-10-20
 vt-ip-bda0c97e90,185.136.15.86,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - seen in Spark logs 2026-10-29 - VT 10/92 malicious 2026-10-20
 vt-ip-9b15cee747,85.217.140.52,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - VT 14/92 malicious 2026-10-20
 vt-ip-6e1a001158,35.203.210.9,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - VT 8/92 malicious 2026-10-20
@@ -443,7 +443,7 @@ vt-ip-5102c361f5,204.76.203.168,IP,high,high,AB,Inbound probe of WAN - Spark sys
 vt-ip-c23901346b,193.176.31.157,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - seen in Spark logs 2026-10-29 - VT 10/92 malicious 2026-10-20
 vt-ip-8895ce858a,95.215.218.163,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - VT 8/92 malicious 2026-10-20
 vt-ip-ba7e003792,20.171.192.135,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - VT 6/92 malicious 2026-10-20
-vt-ip-e964b249d9,89.37.172.130,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - VT 9/92 malicious 2026-10-20
+vt-ip-e964b249d9,89.37.172.130,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - seen in Spark logs 2026-10-30 - VT 9/92 malicious 2026-10-20
 vt-ip-74377016a6,194.180.49.121,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 5/92 malicious 2026-10-21
 vt-ip-6a624ab1d4,195.182.16.23,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 16/92 malicious 2026-10-21
 vt-ip-3e0c9c4551,185.224.128.16,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 9/92 malicious 2026-10-21
@@ -467,14 +467,14 @@ vt-ip-398ebe418c,176.65.149.27,IP,high,high,AB,Inbound probe of WAN - Spark sysl
 vt-ip-639d1e6b64,176.65.149.30,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 11/92 malicious 2026-10-21
 vt-ip-38798af1e3,176.65.149.212,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 9/92 malicious 2026-10-21
 vt-ip-153f9de11a,79.124.56.214,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 12/92 malicious 2026-10-21
-vt-ip-5bfba5399f,176.65.149.64,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 9/92 malicious 2026-10-21
+vt-ip-5bfba5399f,176.65.149.64,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-30 - VT 9/92 malicious 2026-10-21
 vt-ip-9da6067982,185.136.15.90,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 10/92 malicious 2026-10-21
 vt-ip-0dec70aabc,176.65.149.230,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 10/92 malicious 2026-10-21
 vt-ip-ea570d515a,185.136.15.13,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 8/92 malicious 2026-10-21
 vt-ip-ab304f5512,141.98.83.48,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 12/92 malicious 2026-10-21
 vt-ip-5d609821b8,95.214.53.157,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 16/92 malicious 2026-10-21
 vt-ip-67f79de5ca,185.242.226.126,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 10/92 malicious 2026-10-21
-vt-ip-bd4cd0687e,45.77.61.56,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 13/92 malicious 2026-10-21
+vt-ip-bd4cd0687e,45.77.61.56,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-30 - VT 13/92 malicious 2026-10-21
 vt-ip-9a8486e1e3,192.141.94.58,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 6/92 malicious 2026-10-21
 vt-ip-134923bf02,85.217.140.9,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 17/92 malicious 2026-10-21
 vt-ip-9057be1984,160.119.76.170,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 10/92 malicious 2026-10-21
@@ -485,7 +485,7 @@ vt-ip-1c189c7943,5.188.206.30,IP,high,high,AB,Inbound probe of WAN - Spark syslo
 vt-ip-5ddebcb513,68.209.56.42,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 9/92 malicious 2026-10-21
 vt-ip-a2ab8876ef,80.94.92.130,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 11/92 malicious 2026-10-21
 vt-ip-e84132e2f8,82.198.175.226,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 5/92 malicious 2026-10-21
-vt-ip-fc36c60042,185.242.226.72,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 10/92 malicious 2026-10-21
+vt-ip-fc36c60042,185.242.226.72,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-30 - VT 10/92 malicious 2026-10-21
 vt-ip-52359e918f,91.92.47.252,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 12/92 malicious 2026-10-21
 vt-ip-5ee1c937ca,27.29.116.137,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 12/92 malicious 2026-10-21
 vt-ip-89b9580421,79.124.40.162,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 9/92 malicious 2026-10-21
@@ -523,14 +523,14 @@ vt-ip-7c81dd79ea,79.124.58.142,IP,medium,high,AB,Inbound probe of WAN - Spark sy
 vt-ip-295b96cbee,213.209.159.25,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 14/92 malicious 2026-10-21
 vt-ip-63a89ce4ff,66.240.223.240,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 14/92 malicious 2026-10-21
 vt-ip-951fc090a5,85.217.140.22,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 11/92 malicious 2026-10-21
-vt-ip-91ca193f2d,147.185.132.75,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 12/92 malicious 2026-10-21
+vt-ip-91ca193f2d,147.185.132.75,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-30 - VT 12/92 malicious 2026-10-21
 vt-ip-5922953e62,66.132.186.241,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 11/92 malicious 2026-10-21
 vt-ip-f5a1282a80,85.217.140.4,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 13/92 malicious 2026-10-21
 vt-ip-9f48d68cfd,51.159.111.44,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 9/92 malicious 2026-10-21
 vt-ip-01b3b33fdd,104.232.79.58,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 8/92 malicious 2026-10-21
 vt-ip-245e7d6c07,85.217.140.36,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 10/92 malicious 2026-10-21
 vt-ip-b845d998cf,196.244.192.202,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 7/92 malicious 2026-10-21
-vt-ip-093d893a9b,150.107.38.251,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 14/92 malicious 2026-10-21
+vt-ip-093d893a9b,150.107.38.251,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-30 - VT 14/92 malicious 2026-10-21
 vt-ip-b1c2357925,79.124.56.138,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - VT 6/92 malicious 2026-10-21
 vt-ip-778d41dbc3,193.163.125.97,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 9/92 malicious 2026-10-21
 vt-ip-e22101e7fd,193.163.125.82,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - VT 7/92 malicious 2026-10-21
@@ -547,11 +547,11 @@ vt-ip-e573234e50,204.76.203.195,IP,high,high,AB,Inbound probe of WAN - Spark sys
 vt-ip-a05539b034,150.107.36.82,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 14/92 malicious 2026-10-22
 vt-ip-615617afb6,160.119.76.165,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 5/92 malicious 2026-10-22
 vt-ip-1ae50bcbb0,45.156.87.65,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 9/92 malicious 2026-10-22
-vt-ip-6aae77b05f,46.151.178.14,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 13/92 malicious 2026-10-22
+vt-ip-6aae77b05f,46.151.178.14,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-30 - VT 13/92 malicious 2026-10-22
 vt-ip-f6d57ee6c5,172.110.223.179,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 12/92 malicious 2026-10-22
 vt-ip-3936c6a52a,77.91.71.11,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 10/92 malicious 2026-10-22
 vt-ip-a609bed764,216.180.246.24,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 6/92 malicious 2026-10-22
-vt-ip-c640eb470c,94.102.49.125,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 5/92 malicious 2026-10-22
+vt-ip-c640eb470c,94.102.49.125,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-30 - VT 5/92 malicious 2026-10-22
 vt-ip-5b37daa9d1,216.180.246.139,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 5/92 malicious 2026-10-22
 vt-ip-6fca3b859b,193.163.125.107,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 10/92 malicious 2026-10-22
 vt-ip-833fba6516,79.124.58.22,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 5/92 malicious 2026-10-22
@@ -566,13 +566,13 @@ vt-ip-a2f91c34d2,71.6.155.70,IP,medium,high,AB,Inbound probe of WAN - Spark sysl
 vt-ip-24d3271e95,85.217.149.64,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 13/92 malicious 2026-10-22
 vt-ip-17351d277f,76.36.254.73,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 8/92 malicious 2026-10-22
 vt-ip-098f530cf9,213.209.159.26,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 14/92 malicious 2026-10-22
-vt-ip-9a01d22886,185.242.226.9,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 11/92 malicious 2026-10-22
+vt-ip-9a01d22886,185.242.226.9,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-30 - VT 11/92 malicious 2026-10-22
 vt-ip-b020cf999f,85.217.140.47,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 11/92 malicious 2026-10-22
 vt-ip-3cc2f5882f,85.217.149.24,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 14/92 malicious 2026-10-22
 vt-ip-2c1473f0b7,130.12.180.174,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 5/92 malicious 2026-10-22
 vt-ip-fb5489fda9,85.217.149.68,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 11/92 malicious 2026-10-22
 vt-ip-dccfe4a5f5,79.124.62.178,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 12/92 malicious 2026-10-22
-vt-ip-db99d31ed1,75.127.6.2,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 13/92 malicious 2026-10-22
+vt-ip-db99d31ed1,75.127.6.2,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-30 - VT 13/92 malicious 2026-10-22
 vt-ip-2e8a20c6cf,45.135.193.193,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 13/92 malicious 2026-10-22
 vt-ip-3b5f05c936,94.154.43.223,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 17/92 malicious 2026-10-22
 vt-ip-4962394775,85.217.140.53,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 11/92 malicious 2026-10-22
@@ -581,17 +581,17 @@ vt-ip-7d34f04acb,178.20.210.152,IP,high,high,AB,Inbound probe of WAN - Spark sys
 vt-ip-3d2c9dab56,1.215.138.43,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 6/92 malicious 2026-10-22
 vt-ip-ef1a4f52dd,185.242.226.95,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 9/92 malicious 2026-10-22
 vt-ip-8170254d3e,185.242.226.91,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 9/92 malicious 2026-10-22
-vt-ip-399bb68e8d,185.242.226.60,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 8/92 malicious 2026-10-22
+vt-ip-399bb68e8d,185.242.226.60,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-30 - VT 8/92 malicious 2026-10-22
 vt-ip-babba52df3,77.90.185.78,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 10/92 malicious 2026-10-22
 vt-ip-53057f3424,85.217.140.10,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 11/92 malicious 2026-10-22
 vt-ip-57d90af585,94.154.43.43,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 12/92 malicious 2026-10-22
 vt-ip-de45539872,192.207.105.196,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 13/92 malicious 2026-10-22
 vt-ip-9f9d21f6ca,78.153.140.235,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 11/92 malicious 2026-10-22
-vt-ip-a5003e07cc,31.59.220.26,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 11/92 malicious 2026-10-22
+vt-ip-a5003e07cc,31.59.220.26,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-30 - VT 11/92 malicious 2026-10-22
 vt-ip-4ce62d5c93,85.217.149.42,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 12/92 malicious 2026-10-22
 vt-ip-661b25b011,78.153.140.236,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 6/92 malicious 2026-10-22
 vt-ip-9ed5b17c97,78.153.140.237,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 8/92 malicious 2026-10-22
-vt-ip-8e6b7f5eb5,185.242.226.61,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 10/92 malicious 2026-10-22
+vt-ip-8e6b7f5eb5,185.242.226.61,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-30 - VT 10/92 malicious 2026-10-22
 vt-ip-45505518d1,185.107.80.93,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 11/92 malicious 2026-10-22
 vt-ip-7982946a05,85.217.140.28,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 12/92 malicious 2026-10-22
 vt-ip-ca046fc175,66.132.186.248,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 9/92 malicious 2026-10-22
@@ -634,7 +634,7 @@ vt-ip-d3e5f11ca4,91.230.168.81,IP,high,high,AB,Inbound probe of WAN - Spark sysl
 vt-ip-5dbbf6e1fd,193.163.125.95,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 10/92 malicious 2026-10-22
 vt-ip-b14ad6ff8a,85.217.149.45,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 12/92 malicious 2026-10-22
 vt-ip-49208c8da3,157.20.144.241,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 8/92 malicious 2026-10-22
-vt-ip-3094176fd7,69.5.169.184,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 11/92 malicious 2026-10-22
+vt-ip-3094176fd7,69.5.169.184,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-30 - VT 11/92 malicious 2026-10-22
 vt-ip-fb1544d6ca,45.63.4.69,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 11/92 malicious 2026-10-22
 vt-ip-04212754d6,193.163.125.79,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 10/92 malicious 2026-10-22
 vt-ip-3a8fb9226b,45.148.10.188,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 14/92 malicious 2026-10-22
@@ -643,7 +643,7 @@ vt-ip-eacb0e6987,91.231.89.177,IP,medium,high,AB,Inbound probe of WAN - Spark sy
 vt-ip-14795a9e17,193.163.125.90,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 11/92 malicious 2026-10-22
 vt-ip-f741709f0f,66.132.186.140,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 7/92 malicious 2026-10-22
 vt-ip-cdca609406,23.111.14.190,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - VT 5/92 malicious 2026-10-22
-vt-ip-47dc1b1110,69.5.169.122,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 10/92 malicious 2026-10-22
+vt-ip-47dc1b1110,69.5.169.122,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-30 - VT 10/92 malicious 2026-10-22
 vt-ip-0e9545c5ef,85.217.149.65,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 11/92 malicious 2026-10-22
 vt-ip-5cc27ed4c7,85.217.140.17,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 6/92 malicious 2026-10-22
 vt-ip-99a8882c45,85.217.149.72,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - VT 13/92 malicious 2026-10-22
@@ -1808,3 +1808,5 @@ vt-domain-ea0f925177,inducare.online,Domain,high,high,AB,News 2026-10-28 Indian 
 vt-domain-7acb177625,managebworld.com,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 11/92 malicious 2026-10-30
 vt-domain-fd1680a6cd,managecare.online,Domain,medium,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 8/92 malicious 2026-10-30
 vt-domain-a16e921210,managecp.co.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - VT 3/92 malicious 2026-10-30
+vt-ip-775edf4c0c,77.239.124.2,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-30 - seen in Spark logs 2026-10-30 - VT 10/92 malicious 2026-10-30
+vt-ip-383cf28242,102.220.163.206,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-30 - seen in Spark logs 2026-10-30 - VT 13/92 malicious 2026-10-30
