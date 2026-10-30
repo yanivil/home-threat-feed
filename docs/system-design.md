@@ -891,7 +891,8 @@ was decided: open item 7. If they do, the rows stay and those two fields go gene
 license choice does not change.
 
 **Outcome.** Built 2026-10-30: `LICENSE`, `LICENSE-DATA`, the README section and the
-CHANGELOG entry. Committed locally; pushed on the owner's word.
+CHANGELOG entry. Pushed the same morning on the owner's word (commit e25721f); GitHub detects
+"MIT License" for the repository and serves `LICENSE-DATA` at the raw URL.
 
 ## 5. Operating it
 
