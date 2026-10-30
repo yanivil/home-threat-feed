@@ -910,8 +910,8 @@ may be publicly attributed to one of the engines behind it. Three things in the 
 touched this. Every confirmed row's `COMMENT` ended with the service's abbreviation, the
 engine count and the check date (`<abbreviation> n/m malicious 2026-10-20`): a result from
 the service, published to the world. The README, the About text, the wiki and three
-Discussions said the rows were checked there. And 36 rows named a research outlet as their
-source, which the earlier vendor scrub had missed. The selection itself (a row is in because
+Discussions said the rows were checked there. And 36 rows of the first hand-made import credited
+the gateway vendor's research arm as their source. The selection itself (a row is in because
 the lookup confirmed it) is a grey area no wording changes; each row also has a basis of its
 own: an inbound probe in the gateway's logs, a public report the news agent read, or the
 owner's hand.
@@ -921,7 +921,7 @@ public face names no lookup service. (a) The closing notes become `confirmed YYY
 (the count dropped) and `added unchecked YYYY-MM-DD`; the `seen in Spark logs` note and the
 `CONFIDENCE` band are unchanged (the band is still computed from the count, but it is this
 feed's band, published without the count or the service's name). One rewrite of the committed
-feed: 697 confirmed rows, 1,111 unchecked rows, and the 36 rows that named the outlet now say
+feed: 697 confirmed rows, 1,111 unchecked rows, and the 36 rows that credited that outlet now say
 `External report`. (b) `vt_check.py` writes and reads only the new notes, `spark_brief.py` and
 `news_agent.py` recognise them, and `feed_lint.py` refuses a `COMMENT` that contains the
 service's name or abbreviation, so the old form cannot return by any insert path. (c) The
@@ -947,7 +947,10 @@ repository was not worth its cost. The monthly workflow's log, public like the r
 still lists each re-checked row with its engine count; making the job print only its summary
 is a follow-up if the owner wants it. The band is derived from the count, so a reader who
 knows the code can still infer the service; the terms are about what is distributed, and the
-count no longer is.
+count no longer is. 168 other rows of the same first import (2026-10-19) still credit the
+public report they came from by its outlet (Unit 42, Group-IB, Kaspersky Securelist and others);
+news-agent rows never do (D7), and whether a hand-added row may is the owner's decision: if
+not, it is one more rewrite to `External report` plus a lint rule.
 
 **Outcome.** Built 2026-10-30 in a worktree, test-first: 631 tests green both ways, the feed
 lint clean (1,811 rows, 0 mentions), `unifi-blocklist.txt` unchanged (489 entries). Merged to

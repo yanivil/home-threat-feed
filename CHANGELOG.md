@@ -43,7 +43,7 @@ All notable changes to this feed are recorded here.
 
 ### Changed
 - The feed names no lookup service: a row's closing note is `confirmed <date>` or `added unchecked
-  <date>` (the engine count left the comment; `CONFIDENCE` is unchanged), 36 rows that named a
+  <date>` (the engine count left the comment; `CONFIDENCE` is unchanged), 36 rows that credited one
   research outlet say `External report`, and the lint refuses a comment that names a service.
   The programs' own messages say `the service` and `engines` too, and the monthly workflow's
   secret is `REPUTATION_API_KEY` (the Keychain account is unchanged). Design D12.
