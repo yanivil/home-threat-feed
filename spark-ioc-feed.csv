@@ -141,11 +141,11 @@ vt-domain-edf85e1d71,secboxes.com,Domain,high,high,AB,APT31 (TA412) - Proofpoint
 vt-domain-09c25fa897,msbenefit.com,Domain,high,high,AB,APT31 (TA412) - Proofpoint 2026-09-09 - confirmed 2026-10-19
 vt-sha256-5bd9e5c3fa,7d6f6dcb17a423bdd7715f8a4e34f2939501a761bc9bf7aa005f805ef1f82288,SHA256,high,high,AV,APT31 (TA412) - Proofpoint 2026-09-09 - confirmed 2026-10-19
 vt-domain-cdf1210ee1,gitprogram.com,Domain,high,high,AB,APT31 (JungleBamboo) - Volexity 2026-09-09 - confirmed 2026-10-19
-vt-domain-1cd1f47386,team-hw.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - Check Point 2026-09-02 - confirmed 2026-10-19
-vt-domain-9eeccf1f5d,br.team-c2.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - Check Point 2026-09-02 - confirmed 2026-10-19
-vt-domain-153281fa53,kerneltty.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - Check Point 2026-09-02 - confirmed 2026-10-19
-vt-domain-ca37997ea3,data.windows-update-cdn.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - Check Point 2026-09-02 - confirmed 2026-10-19
-vt-domain-f2c31c893c,js.ai-jquery.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - Check Point 2026-09-02 - confirmed 2026-10-19
+vt-domain-1cd1f47386,team-hw.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - External report 2026-09-02 - confirmed 2026-10-19
+vt-domain-9eeccf1f5d,br.team-c2.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - External report 2026-09-02 - confirmed 2026-10-19
+vt-domain-153281fa53,kerneltty.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - External report 2026-09-02 - confirmed 2026-10-19
+vt-domain-ca37997ea3,data.windows-update-cdn.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - External report 2026-09-02 - confirmed 2026-10-19
+vt-domain-f2c31c893c,js.ai-jquery.com,Domain,high,high,AB,Gambling Goblin (Earth Berberoka) - External report 2026-09-02 - confirmed 2026-10-19
 vt-domain-30066104d3,gestionadocs.me,Domain,high,high,AB,Dark Caracal - Arctic Wolf 2026-08-26 - confirmed 2026-10-19
 vt-domain-150d600bb7,getpdfdigital.cloud,Domain,high,high,AB,Dark Caracal - Arctic Wolf 2026-08-26 - confirmed 2026-10-19
 vt-domain-0a40322710,visualizarpdf.online,Domain,high,high,AB,Dark Caracal - Arctic Wolf 2026-08-26 - confirmed 2026-10-19
@@ -155,11 +155,11 @@ vt-domain-4ac7720a7b,news.dursamjbataar.org,Domain,high,high,AB,HoneyMyte - Kasp
 vt-domain-973974a4b6,video.dursamjbataar.org,Domain,high,high,AB,HoneyMyte - Kaspersky 2026-08-14 - confirmed 2026-10-19
 vt-domain-37144c49ce,black-popular.com,Domain,high,high,AB,HoneyMyte - Kaspersky 2026-08-14 - confirmed 2026-10-19
 vt-domain-a37b6cb3de,whatismybestthing.com,Domain,high,high,AB,HoneyMyte - Kaspersky 2026-08-14 - confirmed 2026-10-19
-vt-domain-763029a950,envell.xyz,Domain,high,high,AB,Lazarus - Check Point 2026-08-11 - confirmed 2026-10-19
-vt-domain-5a16680c88,enveil.online,Domain,high,high,AB,Lazarus - Check Point 2026-08-11 - confirmed 2026-10-19
-vt-domain-683afac294,uxtramine.org,Domain,high,high,AB,Lazarus - Check Point 2026-08-11 - confirmed 2026-10-19
-vt-ip-82b95cbe8a,135.181.67.203,IP,high,high,AB,Lazarus - Check Point 2026-08-11 - confirmed 2026-10-19
-vt-ip-46713394f7,135.181.185.158,IP,high,high,AB,Lazarus - Check Point 2026-08-11 - confirmed 2026-10-19
+vt-domain-763029a950,envell.xyz,Domain,high,high,AB,Lazarus - External report 2026-08-11 - confirmed 2026-10-19
+vt-domain-5a16680c88,enveil.online,Domain,high,high,AB,Lazarus - External report 2026-08-11 - confirmed 2026-10-19
+vt-domain-683afac294,uxtramine.org,Domain,high,high,AB,Lazarus - External report 2026-08-11 - confirmed 2026-10-19
+vt-ip-82b95cbe8a,135.181.67.203,IP,high,high,AB,Lazarus - External report 2026-08-11 - confirmed 2026-10-19
+vt-ip-46713394f7,135.181.185.158,IP,high,high,AB,Lazarus - External report 2026-08-11 - confirmed 2026-10-19
 vt-sha256-448dd84c37,458a1927d2c36a9cc8990ffc34a7969d0165d364f30204645d5c522d65fc1d88,SHA256,high,high,AV,UAC-0099 - ESET GitHub 2026-10-10 - confirmed 2026-10-19
 vt-ip-fa64407260,38.60.224.51,IP,high,high,AB,FamousSparrow - ESET GitHub 2026-09-17 - confirmed 2026-10-19
 vt-ip-ccbf11623d,149.104.90.203,IP,medium,high,AB,FamousSparrow - ESET GitHub 2026-09-17 - confirmed 2026-10-19
