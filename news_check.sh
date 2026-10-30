@@ -171,8 +171,8 @@ rows="the rows done so far are in"
 [ -z "$DRY_RUN" ] || rows="a dry run, nothing was committed"
 case $check_status in
     0) ;;
-    4) fail "news_agent.py --check exited 4: the VirusTotal quota is reached; $rows, the rest are candidates again tomorrow" ;;
-    2) fail "news_agent.py --check exited 2: VirusTotal refused the key or lookups failed; $rows (see $LOG_FILE)" ;;
+    4) fail "news_agent.py --check exited 4: the lookup quota is reached; $rows, the rest are candidates again tomorrow" ;;
+    2) fail "news_agent.py --check exited 2: the reputation service refused the key or lookups failed; $rows (see $LOG_FILE)" ;;
     *) fail "news_agent.py --check exited $check_status; $rows (see $LOG_FILE)" ;;
 esac
 log "News check done"

@@ -22,15 +22,16 @@ All notable changes to this feed are recorded here.
 - A Telegram bot (`telegram_bot.py`, `capture_watcher.py`, LaunchAgent
   `com.spark-ioc-feed.telegram`): live alerts from the Spark's capture with attacker-context
   notes, the morning brief sent by the daily check, and indicators sent from the phone checked
-  on VirusTotal and added. Only the owner's private chat is served, and values the gateway must
-  never block (GitHub, Telegram, Anthropic, VirusTotal and the vendor list) are refused. See the
+  against a reputation service and added. Only the owner's private chat is served, and values the
+  gateway must never block (GitHub, Telegram, Anthropic, the reputation service and the vendor
+  list) are refused. See the
   README, "Telegram", and `docs/system-design.md`, D6.
 - A news agent (`news_agent.py`, `news_check.sh`, LaunchAgent `com.spark-ioc-feed.news`, 06:30):
   one Claude call with web search and web fetch names the network indicators the week's public
   security reporting lists for home networks (consumer phishing, commodity malware delivery and
   control, fake installers, scam domains); the repository's code drops vendor and shared-platform
-  names, stale reports, duplicates and recently checked values and keeps at most 40; VirusTotal
-  admits them at the usual bar and the verdicts go to `syslog/news-checked.json`, the job's own
+  names, stale reports, duplicates and recently checked values and keeps at most 40; the reputation
+  service admits them at the usual bar and the verdicts go to `syslog/news-checked.json`, the job's own
   cache, so the daily check's thirty-day memory is untouched. Rows carry `News <report date>
   <theme>`, the theme reduced to plain words, and never name a publication. See the README,
   "News agent", and `docs/system-design.md`, D7.
@@ -41,6 +42,11 @@ All notable changes to this feed are recorded here.
   reply names the line to fix. See the README, "Format", and `docs/system-design.md`, D8.
 
 ### Changed
+- The feed names no lookup service: a row's closing note is `confirmed <date>` or `added unchecked
+  <date>` (the engine count left the comment; `CONFIDENCE` is unchanged), 36 rows that named a
+  research outlet say `External report`, and the lint refuses a comment that names a service.
+  The programs' own messages say `the service` and `engines` too, and the monthly workflow's
+  secret is `REPUTATION_API_KEY` (the Keychain account is unchanged). Design D12.
 - The repository is `yanivil/home-threat-feed` (it was `spark-ioc-feed`): a name friends can read when
   they set the feed up on their own gateway. The raw feed URL changed with it; the old URL
   redirects for as long as the old name stays unused. The file name `spark-ioc-feed.csv` is
@@ -57,7 +63,7 @@ All notable changes to this feed are recorded here.
   on a family lists its hosts): on a full day's capture (accepted connections included) the names
   alone exceeded the whole budget and the inbound sources the feed is built from were never
   reached. See `docs/system-design.md`, D9.
-- Of the free VirusTotal key's 500 lookups a day, 40 now go to the news check at 06:30; the bot
+- Of the free key's 500 lookups a day, 40 now go to the news check at 06:30; the bot
   and runs by hand share 60 (100 until now), the daily check keeps its 400.
 - `syslog_receiver.py` keeps only the gateway's datagrams (`--source`, by default the default
   route's gateway) and writes one capture line per datagram.
@@ -67,8 +73,8 @@ All notable changes to this feed are recorded here.
   and written in a thread of their own; a same-day restart alerts what it missed as `late:`.
 - The daily check gives the feed lock back right after its push and always ends with one
   Telegram message (`Daily check failed: <reason>` when it fails before its check).
-- VirusTotal: a 429 is tried once more after 61 s, and notes and `/who` skip VirusTotal while a
-  feed check runs.
+- Reputation lookups: a 429 is tried once more after 61 s, and notes and `/who` skip the lookup
+  while a feed check runs.
 - One duplicate check for every insert path (`vt_check.FeedMembers`): `vt_check.py` and
   `--trusted` now also report `in-feed` for an address inside one of the feed's `IP Range` rows
   instead of looking it up or adding it as a second row.

@@ -35,7 +35,7 @@ RUN_LOG = """2026-10-29 07:30:01 Daily check starting: last 2 day(s)
 47.79.34.208: added (IP 11/94 malicious)
 118.69.26.133: clean (IP 1/94 malicious)
 OUTBOUND HIT  c2.example.net  (Domain 9/94 malicious)  reached by 192.168.2.121  <- check these devices
-Added to the feed: 1  clean: 1  unknown to VirusTotal: 0  left for another day: 0
+Added to the feed: 1  clean: 1  unknown to the service: 0  left for another day: 0
 """
 
 
@@ -177,14 +177,14 @@ class ParseRunLogTest(unittest.TestCase):
         self.assertEqual(run["outbound_hits"], [("198.51.100.9", "IP 7/94 malicious", ["10.0.0.1", "10.0.0.2"])])
 
     def test_lookups_are_added_plus_clean_plus_unknown_to_virustotal(self):
-        run = spark_brief.parse_run_log("Added to the feed: 2  clean: 5  unknown to VirusTotal: 3  left for another day: 9\n")
+        run = spark_brief.parse_run_log("Added to the feed: 2  clean: 5  unknown to the service: 3  left for another day: 9\n")
 
         self.assertEqual(run["lookups"], 10)
 
     def test_outbound_dry_run_lines_and_other_statuses_are_not_added_rows(self):
         run = spark_brief.parse_run_log(
             "c2.example.net: would-add (Domain 9/94 malicious -> vt-domain-1,c2.example.net,Domain,...)\n"
-            "198.51.100.5: not-found (VirusTotal has no record)\n"
+            "198.51.100.5: not-found (the service has no record)\n"
             "198.51.100.6: in-feed\n"
             "198.51.100.7: added (IP 7/94 malicious)\n")
 
@@ -202,7 +202,7 @@ class ParseRunLogTest(unittest.TestCase):
         self.assertEqual(spark_brief.parse_run_log(log)["errors"], [
             "109.205.211.205: error (HTTP 500 InternalError)",
             "evil.example: quota (QuotaExceededError - stopping)",
-            "VirusTotal quota reached; rerun tomorrow for the rest.",
+            "Lookup quota reached; rerun tomorrow for the rest.",
         ])
 
     def test_a_crash_reads_as_its_exception_line(self):
@@ -210,7 +210,7 @@ class ParseRunLogTest(unittest.TestCase):
 
         self.assertIn("Traceback (most recent call last):", log)
         self.assertEqual(spark_brief.parse_run_log(log)["errors"],
-                         ["vt_check.VTError: VirusTotal refused the API key: HTTP 401 WrongCredentialsError"])
+                         ["vt_check.VTError: The reputation service refused the API key: HTTP 401 WrongCredentialsError"])
 
     def test_a_chained_crash_gives_each_exception_once(self):
         try:
@@ -313,8 +313,8 @@ class RenderTest(unittest.TestCase):
 
         self.assertEqual(text.splitlines()[0], "Spark brief — Wed 2026-10-28")
         self.assertIn("Probes dropped: 4 from 2 sources · TP detections: 1 · Sent to block: 1 · Outbound hits: 1", text)
-        self.assertIn("  47.79.34.208     VT 11/94   probed 20×   →  added", text)
-        self.assertIn("192.168.2.121 reached c2.example.net (VT 9/94)", text)
+        self.assertIn("  47.79.34.208     11/94   probed 20×   →  added", text)
+        self.assertIn("192.168.2.121 reached c2.example.net (9/94)", text)
         self.assertIn("INDICATORS ENTERED: 1 from the Spark's logs · 0 from news · 0 by hand", text)
         self.assertIn("Lookups: 2 of 500 · next re-check 2026-12-18 · no errors", text)
 
@@ -332,10 +332,10 @@ class RenderTest(unittest.TestCase):
             "Spark brief — Wed 2026-10-28",
             "Probes dropped: 41,207 from 3,912 sources · TP detections: 2 · Sent to block: 1 · Outbound hits: 1",
             "",
-            "SENT TO BLOCK (passed the firewall, VirusTotal flags them)",
-            "  47.79.34.208     VT 11/94   probed 20×   →  added",
+            "SENT TO BLOCK (passed the firewall, flagged by the reputation service)",
+            "  47.79.34.208     11/94   probed 20×   →  added",
             "OUTBOUND HIT — look at this device",
-            "  192.168.2.121 reached c2.example.net (VT 9/94)",
+            "  192.168.2.121 reached c2.example.net (9/94)",
             "THREAT PREVENTION",
             "  Anti-Malware: 1 ·  IPS: 1",
             "TOP PROBING SOURCES (all dropped)",
@@ -387,8 +387,8 @@ class RenderTest(unittest.TestCase):
 
         text = spark_brief.render(DAY, sample_attack(), run, {}, Counter(), None)
 
-        self.assertIn("OUTBOUND HIT — look at this device\n  10.0.0.1 reached 198.51.100.9 (VT 7/94)\n"
-                      "  10.0.0.2 reached 198.51.100.9 (VT 7/94)\n", text)
+        self.assertIn("OUTBOUND HIT — look at this device\n  10.0.0.1 reached 198.51.100.9 (7/94)\n"
+                      "  10.0.0.2 reached 198.51.100.9 (7/94)\n", text)
         self.assertIn("Outbound hits: 1", text)
 
     def test_a_source_that_was_only_accepted_has_no_probe_count(self):
@@ -396,7 +396,7 @@ class RenderTest(unittest.TestCase):
 
         text = spark_brief.render(DAY, sample_attack(), run, {}, Counter(), None)
 
-        self.assertIn("\n  47.79.34.208     VT 11/94   →  added\n", text)
+        self.assertIn("\n  47.79.34.208     11/94   →  added\n", text)
 
     def test_one_source_is_not_plural(self):
         text = spark_brief.render(DAY, sample_attack(sources=1, dropped=7), spark_brief.parse_run_log(""), {}, Counter(), None)
@@ -432,7 +432,7 @@ class RenderTest(unittest.TestCase):
 
     def test_lookup_errors_merge_by_status_and_detail_at_the_place_of_the_first(self):
         mixed = ["ERROR: git push failed", *lookup_errors(2), "other.example.net: error (HTTP 400 BadRequestError)",
-                 "198.51.100.5: quota (QuotaExceededError - stopping)", "VirusTotal quota reached; rerun tomorrow for the rest."]
+                 "198.51.100.5: quota (QuotaExceededError - stopping)", "Lookup quota reached; rerun tomorrow for the rest."]
 
         section, _ = self.errors_section(mixed)
 
@@ -441,7 +441,7 @@ class RenderTest(unittest.TestCase):
             "  2 lookups: error (HTTP 503 ServiceUnavailable)",
             "  other.example.net: error (HTTP 400 BadRequestError)",
             "  198.51.100.5: quota (QuotaExceededError - stopping)",
-            "  VirusTotal quota reached; rerun tomorrow for the rest.",
+            "  Lookup quota reached; rerun tomorrow for the rest.",
         ])
 
     def test_at_most_five_error_lines_are_shown_and_the_rest_are_counted(self):
@@ -498,7 +498,7 @@ class ComposeTest(unittest.TestCase):
 
         text = self.compose()
 
-        self.assertIn("  47.79.34.208     VT 11/94   probed 3×   →  added", text)
+        self.assertIn("  47.79.34.208     11/94   probed 3×   →  added", text)
         self.assertIn("Probes dropped: 2 from 1 source", text, "the totals are the day's alone")
 
     def test_a_missing_capture_still_gives_a_brief(self):
@@ -506,7 +506,7 @@ class ComposeTest(unittest.TestCase):
 
         self.assertIn("Probes dropped: 0 from 0 sources · TP detections: 0 · Sent to block: 1 · Outbound hits: 1", text)
         self.assertNotIn("TOP PROBING SOURCES", text)
-        self.assertIn("  47.79.34.208     VT 11/94   →  added", text)
+        self.assertIn("  47.79.34.208     11/94   →  added", text)
 
     def test_a_day_without_a_capture_says_so_among_the_errors(self):
         text = self.compose()
@@ -536,7 +536,7 @@ class ComposeTest(unittest.TestCase):
 
         self.assertIn("ERRORS\n  109.205.211.205: error (HTTP 500 InternalError)\n"
                       "  evil.example: quota (QuotaExceededError - stopping)\n"
-                      "  VirusTotal quota reached; rerun tomorrow for the rest.\n", text)
+                      "  Lookup quota reached; rerun tomorrow for the rest.\n", text)
         self.assertTrue(text.endswith("· 3 errors"), text)
 
     def test_system_log_lines_in_the_capture_change_no_count_and_raise_nothing(self):
@@ -829,7 +829,7 @@ class SendTest(unittest.TestCase):
         self.assertEqual((self.sent, self.notes), ([], []))
 
     def test_a_morning_with_nothing_sent_to_block_sends_the_brief_alone(self):
-        (self.dir / "run.log").write_text("Added to the feed: 0  clean: 3  unknown to VirusTotal: 0  left for another day: 0\n")
+        (self.dir / "run.log").write_text("Added to the feed: 0  clean: 3  unknown to the service: 0  left for another day: 0\n")
 
         code, out, err = self.main()
 

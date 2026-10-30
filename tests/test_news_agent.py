@@ -481,7 +481,7 @@ class MainTests(unittest.TestCase):
         self.assertEqual(vt_check.read_indicators([str(path)], []), [("bad.example", "News 2026-10-28 Fake parcel SMS")])
         out = self.out.getvalue()
         self.assertIn("news usage: input=9 output=2 searches=0 fetches=0", out)
-        self.assertIn("1 candidate for VirusTotal from 3 named (dropped: 1 vendor domain, 1 older than 7 days)", out)
+        self.assertIn("1 candidate for lookup from 3 named (dropped: 1 vendor domain, 1 older than 7 days)", out)
         self.assertIn("  bad.example  News 2026-10-28 Fake parcel SMS  https://reports.example/a", out)
         self.assertIn(f"Written to {path}", out)
 
@@ -489,7 +489,7 @@ class MainTests(unittest.TestCase):
         code = self.main(http=FakeHttp(answer('Nothing of note.\n{"candidates": []}')), stored={"ANTHROPIC_API_KEY": "k"})
         self.assertEqual(code, 0)
         self.assertEqual(vt_check.read_indicators([str(self.syslog / "news-2026-10-29.txt")], []), [])
-        self.assertIn("0 candidates for VirusTotal", self.out.getvalue())
+        self.assertIn("0 candidates for lookup", self.out.getvalue())
 
     def test_the_max_candidates_option_and_the_allow_file(self):
         (self.syslog / "allow.txt").write_text("trusted.example  # ours\n")
@@ -529,7 +529,7 @@ class MainTests(unittest.TestCase):
             {"a.example": {"checked": "2026-10-28", "malicious": 0, "total": 90}}))
         http = FakeHttp(answer(reply_text(cand("a.example"), cand("b.example"))))
         self.assertEqual(self.main(http=http, stored={"ANTHROPIC_API_KEY": "k"}), 0)
-        self.assertIn("1 candidate for VirusTotal from 2 named (dropped: 1 checked in the last 3 days)", self.out.getvalue())
+        self.assertIn("1 candidate for lookup from 2 named (dropped: 1 checked in the last 3 days)", self.out.getvalue())
 
     def test_check_looks_the_file_up_and_summarises(self):
         path = self.syslog / "news-2026-10-29.txt"
@@ -540,7 +540,7 @@ class MainTests(unittest.TestCase):
             code = self.main("--check", str(path), "--delay", "0", stored={"VT_API_KEY": "v"})
         self.assertEqual(code, 0)
         out = self.out.getvalue()
-        self.assertIn("Checking 2 indicators against VirusTotal", out)
+        self.assertIn("Checking 2 indicators against the reputation service", out)
         self.assertIn("News check: 1 added, 1 not-found", out)
         self.assertEqual(len(self.feed.read_text().splitlines()), 4)
         self.assertEqual(set(json.loads((self.syslog / news_agent.NEWS_CACHE_NAME).read_text())), {"bad.example", "gone.example"})

@@ -48,7 +48,7 @@ def main():
     print("3 inbound sources and 2 outbound destinations in the last 2 day(s); 3 and 2 still to check")
     for i in range(int(os.environ.get("STUB_OUTBOUND", "0"))):
         print(f"OUTBOUND HIT  bad{i}.example  (Domain 7/94 malicious)  reached by 10.0.0.{i}  <- check these devices")
-    print("Added to the feed: 0  clean: 1  unknown to VirusTotal: 0  left for another day: 0")
+    print("Added to the feed: 0  clean: 1  unknown to the service: 0  left for another day: 0")
     sys.exit(int(os.environ.get("STUB_EXIT", "0")))
 
 
@@ -325,7 +325,7 @@ class DailyCheckTest(unittest.TestCase):
         self.assertLess(proc.stdout.index("Pushed to"), proc.stdout.index("Spark brief —"))
         self.assertLess(proc.stdout.index("Spark brief —"), proc.stdout.index("Daily check done"))
         self.assertIn("Outbound hits: 1", proc.stdout, "the brief reads the run's own output")
-        self.assertIn("10.0.0.0 reached bad0.example (VT 7/94)", proc.stdout)
+        self.assertIn("10.0.0.0 reached bad0.example (7/94)", proc.stdout)
         self.assertIn("INDICATORS ENTERED: 1 from the Spark's logs", proc.stdout, "and the rows git says were added")
 
     def test_the_brief_is_sent_even_when_the_check_stopped_at_the_quota(self):

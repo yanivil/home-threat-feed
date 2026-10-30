@@ -440,7 +440,7 @@ def _find(args, http, say):
     write_candidates(path, kept, args.today)
     noun = "candidate" if len(kept) == 1 else "candidates"
     reasons = ", ".join(f"{n} {reason}" for reason, n in dropped.items())  # in the order the rules apply
-    say(f"{len(kept)} {noun} for VirusTotal from {len(candidates)} named" + (f" (dropped: {reasons})" if reasons else ""))
+    say(f"{len(kept)} {noun} for lookup from {len(candidates)} named" + (f" (dropped: {reasons})" if reasons else ""))
     where = sources(candidates)
     for indicator, label in kept:
         say(f"  {indicator}  {label}  {_visible(where.get(indicator))}")
@@ -457,7 +457,7 @@ def _check(args, say):
     if not key:
         say("news agent: no VT_API_KEY in the Keychain (service spark-ioc-feed) or the environment")
         return 3
-    say(f"Checking {len(entries)} indicators against VirusTotal (min {vt_check.DEFAULT_MIN_MALICIOUS} malicious "
+    say(f"Checking {len(entries)} indicators against the reputation service (min {vt_check.DEFAULT_MIN_MALICIOUS} malicious "
         f"detections, IPs {vt_check.MIN_MALICIOUS['IP']}" + (", dry run)" if args.dry_run else ")"))
     try:
         results = check(args.check, args.feed, args.dir / NEWS_CACHE_NAME, vt_check.make_fetch(key),
@@ -468,10 +468,10 @@ def _check(args, say):
     counts = Counter(r.status for r in results)
     say("News check: " + ", ".join(f"{n} {status}" for status, n in counts.most_common()))
     if counts["quota"]:
-        say(f"VirusTotal quota reached; {counts['unchecked'] + 1} candidates still need checking.")
+        say(f"Lookup quota reached; {counts['unchecked'] + 1} candidates still need checking.")
         return 4
     if counts["error"]:
-        say(f"news agent: {counts['error']} lookups failed (VirusTotal unreachable or an error status, see above); "
+        say(f"news agent: {counts['error']} lookups failed (the service unreachable or an error status, see above); "
             "they are candidates again tomorrow")
         return 2
     return 0
@@ -480,10 +480,10 @@ def _check(args, say):
 def main(argv=None, *, http=None):
     parser = argparse.ArgumentParser(description="Find indicators in the week's security reporting and check them.")
     parser.add_argument("--check", type=Path, metavar="FILE",
-                        help="look this candidates file up on VirusTotal instead of asking the model")
+                        help="look this candidates file up instead of asking the model")
     parser.add_argument("--dry-run", action="store_true", help="with --check: look up, change nothing")
     parser.add_argument("--max-candidates", type=int, default=MAX_CANDIDATES, metavar="N",
-                        help=f"at most N candidates for VirusTotal (default {MAX_CANDIDATES})")
+                        help=f"at most N candidates for lookup (default {MAX_CANDIDATES})")
     parser.add_argument("--dir", type=Path, default=DEFAULT_DIR,
                         help="the syslog directory: checked.json, allow.txt and the candidates file live there")
     parser.add_argument("--feed", type=Path, default=vt_check.FEED, help="the feed CSV")

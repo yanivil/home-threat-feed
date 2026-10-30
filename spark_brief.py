@@ -40,11 +40,11 @@ BLADE_NAMES = {"Anti Malware": "Anti-Malware", "Anti Virus": "Anti-Virus"}
 SHA_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 ADDED_RE = re.compile(r"(\S+): added \(([^)]*)\)$")
 HIT_RE = re.compile(r"OUTBOUND HIT  (\S+)  \((.*?)\)  reached by (.*?)  <- check these devices")
-LOOKUPS_RE = re.compile(r"Added to the feed: (\d+)  clean: (\d+)  unknown to VirusTotal: (\d+)")
+LOOKUPS_RE = re.compile(r"Added to the feed: (\d+)  clean: (\d+)  unknown to the service: (\d+)")
 # What the run log says when something went wrong: vt_check.run prints "<x>: error (HTTP ...)" and
-# "<x>: quota (... - stopping)", spark_logs.py "VirusTotal quota reached; ..." on a quota stop and,
+# "<x>: quota (... - stopping)", spark_logs.py "Lookup quota reached; ..." on a quota stop and,
 # through argparse, "spark_logs.py: error: ..." when it could not start (no VirusTotal key).
-PROBLEMS = ("ERROR", ": error (", ": quota ", "VirusTotal quota reached", ": error: ")
+PROBLEMS = ("ERROR", ": error (", ": quota ", "Lookup quota reached", ": error: ")
 TRACEBACK = "Traceback (most recent call last):"
 LOOKUP_ERROR_RE = re.compile(r"\S+: (error|quota) \((.*)\)$")  # one failed lookup, as vt_check.run prints it
 ERROR_LINES = 5  # the brief lists this many error lines, then counts the rest
@@ -89,7 +89,7 @@ def attacks(entries, feed):
 
 def parse_run_log(text):
     """What the daily check's output says: `added` as (indicator, ratio), `outbound_hits` as
-    (indicator, ratio, devices), `lookups` used (added, clean and unknown to VirusTotal) and the
+    (indicator, ratio, devices), `lookups` used (added, clean and unknown to the service) and the
     `errors`: the lines that say something went wrong (PROBLEMS) and the last line, the exception,
     of each traceback."""
     run = {"added": [], "outbound_hits": [], "lookups": 0, "errors": []}
@@ -147,9 +147,9 @@ def next_recheck(feed_text, today):
 
 
 def _vt(ratio):
-    """'VT 11/94' from the check's 'IP 11/94 malicious'."""
+    """'11/94' from the check's 'IP 11/94 malicious'."""
     found = spark_logs.RATIO_RE.search(ratio)
-    return f"VT {found.group(1)}/{found.group(2)}" if found else ratio
+    return f"{found.group(1)}/{found.group(2)}" if found else ratio
 
 
 def _count(n, noun):
@@ -180,7 +180,7 @@ def render(day, attack, run, entered, probes, next_due, lookups_quota=LOOKUPS_QU
              f"Outbound hits: {len(run['outbound_hits'])}",
              ""]
     if run["added"]:
-        lines.append("SENT TO BLOCK (passed the firewall, VirusTotal flags them)")
+        lines.append("SENT TO BLOCK (passed the firewall, flagged by the reputation service)")
         for indicator, ratio in run["added"]:
             probed = f"   probed {probes[indicator]:,}×" if probes.get(indicator) else ""
             lines.append(f"  {indicator:<15}  {_vt(ratio)}{probed}   →  added")

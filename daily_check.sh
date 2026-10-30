@@ -179,6 +179,6 @@ if [ "$brief_status" -ne 0 ]; then
 fi
 
 if [ "$check_status" -ne 0 ]; then
-    fail "spark_logs.py exited $check_status (1 = VirusTotal quota reached, rows done so far are in; else see above)"
+    fail "spark_logs.py exited $check_status (1 = lookup quota reached, rows done so far are in; else see above)"
 fi
 log "Daily check done"

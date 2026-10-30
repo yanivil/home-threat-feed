@@ -56,7 +56,7 @@ DOMAIN_RE = re.compile(
 # Where the VirusTotal key lives when VT_API_KEY is not in the environment:
 #   security add-generic-password -s spark-ioc-feed -a VT_API_KEY -w '<key>' -U
 KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT = keychain.SERVICE, "VT_API_KEY"
-NO_KEY_HELP = (f"set the VT_API_KEY environment variable to your VirusTotal API key, or store it in the "
+NO_KEY_HELP = (f"set the VT_API_KEY environment variable to your reputation-service API key, or store it in the "
                f"Keychain: security add-generic-password -s {KEYCHAIN_SERVICE} -a {KEYCHAIN_ACCOUNT} -w '<key>' -U")
 
 # The notes that close a COMMENT: feed_row() ends it with the day the lookup confirmed the
@@ -223,11 +223,11 @@ def lookup(fetch, ioc_type, value):
     status, body = fetch(api_path(ioc_type, value))
     error = (body.get("error") or {}).get("code", "") if isinstance(body, dict) else ""
     if status in (401, 403):
-        raise VTError(f"VirusTotal refused the API key: HTTP {status} {error}")
+        raise VTError(f"The reputation service refused the API key: HTTP {status} {error}")
     if status == 429:
         return "quota", f"{error} - stopping", None
     if status == 404:
-        return "not-found", "VirusTotal has no record", None
+        return "not-found", "the service has no record", None
     if status != 200:
         return "error", f"HTTP {status} {error}", None
     return None, "", body["data"]["attributes"].get("last_analysis_stats", {})
@@ -563,7 +563,7 @@ def read_indicators(files, args, label=""):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Check indicators on VirusTotal and add the malicious ones to the Spark IoC feed."
+        description="Check indicators against a reputation service and add the malicious ones to the Spark IoC feed."
     )
     parser.add_argument("indicators", nargs="*", help="IPs, domains, URLs or MD5/SHA1/SHA256 hashes")
     parser.add_argument("-f", "--file", action="append", default=[],
@@ -579,7 +579,7 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="show what would change, change nothing")
     parser.add_argument("--recheck", action="store_true",
                         help="instead of adding indicators, re-verify the feed's own rows: rows whose "
-                             "VirusTotal check is old get a fresh ratio and date, or are removed")
+                             "last check is old get a fresh date, or are removed")
     parser.add_argument("--max-age", type=int, default=None, metavar="DAYS",
                         help="with --recheck, re-verify rows of every type checked DAYS or more days ago "
                              "(0 = every row); default per type: IPs 60, domains and URLs 180, rows added "
@@ -600,7 +600,7 @@ def main(argv=None):
     if args.trusted:
         if args.recheck or args.dry_run:
             parser.error("--trusted cannot be combined with --recheck or --dry-run")
-        say(f"Adding {len(entries)} indicators without a VirusTotal check")
+        say(f"Adding {len(entries)} indicators without a lookup")
         results = add_trusted(entries, args.feed, out=say)
         counts = Counter(r.status for r in results)
         say("Summary: " + ", ".join(f"{n} {status}" for status, n in counts.most_common()))
@@ -618,12 +618,12 @@ def main(argv=None):
                     else ", ".join(f"{t} {d}+" for t, d in MAX_AGE.items())
                     + f" days ago, unchecked rows {TRUSTED_MAX_AGE}+, IPs seen in the logs {SEEN_MAX_AGE}+ "
                     "after their last sighting, hashes never")
-            say(f"Re-checking {args.feed.name} rows last verified {ages} on VirusTotal ({mode})")
+            say(f"Re-checking {args.feed.name} rows last verified {ages} ({mode})")
             results = recheck(args.feed, make_fetch(key), max_age=args.max_age,
                               min_malicious=args.min_malicious, dry_run=args.dry_run,
                               delay=args.delay, out=say)
         else:
-            say(f"Checking {len(entries)} indicators against VirusTotal ({mode})")
+            say(f"Checking {len(entries)} indicators against the reputation service ({mode})")
             results = run(entries, args.feed, make_fetch(key), min_malicious=args.min_malicious,
                           dry_run=args.dry_run, delay=args.delay, out=say)
     except VTError as e:
@@ -634,7 +634,7 @@ def main(argv=None):
     say("Summary: " + ", ".join(f"{n} {status}" for status, n in counts.most_common()))
     if counts["quota"]:
         what = "rows" if args.recheck else "indicators"
-        say(f"VirusTotal quota reached; {counts['unchecked'] + 1} {what} still need checking.")
+        say(f"Lookup quota reached; {counts['unchecked'] + 1} {what} still need checking.")
         return 1
     return 0
 

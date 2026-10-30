@@ -38,7 +38,7 @@ if "--check" in args:
         print("Nothing to check")
         sys.exit(0)
     dry = "--dry-run" in args
-    print(f"Checking {len(entries)} indicators against VirusTotal (min 3 malicious detections, IPs 5"
+    print(f"Checking {len(entries)} indicators against the reputation service (min 3 malicious detections, IPs 5"
           + (", dry run)" if dry else ")"))
     feed = here / "spark-ioc-feed.csv"
     start = sum(1 for line in feed.read_text().splitlines() if line and not line.startswith("#"))
@@ -62,7 +62,7 @@ out = Path(args[args.index("--out") + 1])
 n = int(os.environ.get("STUB_CANDIDATES", "2"))
 out.write_text("# News candidates\\n" + "".join(f"bad{i}.example\\tNews 2026-10-28 Fake parcel SMS\\n" for i in range(n)))
 print("news usage: input=50000 output=3000 searches=8 fetches=4 seconds=120")
-print(f"{n} candidates for VirusTotal from {n} named")
+print(f"{n} candidates for lookup from {n} named")
 """
 
 # Stands in for spark_brief.py: records each call (its arguments, whether the feed lock was held) in
@@ -317,7 +317,7 @@ class NewsCheckTest(unittest.TestCase):
         self.assertEqual(self.head(self.origin), self.head())
         [notice] = self.notices()
         self.assertIn("exited 2", notice)
-        self.assertIn("VirusTotal refused the key or lookups failed; the rows done so far are in", notice)
+        self.assertIn("the reputation service refused the key or lookups failed; the rows done so far are in", notice)
         self.assertFalse(self.calls("brief")[0]["locked"], "the lock is given back before the notice")
 
     def test_a_missing_vt_key_fails_the_check_with_a_notice(self):

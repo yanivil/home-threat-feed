@@ -410,14 +410,14 @@ def main(argv=None):
     report = check(found, args.feed, args.dir / CACHE_NAME, vt_check.make_fetch(key), today=today,
                    max_lookups=args.max_lookups, recheck_days=args.recheck_days, allow=allow, **thresholds,
                    delay=args.delay, out=say)
-    say(f"Added to the feed: {len(report['added'])}  clean: {report['clean']}  unknown to VirusTotal: {report['not_found']}"
+    say(f"Added to the feed: {len(report['added'])}  clean: {report['clean']}  unknown to the service: {report['not_found']}"
         f"  left for another day: {len(report['skipped'])}")
     for indicator, ratio, devices, family in report["outbound_hits"]:
         say(f"OUTBOUND HIT  {indicator}  ({ratio})  reached by {', '.join(devices)}  <- check these devices")
         if len(family) > 1:
             say(f"  the family's hosts: {', '.join(family)}")
     if report["quota"]:
-        say("VirusTotal quota reached; rerun tomorrow for the rest.")
+        say("Lookup quota reached; rerun tomorrow for the rest.")
         return 1
     return 0
 

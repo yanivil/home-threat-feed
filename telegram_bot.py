@@ -61,8 +61,8 @@ NOTE_QUEUE = 10  # notes waiting for the note thread; one more is dropped
 
 HELP = """Send indicators (IPs, domains, URLs, hashes; defanged is fine), then an optional label:
   evil[.]com hxxps://bad[.]example/x MuddyWater - Unit 42
-They are checked on VirusTotal and the flagged ones added to the feed.
-/trust <indicators> [label] - add them without a VirusTotal check
+They are checked against a reputation service and the flagged ones added to the feed.
+/trust <indicators> [label] - add them without a lookup
 /who <indicator> - who is behind it, and what it did here
 /sources [YYYY-MM-DD] - that day's probing sources as a file (default yesterday)
 /status - receiver, last daily check, next re-check, uptime, last error
@@ -70,7 +70,7 @@ They are checked on VirusTotal and the flagged ones added to the feed.
 COMMANDS = ("trust", "who", "sources", "status", "help")
 URL_RE = re.compile(r"h(?:tt|xx)ps?://", re.IGNORECASE)  # a URL, defanged or not
 STATUS_RE = re.compile(r"\S+: (\S+)")  # vt_check's "<indicator>: <status> (<detail>)"
-SUMMARY = {"added": "added", "clean": "clean", "not-found": "unknown to VirusTotal", "in-feed": "already in the feed"}
+SUMMARY = {"added": "added", "clean": "clean", "not-found": "unknown to the service", "in-feed": "already in the feed"}
 RUN_START = "Daily check starting"
 RUN_END_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} (?:Daily check done|ERROR: (.*))$", re.M)
 
@@ -277,7 +277,7 @@ class Bot:
         if not trusted:
             fetch = self.fetch or self._keychain_fetch()
             if fetch is None:
-                return f"No VirusTotal key: {vt_check.NO_KEY_HELP}"
+                return f"No lookup key: {vt_check.NO_KEY_HELP}"
         lock = feed_lock.FeedLock(self.syslog / feed_lock.LOCK_NAME, sleep=self.sleep, now=self.clock)
         self.syslog.mkdir(exist_ok=True)
         if not lock.acquire(timeout=LOCK_WAIT):
@@ -290,7 +290,7 @@ class Bot:
         try:  # from here on, whatever happens (SIGTERM included), the lock is given back
             if not trusted:
                 minutes = max(1, math.ceil((len(taken) - 1) * vt_check.FREE_API_DELAY / 60))
-                self.send(f"Checking {spark_brief._count(len(taken), 'indicator')} on VirusTotal, "
+                self.send(f"Checking {spark_brief._count(len(taken), 'indicator')}, "
                           f"about {spark_brief._count(minutes, 'minute')}.")
             lines = self._write(taken, label, fetch)
         finally:

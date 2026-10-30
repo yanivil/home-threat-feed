@@ -111,12 +111,12 @@ No spaces around commas. Do not put commas inside the COMMENT field. A web edit 
 unchecked: when it broke the file, the next daily run stops at its lint with the problem in its
 log and in the morning message, and adds nothing until the file is fixed.
 
-## Adding indicators checked on VirusTotal
+## Adding indicators checked against a reputation service
 
-`vt_check.py` looks up each indicator on VirusTotal and appends the ones that enough
+`vt_check.py` looks up each indicator in a reputation service and appends the ones that enough
 engines flag as malicious to `spark-ioc-feed.csv`. It needs Python 3 only (no packages)
-and a VirusTotal API key, read from the `VT_API_KEY` environment variable or, when that is
-not set, from the login Keychain item described under "Daily check on this Mac" below.
+and an API key for that service, read from the `VT_API_KEY` environment variable or, when that
+is not set, from the login Keychain item described under "Daily check on this Mac" below.
 Never commit the key — this repository is public.
 
 ```
@@ -124,7 +124,7 @@ export VT_API_KEY=your-key
 python3 vt_check.py evil.com 203.0.113.7 https://bad.example/x 275a021b...fd0f
 python3 vt_check.py -f iocs.txt --dry-run      # preview, change nothing
 python3 vt_check.py -f iocs.txt
-python3 feed_lint.py && git commit -am "Add VirusTotal-confirmed indicators" && git push
+python3 feed_lint.py && git commit -am "Add confirmed indicators" && git push
 ```
 
 In an indicators file, each line holds one indicator, optionally followed by whitespace and
@@ -132,7 +132,7 @@ a label (group, source) that goes into COMMENT; tab-separated label fields are j
 ` - `. Blank lines and `#` lines are skipped, and defanged input (`evil[.]com`, `hxxps://`)
 is accepted.
 
-- **Added** when enough VirusTotal engines flag it: 3 for domains, URLs and hashes, 5 for
+- **Added** when enough engines flag it: 3 for domains, URLs and hashes, 5 for
   IPs (hosting addresses pick up a few blocklist hits just for being on a busy provider).
   `--min-malicious N` applies N to every type instead.
 - **CONFIDENCE** follows the detection count: 10+ high, 5–9 medium, below 5 low. Whether
@@ -144,14 +144,14 @@ is accepted.
   between lookups (`--delay`). If the daily quota runs out it stops, keeps what it already
   added, and lists the indicators still to check.
 
-## Adding indicators from a source you trust (no VirusTotal)
+## Adding indicators from a source you trust (no lookup)
 
 `--trusted` appends indicators without looking them up, for feeds whose publisher you vouch
-for. Rows get CONFIDENCE high and a COMMENT ending in `added without VirusTotal check <date>`.
+for. Rows get CONFIDENCE high and a COMMENT ending in `added unchecked <date>`.
 They are not exempt from "Keeping the feed fresh" below: 90 days after that date `--recheck`
-looks them up once, keeps the ones VirusTotal flags as ordinary checked rows, and removes the
-rest (hashes are never re-checked). An indicator the source still vouches for after that is
-yours to add again.
+looks them up once, keeps the ones the reputation service flags as ordinary checked rows, and
+removes the rest (hashes are never re-checked). An indicator the source still vouches for
+after that is yours to add again.
 
 ```
 python3 vt_check.py --trusted -f iocs.tsv
@@ -171,7 +171,7 @@ python3 vt_check.py --trusted -f iocs.tsv
 ```
 
 Even with a trusted source, read the domain list once before adding: vendor exports sometimes
-include a victim's or a legitimate company's domain, which VirusTotal would have caught.
+include a victim's or a legitimate company's domain, which a lookup would have caught.
 
 ## Mining the gateway's own logs
 
@@ -205,8 +205,8 @@ that stream into checked indicators:
    - **outbound**: names (or addresses) that LAN devices connected to. Hits are **reported,
      never added**, with the devices that reached them, because an outbound hit means a
      device needs looking at.
-   - **inbound**: public addresses that probed the WAN. With `--check`, those VirusTotal
-     flags (5+ engines) are added to the feed, labelled `Inbound probe of WAN - Spark syslog`.
+   - **inbound**: public addresses that probed the WAN. With `--check`, those the reputation
+     service flags (5+ engines) are added to the feed, labelled `Inbound probe of WAN - Spark syslog`.
 
 ```
 python3 spark_logs.py                       # list what a run would check, from today's capture
@@ -309,8 +309,8 @@ time.
 minute or two when a LAN device reaches something in the feed, or when the gateway's Threat
 Prevention prevents, drops, rejects, blocks or detects something on traffic with a public
 address; every morning the daily check sends you a brief of the previous day through the same
-bot; and indicators you send it are checked on VirusTotal, and the flagged ones added to the
-feed, committed and pushed. Only your own private chat with the bot is served: a message from
+bot; and indicators you send it are checked against a reputation service, and the flagged ones
+added to the feed, committed and pushed. Only your own private chat with the bot is served: a message from
 any other chat, a group you are in included, is ignored (and logged, once a day per chat). The
 bot runs on this Mac as the LaunchAgent `com.spark-ioc-feed.telegram` and logs to
 `~/Library/Logs/spark-ioc-feed/telegram-bot.log`. `docs/system-design.md`, decision D6, has the
@@ -319,7 +319,7 @@ design.
 ### Setting it up
 
 The bot's token and your chat id live in the login Keychain under the service `spark-ioc-feed`,
-like the VirusTotal key; nothing about the bot is stored in the repository. This is your
+like the reputation service's key; nothing about the bot is stored in the repository. This is your
 checklist, once:
 
 1. Create the bot. In Telegram open BotFather, send `/newbot` and answer its questions; it
@@ -373,8 +373,8 @@ Then check it end to end, and tick each line:
 - [ ] The receiver's log shows `receiving from <the Spark's address>`, and today's capture keeps
   growing.
 - [ ] `/status` and `/help` both answer in Telegram.
-- [ ] Send one test indicator that VirusTotal flags (a domain that 3 engines flag, or an IP that
-  5 do) with a label, for example `<indicator> bot test`. The bot replies that it is checking,
+- [ ] Send one test indicator that the reputation service flags (a domain that 3 engines flag, or
+  an IP that 5 do) with a label, for example `<indicator> bot test`. The bot replies that it is checking,
   then `<indicator>: added (...)` and `Committed and pushed.`; `git log -1` shows
   `Add 1 indicator sent from Telegram: bot test`, and the commit is on GitHub.
 - [ ] Append a crafted line to today's capture for a LAN device reaching that indicator (this
@@ -403,27 +403,28 @@ Send the bot a message and it answers in the same chat. `/help` lists what it un
   ```
   evil[.]com hxxps://bad[.]example/x MuddyWater - Unit 42
   ```
-  Every leading word that is an indicator is checked on VirusTotal and added when enough engines
-  flag it (the thresholds under "Adding indicators checked on VirusTotal"); indicators may be
-  separated by spaces or commas (`a.example,b.example`). The first word that is not one starts
-  the label, which loses quotes and invisible characters (control, bidi and zero-width marks),
-  has its commas made spaces and is cut to 120 characters. The bot first says
-  `Checking 2 indicators on VirusTotal, about 1 minute.` as a message of its own; the reply then
-  has one line per indicator, a count, and what happened to the commit:
+  Every leading word that is an indicator is checked against the reputation service and added
+  when enough engines flag it (the thresholds under "Adding indicators checked against a
+  reputation service"); indicators may be separated by spaces or commas
+  (`a.example,b.example`). The first word that is not one starts the label, which loses quotes
+  and invisible characters (control, bidi and zero-width marks), has its commas made spaces and
+  is cut to 120 characters. The bot first says `Checking 2 indicators, about 1 minute.` as a
+  message of its own; the reply then has one line per indicator, a count, and what happened to
+  the commit:
   ```
   evil.com: added (Domain 11/94 malicious)
   https://bad.example/x: clean (URL 0/94 malicious)
-  1 added, 1 clean, 0 unknown to VirusTotal, 0 already in the feed
+  1 added, 1 clean, 0 unknown to the service, 0 already in the feed
   Committed and pushed.
   ```
-  An indicator can also come back `in-feed`, `duplicate`, `not-found (VirusTotal has no
+  An indicator can also come back `in-feed`, `duplicate`, `not-found (the service has no
   record)`, `invalid (...)`, `error (...)`, `quota (...)` or `unchecked`. With nothing added
   the last line is `Nothing added, nothing committed.`; when the file fails `feed_lint.py` (a
   hand edit of it on the Mac, never the bot's own rows) it is `The feed failed its lint, nothing
   committed (fix spark-ioc-feed.csv on the Mac): line N: …` and the rows wait, uncommitted, for
   the fix.
-- **`/trust <indicators> [label]`** adds them without a VirusTotal check, as
-  `vt_check.py --trusted` does: the rows carry `added without VirusTotal check <date>` and join
+- **`/trust <indicators> [label]`** adds them without a reputation check, as
+  `vt_check.py --trusted` does: the rows carry `added unchecked <date>` and join
   the 90-day first check under "Keeping the feed fresh". There is no wait, so the reply comes
   in seconds.
 - Both refuse what the gateway must never block, with `refused: <value> is on the never-block
@@ -462,7 +463,7 @@ What to expect of an addition:
   meanwhile wait their turn; alerts keep coming, the watcher has a thread of its own), and holds
   the feed lock the whole time.
 - The label becomes `<label> - sent from Telegram` in the row's COMMENT, ahead of the
-  VirusTotal note (`sent from Telegram` alone without a label). The commit holds
+  `confirmed <date>` note (`sent from Telegram` alone without a label). The commit holds
   `spark-ioc-feed.csv` only and reads `Add N indicator(s) sent from Telegram: <label>`.
 - The bot pulls before it writes. If the pull fails nothing is added and the reply says so.
 - If the daily check holds the feed lock (from before its pull until right after its push), the
@@ -484,7 +485,7 @@ Two things alert, each as one message:
 
 - **A LAN device reached something in the feed**, by its name or by its address:
   ```
-  13:05:17 — 192.168.1.50 tried to reach c2.example.net (MuddyWater - VT 9/94 malicious 2026-10-01) — drop; 1× today
+  13:05:17 — 192.168.1.50 tried to reach c2.example.net (MuddyWater - confirmed 2026-10-01) — drop; 1× today
   ```
   That is the time, the device, the feed member with its row's COMMENT, what the gateway did
   with the connection (`drop`, `accept`, ...), and how many times that device has reached that
@@ -521,8 +522,8 @@ detection (on its source) and an outbound Anti-Bot, Anti-Virus, Anti-Malware or 
 Emulation detection (on its destination: the host name the row names, else the address); an
 outbound IPS or SmartDefense detection gets none, and neither does a late alert. It starts with
 the facts: what the capture holds about the indicator, then one line per public service
-(VirusTotal; for an IP also RDAP, Shodan InternetDB and, with a key, GreyNoise; for a domain
-also RDAP). Then comes a note from Claude Opus 5.5, which may search the web, on who the
+(the reputation service; for an IP also RDAP, Shodan InternetDB and, with a key, GreyNoise; for
+a domain also RDAP). Then comes a note from Claude Opus 5.5, which may search the web, on who the
 attacker is, what it did here, whether it is aimed at this network or scanning everything, and
 what to do: at most eight lines and 1,200 characters, ending in `(note cut short)` when the
 model ran out of room. A service that cannot be asked shows as `unavailable`; if the model
@@ -543,7 +544,7 @@ message about the previous day, with these sections (a section with nothing in i
 
 - the title and a totals line: probes dropped and from how many sources, Threat Prevention
   detections, sources sent to block, outbound hits;
-- `SENT TO BLOCK`: the sources the run added, with their VirusTotal ratio and how often they
+- `SENT TO BLOCK`: the sources the run added, with their engine ratio and how often they
   probed;
 - `OUTBOUND HIT`: LAN devices that reached a flagged destination;
 - `THREAT PREVENTION`: the detections counted per blade;
@@ -565,15 +566,15 @@ day).
 
 ### Quotas
 
-The free VirusTotal key allows 500 lookups a day and 4 a minute. The daily check spends up to
+The free key allows 500 lookups a day and 4 a minute. The daily check spends up to
 400 of the day's 500 (`MAX_LOOKUPS` lowers that) and the 06:30 news check up to 40
 (`MAX_CANDIDATES`, "News agent" below); your checks through the bot (one lookup per
 indicator), each `/who` and each attacker note (one lookup each) share the remaining 60. While
 a check is writing the feed (`syslog/.feed-lock` exists: the daily check until its push, the news
 check from before its pull until its push, or the bot's own check), notes and `/who` do not ask
-VirusTotal, so they cannot push a check over the
-4 a minute; their facts then say `VirusTotal: skipped (a feed check is running)`. The daily check
-gives the lock back before its brief, so the brief's notes do ask it. A lookup that still meets a
+the reputation service, so they cannot push a check over the
+4 a minute; their facts then say `Reputation service: skipped (a feed check is running)`. The
+daily check gives the lock back before its brief, so the brief's notes do ask it. A lookup that still meets a
 429 waits 61 seconds and tries once more; a second 429 is the quota stop: the check keeps the rows
 it added and lists the indicators it did not check, to be sent again. Nothing else the bot asks of
 the public services is retried: a service that does not answer shows as `unavailable`, and a 404 is
@@ -613,8 +614,8 @@ for that reason.
 
 `news_agent.py` asks Claude (Opus 5.5 with web search and web fetch, one call) which network
 indicators the last seven days of public security reporting name, keeps the home-relevant ones,
-and lets VirusTotal decide; `news_check.sh` does that every morning at 06:30 through
-`launchd/com.spark-ioc-feed.news.plist` and commits what VirusTotal confirms. The design and the
+and lets the reputation service decide; `news_check.sh` does that every morning at 06:30 through
+`launchd/com.spark-ioc-feed.news.plist` and commits what the service confirms. The design and the
 reasons are in `docs/system-design.md`, D7.
 
 Home-relevant, to the agent: consumer phishing (banks, parcel and tax portals, streaming
@@ -624,8 +625,8 @@ and updates, scam and tech-support domains. Not: enterprise-only and state-actor
 file hashes (the gateway blocks by network indicator), abused legitimate services, victims'
 names, anything reported more than seven days ago.
 
-The model names candidates; this repository's code decides what reaches VirusTotal; VirusTotal
-decides what reaches the feed:
+The model names candidates; this repository's code decides what reaches the reputation service;
+the service decides what reaches the feed:
 
 - `vt_check.classify` keeps IPs, domains and URLs (defanged forms accepted) and drops hashes and
   anything else.
@@ -647,7 +648,7 @@ decides what reaches the feed:
   would (3 engines for a domain or URL, 5 for an IP) and records every verdict in
   `syslog/news-checked.json`, so the following days skip them. It never writes the daily check's
   `syslog/checked.json`: a clean verdict there would keep the daily check from looking that
-  destination up for thirty days, and a reported indicator is often clean on VirusTotal the first
+  destination up for thirty days, and a reported indicator is often clean in the lookup the first
   day and flagged a week later. With `--dry-run` nothing is recorded or written.
 
 Setting it up, once:
@@ -678,7 +679,7 @@ What a run does:
 - It sends no brief: the 07:30 daily check's brief counts its rows as `from news`.
 - Everything is logged to `~/Library/Logs/spark-ioc-feed/news-check.log`: the agent's one
   `news usage: input=N output=N searches=N fetches=N seconds=N` line (what the call cost; the
-  design budgets about $0.80 a run, $25 a month), `N candidates for VirusTotal from M named
+  design budgets about $0.80 a run, $25 a month), `N candidates for lookup from M named
   (dropped: 2 vendor domain, 1 older than 7 days, …)` with one line per candidate and its
   source, then the lookups as `vt_check.py` prints them, `News check: 2 added, 3 clean`,
   `Committed: …`, `Pushed to origin/main`, `News check done`.
@@ -687,7 +688,7 @@ What a run does:
   `ANTHROPIC_API_KEY` in the Keychain; the model call failed (an error after one retry, a
   refusal, a reply cut short or without the candidates list; the log has the detail); the feed on
   main fails its lint (fix `spark-ioc-feed.csv`, nothing was looked up); no `VT_API_KEY`; the
-  VirusTotal quota reached, or VirusTotal refused the key or some lookups failed (in each case
+  lookup quota reached, or the service refused the key or some lookups failed (in each case
   the rows done so far are committed and pushed first; the rest are candidates again the next
   morning while a report still names them); the feed locked for over twenty minutes; a pull or
   push that failed (the commit stays local and the next run pushes it).
@@ -699,7 +700,7 @@ What a run does:
 ## Keeping the feed fresh
 
 Attacker infrastructure rotates: command-and-control servers are re-leased within weeks,
-so a static blocklist slowly fills with addresses that VirusTotal no longer flags and that
+so a static blocklist slowly fills with addresses that the reputation service no longer flags and that
 may by now serve legitimate traffic. `--recheck` re-verifies the rows the script added:
 
 ```
@@ -710,17 +711,17 @@ python3 feed_lint.py && git commit -am "Re-verify stale indicators" && git push
 ```
 
 - Rows are looked up one every 15 s, and only once due for their TYPE, read from the dates
-  in COMMENT: IPs 60 days after their `VT n/m malicious YYYY-MM-DD` note (attacker servers
+  in COMMENT: IPs 60 days after their `confirmed YYYY-MM-DD` note (attacker servers
   are re-leased within weeks), domains and URLs 180 (domains drop and get re-registered on a
-  scale of months), rows `added without VirusTotal check YYYY-MM-DD` 90 days after that,
+  scale of months), rows `added unchecked YYYY-MM-DD` 90 days after that,
   hashes never (a malicious file stays malicious, so a hash can never block something
   legitimate). An IP carrying `seen in Spark logs YYYY-MM-DD`, which the daily check writes
   for every feed IP that probed the WAN, is in addition never due before 180 days after that
-  sighting: a probe of this network is first-hand evidence, and VirusTotal's count for a
-  scanner decays while the scanning goes on. `--max-age DAYS` applies DAYS to every row's own
+  sighting: a probe of this network is first-hand evidence, and the number of engines that flag
+  a scanner decays while the scanning goes on. `--max-age DAYS` applies DAYS to every row's own
   date, hashes included. Rows with no date at all (hand-written ones) are never touched.
 - Rows still flagged by enough engines (3, or 5 for IPs, unless `--min-malicious` says
-  otherwise) get a fresh ratio, date and CONFIDENCE in place; rows that fell below are
+  otherwise) get a fresh `confirmed` date and CONFIDENCE in place; rows that fell below are
   removed.
 - The header line, the order of the rows and every other row stay exactly as they are.
 - The file is rewritten after every change, so if the daily quota runs out (or you press
@@ -732,7 +733,7 @@ python3 feed_lint.py && git commit -am "Re-verify stale indicators" && git push
 `.github/workflows/recheck.yml` runs `--recheck` on the 1st of every month (or on demand
 from the Actions tab, optionally with a `--max-age` override), renders `unifi-blocklist.txt`
 from the result and commits both. It does nothing until
-the repository has a `VT_API_KEY` secret: Settings → Secrets and variables → Actions →
+the repository has a `REPUTATION_API_KEY` secret: Settings → Secrets and variables → Actions →
 New repository secret. A full run takes about 15 s per stale row, within the free key's
 500 lookups a day; if it stops early the rows done so far are still committed and the job
 is marked failed so GitHub notifies you. Note that GitHub pauses scheduled workflows in

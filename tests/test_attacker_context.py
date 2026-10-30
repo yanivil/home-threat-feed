@@ -195,7 +195,7 @@ class GatherTest(CaptureTestCase):
         self.assertEqual(facts["virustotal"], {"as_owner": None, "asn": None, "country": None, "malicious": None,
                                                "total": None, "categories": None, "registrar": None})
         self.assertEqual(attacker_context.facts_text(facts).splitlines()[-4:], [
-            "VirusTotal: no record",
+            "Reputation service: no record",
             "RDAP: no record",
             "InternetDB: no record",
             "GreyNoise: no record (not observed scanning)",
@@ -283,7 +283,7 @@ class GatherTest(CaptureTestCase):
         self.assertNotIn(VT_URL, self.fetch.urls)
         self.assertEqual(facts["skipped"], {"virustotal": "a feed check is running"})
         self.assertIsNotNone(facts["rdap"])
-        self.assertIn("\nVirusTotal: skipped (a feed check is running)\n", attacker_context.facts_text(facts))
+        self.assertIn("\nReputation service: skipped (a feed check is running)\n", attacker_context.facts_text(facts))
 
     def test_a_missing_virustotal_field_is_none(self):
         self.fetch.responses[VT_URL] = {"data": {"attributes": {"country": "US"}}}
@@ -437,7 +437,7 @@ class FactsTextTest(unittest.TestCase):
         self.assertEqual(text.splitlines(), [
             "93.152.221.36 (IP): 3 attempts, first 2026-10-27T23:58:00, last 2026-10-28T09:30:00, services 22 x3",
             "Gateway actions: drop x2, accept x1",
-            "VirusTotal: 11/94 malicious; owner Linode (AS63949); country US",
+            "Reputation service: 11/94 malicious; owner Linode (AS63949); country US",
             "RDAP: name LINODE-US; handle NET-1; abuse abuse@linode.com",
             "InternetDB: ports 22, 80; tags cloud; vulns none",
             "GreyNoise: classification malicious; name unknown; noise yes; riot no",
@@ -481,7 +481,7 @@ class FactsTextTest(unittest.TestCase):
 
         lines = attacker_context.facts_text(facts).splitlines()
 
-        self.assertEqual([line.split(":")[0] for line in lines[2:]], ["VirusTotal", "RDAP"])
+        self.assertEqual([line.split(":")[0] for line in lines[2:]], ["Reputation service", "RDAP"])
         self.assertIn("categories malicious web sites, malware callhome", lines[2])
         self.assertIn("registrar NameCheap", lines[2])
 
@@ -491,7 +491,7 @@ class FactsTextTest(unittest.TestCase):
                            greynoise=None, virustotal=None)
 
         self.assertEqual(attacker_context.facts_text(facts).splitlines(),
-                         [f"{'a' * 64} (SHA256): 0 attempts", "VirusTotal: unavailable"])
+                         [f"{'a' * 64} (SHA256): 0 attempts", "Reputation service: unavailable"])
 
     def test_a_long_list_is_cut_to_stay_readable(self):
         facts = self.facts(
@@ -687,7 +687,7 @@ class NoteTest(CaptureTestCase):
 
         text = self.note(http=FakeHttp(answer("ok")))
 
-        self.assertIn("\nVirusTotal: skipped (a feed check is running)\n", text)
+        self.assertIn("\nReputation service: skipped (a feed check is running)\n", text)
         self.assertNotIn(VT_URL, self.fetch.urls)
         self.assertTrue(text.endswith("\n\nok"))
 
@@ -706,7 +706,7 @@ class NoteTest(CaptureTestCase):
 
         self.assertTrue(text.startswith("93.152.221.36 (IP): 3 attempts"))
         self.assertRegex(text, r"\n\n\(context note unavailable: no route\)$")
-        for source in ("VirusTotal", "RDAP", "InternetDB", "GreyNoise"):
+        for source in ("Reputation service", "RDAP", "InternetDB", "GreyNoise"):
             self.assertIn(f"\n{source}: unavailable", text)
 
     def test_the_model_failing_leaves_the_facts_and_the_reason(self):
@@ -743,8 +743,8 @@ class NoteTest(CaptureTestCase):
     def test_an_odd_answer_from_a_service_still_gives_the_note_with_what_survived(self):
         odd_answers = [
             (INTERNETDB_URL, {"ports": 22, "tags": ["cloud"]}, "InternetDB: ports unknown; tags cloud; vulns unknown"),
-            (VT_URL, vt_body(categories=["x"]), "VirusTotal: 11/94 malicious; owner Linode (AS63949); country US"),
-            (VT_URL, vt_body(as_owner=5), "VirusTotal: 11/94 malicious; owner AS63949; country US"),
+            (VT_URL, vt_body(categories=["x"]), "Reputation service: 11/94 malicious; owner Linode (AS63949); country US"),
+            (VT_URL, vt_body(as_owner=5), "Reputation service: 11/94 malicious; owner AS63949; country US"),
             (RDAP_URL, {"name": ["x"], "handle": "H1", "entities": "abuse"}, "RDAP: handle H1"),
             (GREYNOISE_URL, {"classification": 7, "name": ["x"], "noise": "yes", "riot": True}, "GreyNoise: riot yes"),
             (RDAP_URL, ["not", "an", "object"], "RDAP: unavailable"),

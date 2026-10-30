@@ -36,7 +36,7 @@ URLS = {
 }
 # Domains have no InternetDB or GreyNoise record, URLs and hashes no RDAP one.
 SOURCES = {"IP": ("virustotal", "rdap", "internetdb", "greynoise"), "Domain": ("virustotal", "rdap")}
-LABELS = {"virustotal": "VirusTotal", "rdap": "RDAP", "internetdb": "InternetDB", "greynoise": "GreyNoise"}
+LABELS = {"virustotal": "Reputation service", "rdap": "RDAP", "internetdb": "InternetDB", "greynoise": "GreyNoise"}
 LIST_LIMIT = 8  # items of one list in the facts, so a scanner that tried 1,000 ports stays readable
 TEXT_LIMIT = 100  # characters of one string a service sent
 # While the daily check or the bot checks the feed (syslog/.feed-lock exists), it spends the free

@@ -87,11 +87,11 @@ FEED = (HEADER
 
 DAILY_LOG = """\
 2026-10-27 07:30:00 Daily check starting: last 2 day(s)
-Added to the feed: 1  clean: 9  unknown to VirusTotal: 0  left for another day: 0
+Added to the feed: 1  clean: 9  unknown to the service: 0  left for another day: 0
 2026-10-27 09:02:41 Daily check done
 2026-10-28 16:20:05 Daily check starting: last 2 day(s)
 evil.example: added (Domain 11/94 malicious)
-Added to the feed: 2  clean: 40  unknown to VirusTotal: 3  left for another day: 0
+Added to the feed: 2  clean: 40  unknown to the service: 3  left for another day: 0
 Brief sent to Telegram
 2026-10-28 16:58:13 Daily check done
 """
@@ -341,9 +341,9 @@ class AddTest(BotTestCase):
     def test_the_check_is_announced_and_the_reply_ends_with_the_counts_and_the_push(self):
         self.send("evil[.]com 185.1.2.9")
 
-        self.assertEqual(self.tg.sent[0], "Checking 2 indicators on VirusTotal, about 1 minute.")
+        self.assertEqual(self.tg.sent[0], "Checking 2 indicators, about 1 minute.")
         self.assertEqual(self.tg.sent[1].splitlines()[-2:],
-                         ["1 added, 1 clean, 0 unknown to VirusTotal, 0 already in the feed", "Committed and pushed."])
+                         ["1 added, 1 clean, 0 unknown to the service, 0 already in the feed", "Committed and pushed."])
 
     def test_a_label_less_check_is_marked_sent_from_telegram(self):
         self.send("evil.com")
@@ -368,7 +368,7 @@ class AddTest(BotTestCase):
         self.assertEqual(self.feed.read_text(), FEED)
         self.assertIn("93.152.221.36: in-feed", self.tg.sent[-1])
         self.assertEqual(self.tg.sent[-1].splitlines()[-2:],
-                         ["0 added, 1 clean, 0 unknown to VirusTotal, 1 already in the feed",
+                         ["0 added, 1 clean, 0 unknown to the service, 1 already in the feed",
                           "Nothing added, nothing committed."])
 
     def test_rows_an_interrupted_check_left_are_committed_by_the_next_one(self):
@@ -378,7 +378,7 @@ class AddTest(BotTestCase):
 
         self.send("evil.com")
 
-        self.assertEqual(self.tg.sent[-1].splitlines()[-2:], ["0 added, 0 clean, 0 unknown to VirusTotal, "
+        self.assertEqual(self.tg.sent[-1].splitlines()[-2:], ["0 added, 0 clean, 0 unknown to the service, "
                                                               "1 already in the feed", "Committed and pushed."])
         self.assertEqual(self.git.calls[4][3], "Add 1 indicator sent from Telegram",
                          "the commit counts what git says was added, not what this check added")
@@ -430,8 +430,8 @@ class AddTest(BotTestCase):
         self.assertEqual(len(self.vt.calls), 50)
         self.assertEqual(self.clock.sleeps, [vt_check.FREE_API_DELAY] * 49)
         self.assertTrue(self.tg.sent[-1].endswith("10 not checked, send them again"), self.tg.sent[-1][-200:])
-        self.assertIn("0 added, 0 clean, 50 unknown to VirusTotal, 0 already in the feed", self.tg.sent[-1])
-        self.assertTrue(self.tg.sent[0].startswith("Checking 50 indicators on VirusTotal, about 13 minutes"))
+        self.assertIn("0 added, 0 clean, 50 unknown to the service, 0 already in the feed", self.tg.sent[-1])
+        self.assertTrue(self.tg.sent[0].startswith("Checking 50 indicators, about 13 minutes"))
 
     def test_commit_message_is_safe_with_odd_labels(self):
         reply = self.bot.add(["185.1.2.10"], 'x" ; rm -rf / \n y\r', trusted=True)
@@ -474,7 +474,7 @@ class AddTest(BotTestCase):
     def test_a_check_refuses_a_never_block_value_and_checks_the_rest(self):
         self.send("raw.githubusercontent.com evil[.]com")
 
-        self.assertEqual(self.tg.sent[0], "Checking 1 indicator on VirusTotal, about 1 minute.")
+        self.assertEqual(self.tg.sent[0], "Checking 1 indicator, about 1 minute.")
         self.assertEqual(self.tg.sent[1].splitlines()[:2], ["refused: raw.githubusercontent.com is on the never-block list",
                                                             "evil.com: added (Domain 11/94 malicious)"])
         self.assertEqual(self.vt.calls, [vt_check.api_path("Domain", "evil.com")])
@@ -550,8 +550,8 @@ class AddTest(BotTestCase):
 
         self.assertEqual(self.tg.sent[-1].splitlines(), [
             "evil.com: added (Domain 11/94 malicious)",
-            "stopped: VirusTotal refused the API key: HTTP 401 WrongCredentialsError",
-            "1 added, 0 clean, 0 unknown to VirusTotal, 0 already in the feed",
+            "stopped: The reputation service refused the API key: HTTP 401 WrongCredentialsError",
+            "1 added, 0 clean, 0 unknown to the service, 0 already in the feed",
             "Committed and pushed."])
         self.assertEqual(self.git.commands(), ["pull", "diff", "diff", "add", "commit", "push"])
 
@@ -567,7 +567,7 @@ class AddTest(BotTestCase):
         self.assertEqual(reply.splitlines(), [
             "evil.com: added (Domain 11/94 malicious)",
             "stopped: <urlopen error timed out>",
-            "1 added, 0 clean, 0 unknown to VirusTotal, 0 already in the feed",
+            "1 added, 0 clean, 0 unknown to the service, 0 already in the feed",
             "Committed and pushed."])
         self.assertIn(",evil.com,Domain,high,high,AB,sent from Telegram - confirmed 2026-10-28\n",
                       self.feed.read_text())
@@ -812,7 +812,7 @@ class WhoTest(BotTestCase):
                 patch("keychain.item", side_effect=lambda account, *a, **k: stored.get(account, "")):
             self.send("/who 93.152.221.36")
 
-        self.assertIn("\nVirusTotal: skipped (a feed check is running)\n", self.tg.sent[-1])
+        self.assertIn("\nReputation service: skipped (a feed check is running)\n", self.tg.sent[-1])
         self.assertFalse([url for url in asked if "virustotal" in url], asked)
         self.assertTrue(self.tg.sent[-1].endswith("\n\nA scanner."))
 
