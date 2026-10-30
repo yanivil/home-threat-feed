@@ -956,10 +956,10 @@ Talos, Morphisec, CISA, CERT-UA and others);
 news-agent rows never do (D7), and whether a hand-added row may is the owner's decision: if
 not, it is one more rewrite to `External report` plus a lint rule.
 
-**Outcome.** Built 2026-10-30 in a worktree, test-first: 631 tests green both ways, the feed
+**Outcome.** Built 2026-10-30 in a worktree, test-first: 633 tests green both ways, the feed
 lint clean (1,811 rows, 0 mentions), `unifi-blocklist.txt` unchanged (489 entries). Merged to
-main and the bot restarted the same day. The push, the wiki pages and the Discussions follow
-on the owner's word. The workflow reads the `REPUTATION_API_KEY` secret and, while it is
+main, the bot restarted and pushed the same day (8bc7782), with the wiki pages and the
+Discussions reworded in the same hour on the owner's word. The workflow reads the `REPUTATION_API_KEY` secret and, while it is
 missing, the old one, so the monthly run of 2026-11-01 is unaffected; the owner adds the new
 secret under Settings → Secrets and variables → Actions and deletes the old one at leisure.
 
