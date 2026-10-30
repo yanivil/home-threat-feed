@@ -5,6 +5,10 @@ All notable changes to this feed are recorded here.
 ## [Unreleased]
 
 ### Added
+- `LICENSE` (MIT, for the code) and `LICENSE-DATA` (CC0 1.0, for `spark-ioc-feed.csv`,
+  `unifi-blocklist.txt` and any list derived from the CSV); the README's "License" section
+  says which covers what. Until now the repository carried no license and no warranty
+  disclaimer. See `docs/system-design.md`, D11.
 - `unifi-blocklist.txt`: the feed's `IP` and `IP Range` rows as a bare IPv4 list (ranges as
   CIDR, one entry per line, nothing else) for UniFi gateways, which refresh a Network List
   from a URL but cannot read the CSV. Rendered by `unifi_list.py` and kept in step with the

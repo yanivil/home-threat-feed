@@ -857,8 +857,41 @@ feed's 485 addresses and its two /24 ranges. README ("UniFi gateways"), the wiki
 feed with other gateways", Home, the FAQ) and the poll in Discussions point at the list.
 Pushed the same evening on the owner's word; the raw URL served the 487 lines at once, and
 the workflow's first run (dispatched by hand) rendered "487 entries, unchanged" and committed
-nothing, as it should. Its push-triggered path is first exercised by the next job that adds
-rows to the feed.
+nothing, as it should. Its push-triggered path was first exercised by the daily check of
+2026-10-30: within a minute of its push the workflow committed the two new addresses to the
+list (commit 3b3638c), unattended.
+
+### D11. The code is MIT, the feed files are CC0 (decided and built 2026-10-30)
+
+**Findings.** The repository had no license. By default nobody had a formal right to copy or
+redistribute the feed, and nothing disclaimed warranty, which matters for a blocklist that can
+break another household's network. The owner proposed the GNU AGPL v3, seen on an AI project.
+The AGPL is written for programs: its distinctive clause, section 13, obliges whoever runs a
+modified copy as a network service to publish the changes, which fits a SaaS product and
+nothing here. Applied to a data file it is murky (what is the "source" of a CSV; does merging
+twenty rows into another blocklist make that list a derivative?), and it deters exactly the
+aggregators and friends the feed is for. The indicators are facts the checks confirmed, not
+works of authorship.
+
+**Decision.** Two licenses, each for what it fits. The code (`*.py`, `*.sh`, the workflows,
+the LaunchAgent files): MIT, in `LICENSE`. The feed files (`spark-ioc-feed.csv`,
+`unifi-blocklist.txt`, and any list derived from the CSV later): CC0 1.0 Universal, in
+`LICENSE-DATA`, as abuse.ch and most open threat feeds do, so any gateway, filter or
+aggregator can take the rows with no conditions. The README's "License" section says which
+covers what. Apache-2.0 (patent clause, contribution terms) and CC-BY-4.0 (a credit line)
+were considered and not needed: nothing here is patentable, suggestions arrive as
+indicators through Discussions, and an attribution duty on a blocklist is friction for
+aggregators and symbolic otherwise.
+
+**Known limits.** A license cannot be withdrawn from copies already taken, so this is chosen
+once. The `CONFIDENCE` band and the `VT n/m malicious` note in `COMMENT` are derived from
+VirusTotal engine counts; VirusTotal's public API terms restrict redistribution of its
+results, and whether a derived band and a count fall under that was not checked when this
+was decided: open item 7. If they do, the rows stay and those two fields go generic; the
+license choice does not change.
+
+**Outcome.** Built 2026-10-30: `LICENSE`, `LICENSE-DATA`, the README section and the
+CHANGELOG entry. Committed locally; pushed on the owner's word.
 
 ## 5. Operating it
 
@@ -913,3 +946,8 @@ rows to the feed.
 6. Lists for other products beyond the UniFi one (domains for DNS filters, URLs, hashes), the
    same way: rendered from the CSV by GitHub (D10). Published when the poll in Discussions
    shows a product that would use one.
+7. Check VirusTotal's public API terms against the two VT-derived fields the feed publishes,
+   the `CONFIDENCE` band and the `VT n/m malicious` note in `COMMENT` (D11). If
+   redistribution of derived results is restricted, keep the rows and make those fields
+   generic: a band computed the same way but not named as VirusTotal's, and the count
+   dropped from the comment.

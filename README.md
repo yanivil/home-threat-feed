@@ -739,3 +739,13 @@ is marked failed so GitHub notifies you. Note that GitHub pauses scheduled workf
 repositories with no activity for 60 days.
 
 Tests: `python3 -m unittest`
+
+## License
+
+The code (the scripts, the workflows and the LaunchAgent files) is under the MIT License,
+see `LICENSE`. The feed files, `spark-ioc-feed.csv` and `unifi-blocklist.txt`, are released
+under CC0 1.0, a public domain dedication, see `LICENSE-DATA`: point any gateway, DNS filter
+or aggregator at them, merge their rows into your own list, no conditions and no credit
+required. The rows are facts the checks above confirmed, not works of authorship, and CC0
+removes any doubt about that. Both texts disclaim warranty: this is one household's
+blocklist, read the `COMMENT` column and keep your own exceptions.
