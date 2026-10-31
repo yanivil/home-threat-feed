@@ -1830,3 +1830,4 @@ vt-ip-cd80ec18d8,144.31.244.184,IP,medium,high,AB,News 2026-10-28 Android bankin
 vt-ip-d6a3e00ac0,46.151.182.28,IP,medium,high,AB,News 2026-10-28 Android banking trojan C2 India - confirmed 2026-10-31
 vt-domain-9c95087850,accessor.fud2026.com,Domain,high,high,AB,News 2026-10-28 Android banking trojan C2 India - confirmed 2026-10-31
 vt-domain-dfcd7d2a70,fud2026.com,Domain,high,high,AB,News 2026-10-28 Android banking trojan C2 India - confirmed 2026-10-31
+vt-ip-5cfc38a500,193.9.44.239,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-31 - confirmed 2026-10-31
