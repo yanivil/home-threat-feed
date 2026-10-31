@@ -1810,3 +1810,23 @@ vt-domain-fd1680a6cd,managecare.online,Domain,medium,high,AB,News 2026-10-28 Ind
 vt-domain-a16e921210,managecp.co.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing APKs - confirmed 2026-10-30
 vt-ip-775edf4c0c,77.239.124.2,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-30 - seen in Spark logs 2026-10-30 - confirmed 2026-10-30
 vt-ip-383cf28242,102.220.163.206,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-30 - seen in Spark logs 2026-10-30 - confirmed 2026-10-30
+vt-domain-5aa9e5ff2e,manageici.com,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-e3ddb92bec,manageprotection.in,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-4db1299968,manageprotections.com,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-4e0efbb5db,myicuser.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-1a11eb4941,myinsuranceservice.in,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-f56f81976b,pncare.online,Domain,medium,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-007ffa458b,policydeactivate.in,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-c0442b2579,protectcc.online,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-fa91a1fc09,protectionmanage.online,Domain,medium,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-8da439fafc,serviceic.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-545ff78636,serviceici.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-4a27ae2f34,serviceidf.in,Domain,low,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-f3643d33dc,serviceshelp.online,Domain,medium,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-23e92e0c6b,www.icppuser.online,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-f577afc586,www.icuser.online,Domain,medium,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-domain-b345f48e96,www.protectcc.online,Domain,high,high,AB,News 2026-10-28 Indian bank card-protection phishing trojans - confirmed 2026-10-31
+vt-ip-cd80ec18d8,144.31.244.184,IP,medium,high,AB,News 2026-10-28 Android banking trojan C2 India - confirmed 2026-10-31
+vt-ip-d6a3e00ac0,46.151.182.28,IP,medium,high,AB,News 2026-10-28 Android banking trojan C2 India - confirmed 2026-10-31
+vt-domain-9c95087850,accessor.fud2026.com,Domain,high,high,AB,News 2026-10-28 Android banking trojan C2 India - confirmed 2026-10-31
+vt-domain-dfcd7d2a70,fud2026.com,Domain,high,high,AB,News 2026-10-28 Android banking trojan C2 India - confirmed 2026-10-31
