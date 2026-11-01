@@ -1831,3 +1831,6 @@ vt-ip-d6a3e00ac0,46.151.182.28,IP,medium,high,AB,News 2026-10-28 Android banking
 vt-domain-9c95087850,accessor.fud2026.com,Domain,high,high,AB,News 2026-10-28 Android banking trojan C2 India - confirmed 2026-10-31
 vt-domain-dfcd7d2a70,fud2026.com,Domain,high,high,AB,News 2026-10-28 Android banking trojan C2 India - confirmed 2026-10-31
 vt-ip-5cfc38a500,193.9.44.239,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-31 - confirmed 2026-10-31
+vt-domain-e3a74f52fa,js-static.cfd,Domain,high,high,AB,News 2026-10-29 ClickFix fake Cloudflare verification pages - confirmed 2026-11-01
+vt-url-4f81b47faa,https://js-static.cfd/embed.js?v=24,URL,low,high,AB,News 2026-10-29 ClickFix fake Cloudflare verification pages - confirmed 2026-11-01
+vt-url-3aa290c1f2,https://cf-id.com/?ray-id=nz0ovm2jq2g68i,URL,low,high,AB,News 2026-10-29 ClickFix fake Cloudflare verification pages - confirmed 2026-11-01
