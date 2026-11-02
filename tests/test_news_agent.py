@@ -3,7 +3,6 @@ patched. Every indicator here is a stand-in (documentation addresses, `.example`
 
 import contextlib
 import copy
-import http.client
 import io
 import json
 import tempfile
@@ -436,16 +435,9 @@ class CheckTests(unittest.TestCase):
         self.fetch = failing
         results = self.check()
         self.assertEqual([(r.indicator, r.status) for r in results],
-                         [("bad.example", "added"), ("fine.example", "error"), ("gone.example", "not-found")])
-        self.assertIn("fine.example: error (HTTP 0 down)", self.lines)
+                         [("bad.example", "added"), ("fine.example", "unreachable"), ("gone.example", "not-found")])
+        self.assertIn("fine.example: unreachable (down)", self.lines)
         self.assertEqual(set(json.loads(self.cache.read_text())), {"bad.example", "gone.example"})
-
-    def test_a_cut_or_unreadable_body_is_an_error_verdict_too(self):
-        for exception in (ValueError("Expecting value: line 1 column 1 (char 0)"), http.client.IncompleteRead(b"")):
-            wrapped = news_agent._answering(lambda path: (_ for _ in ()).throw(exception))
-            status, body = wrapped("/domains/x.example")
-            self.assertEqual(status, 0)
-            self.assertIn(str(exception).split(":")[0], body["error"]["code"])
 
     def test_the_daily_checks_cache_is_read_with_the_news_jobs(self):
         (self.dir / spark_logs.CACHE_NAME).write_text(json.dumps({
@@ -572,6 +564,22 @@ class MainTests(unittest.TestCase):
         self.assertIn("refused the API key", self.out.getvalue())
         self.assertEqual(len(self.feed.read_text().splitlines()), 5)
 
+    def test_a_service_that_does_not_answer_is_exit_2_with_the_rest_candidates_again(self):
+        path = self.syslog / "news-2026-10-29.txt"
+        news_agent.write_candidates(path, [(f"{n}.example", "News") for n in "abcd"], TODAY)
+
+        def fetch(p):
+            raise urllib.error.URLError("no route to host")
+        slept = []
+        with patch("news_agent.vt_check.make_fetch", lambda key: fetch), patch("news_agent.time.sleep", slept.append):
+            code = self.main("--check", str(path), "--delay", "0", stored={"VT_API_KEY": "v"})
+        self.assertEqual(code, 2)
+        self.assertEqual(slept, [vt_check.RETRY_WAIT, 0, vt_check.RETRY_WAIT, 0, vt_check.RETRY_WAIT])
+        self.assertIn("News check: 3 unreachable, 1 unchecked", self.out.getvalue())
+        self.assertIn("The reputation service did not answer; 4 candidates still need checking.", self.out.getvalue())
+        self.assertEqual(json.loads((self.syslog / news_agent.NEWS_CACHE_NAME).read_text()), {})
+        self.assertEqual(len(self.feed.read_text().splitlines()), 3)
+
     def test_check_without_a_vt_key_is_exit_3(self):
         path = self.syslog / "news-2026-10-29.txt"
         news_agent.write_candidates(path, [("bad.example", "News")], TODAY)
@@ -590,14 +598,19 @@ class MainTests(unittest.TestCase):
 
     def test_a_quota_stop_is_exit_4(self):
         path = self.syslog / "news-2026-10-29.txt"
-        news_agent.write_candidates(path, [("bad.example", "News"), ("b.example", "News")], TODAY)
-        fetch = FakeFetch({"/domains/bad.example": (429, {"error": {"code": "QuotaExceededError"}})})
+        news_agent.write_candidates(path, [("a.example", "News"), ("bad.example", "News"), ("b.example", "News")], TODAY)
+        quota = FakeFetch({"/domains/bad.example": (429, {"error": {"code": "QuotaExceededError"}})})
+
+        def fetch(p):
+            if p == "/domains/a.example":
+                raise urllib.error.URLError("timed out")  # unanswered before the stop: left for tomorrow as well
+            return quota(p)
         slept = []
         with patch("news_agent.vt_check.make_fetch", lambda key: fetch), patch("news_agent.time.sleep", slept.append):
             code = self.main("--check", str(path), "--delay", "0", stored={"VT_API_KEY": "v"})
-        self.assertEqual(slept, [vt_check.QUOTA_WAIT])  # the one more try after a 429, then the stop
+        self.assertEqual(slept, [vt_check.RETRY_WAIT, 0, vt_check.QUOTA_WAIT])  # the two retries, then the stop
         self.assertEqual(code, 4)
-        self.assertIn("quota", self.out.getvalue())
+        self.assertIn("Lookup quota reached; 3 candidates still need checking.", self.out.getvalue())
 
 
 if __name__ == "__main__":

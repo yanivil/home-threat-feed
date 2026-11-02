@@ -144,6 +144,11 @@ is accepted.
 - **Rate limit**: the free API allows 4 lookups/min and 500/day, so the script waits 15 s
   between lookups (`--delay`). If the daily quota runs out it stops, keeps what it already
   added, and lists the indicators still to check.
+- **No answer**: a lookup the service does not answer (a timeout, a refused connection, a cut
+  reply) is tried once more after 10 s, then reported as `unreachable (<reason>)` and skipped;
+  it is not cached, so the next run tries it again. Three unanswered lookups in a row stop the
+  run like the quota does (`The reputation service did not answer; N indicators still need
+  checking.`, exit 1), with the rows added so far kept.
 
 ## Adding indicators from a source you trust (no lookup)
 
@@ -419,7 +424,8 @@ Send the bot a message and it answers in the same chat. `/help` lists what it un
   Committed and pushed.
   ```
   An indicator can also come back `in-feed`, `duplicate`, `not-found (the service has no
-  record)`, `invalid (...)`, `error (...)`, `quota (...)` or `unchecked`. With nothing added
+  record)`, `invalid (...)`, `error (...)`, `unreachable (...)` (the service did not answer,
+  tried twice; send it again later), `quota (...)` or `unchecked`. With nothing added
   the last line is `Nothing added, nothing committed.`; when the file fails `feed_lint.py` (a
   hand edit of it on the Mac, never the bot's own rows) it is `The feed failed its lint, nothing
   committed (fix spark-ioc-feed.csv on the Mac): line N: …` and the rows wait, uncommitted, for
@@ -471,8 +477,9 @@ What to expect of an addition:
   bot waits 60 seconds for it, then replies
   `The daily check has been writing the feed for N minute(s); send the indicators again later.`
   and adds nothing. The daily check, for its part, waits up to twenty minutes for the bot.
-- If a check is interrupted (a refused key, a network error) the reply says `stopped: <why>`;
-  the rows added so far are kept and committed.
+- If a check is interrupted (a refused key) the reply says `stopped: <why>`; the rows added so
+  far are kept and committed. A lookup the service does not answer costs that indicator only
+  (`unreachable`), and three in a row leave the rest `unchecked`.
 - The bot commits whatever the feed holds that git has not committed, and the count in the
   commit message is the rows git says were added. Rows a check killed before its commit left
   behind (a restart, say) therefore go out with the next addition, under the bot's message,
@@ -579,7 +586,11 @@ the reputation service, so they cannot push a check over the
 4 a minute; their facts then say `Reputation service: skipped (a feed check is running)`. The
 daily check gives the lock back before its brief, so the brief's notes do ask it. A lookup that still meets a
 429 waits 61 seconds and tries once more; a second 429 is the quota stop: the check keeps the rows
-it added and lists the indicators it did not check, to be sent again. Nothing else the bot asks of
+it added and lists the indicators it did not check, to be sent again. A lookup the service does not
+answer (a timeout, a refused or reset connection, a reply cut short) waits 10 seconds and tries once
+more, then counts as `unreachable` for that indicator alone; three unanswered in a row end the check
+the same way as the quota stop. The daily check's summary line then says `did not answer: N`, its
+exit is 1 and the brief lists them among its errors. Nothing else the bot asks of
 the public services is retried: a service that does not answer shows as `unavailable`, and a 404 is
 read as its answer (`no record`, or for GreyNoise `GreyNoise: no record (not observed scanning)`).
 
@@ -691,7 +702,8 @@ What a run does:
   `ANTHROPIC_API_KEY` in the Keychain; the model call failed (an error after one retry, a
   refusal, a reply cut short or without the candidates list; the log has the detail); the feed on
   main fails its lint (fix `spark-ioc-feed.csv`, nothing was looked up); no `VT_API_KEY`; the
-  lookup quota reached, or the service refused the key or some lookups failed (in each case
+  lookup quota reached, or the service refused the key, did not answer (three lookups in a row
+  unanswered end the check) or some lookups failed (in each case
   the rows done so far are committed and pushed first; the rest are candidates again the next
   morning while a report still names them); the feed locked for over twenty minutes; a pull or
   push that failed (the commit stays local and the next run pushes it).

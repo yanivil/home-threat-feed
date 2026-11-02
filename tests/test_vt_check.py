@@ -1,10 +1,14 @@
 import contextlib
+import http.client
 import io
+import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
 from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -387,6 +391,148 @@ class RunTest(unittest.TestCase):
 
         self.assertEqual(self.statuses(results), {"evil.com": "error", "bad.example.net": "added"})
 
+    def test_a_network_failure_is_tried_once_more_after_ten_seconds(self):
+        # The service did not answer once (a timeout, a reset connection): the same lookup again, then on.
+        answers = {"/domains/evil.com": vt_object("domain", "evil.com", malicious=12)}
+        failed = []
+
+        def fetch(path):
+            if path == "/domains/evil.com" and not failed:
+                failed.append(path)
+                raise socket.timeout("timed out")
+            return answers.get(path, vt_error(404, "NotFoundError"))
+
+        results = self.run_check(["evil.com", "bad.example.net"], fetch, delay=15)
+
+        self.assertEqual(self.statuses(results), {"evil.com": "added", "bad.example.net": "not-found"})
+        self.assertEqual(self.sleeps, [vt_check.RETRY_WAIT, 15])
+        self.assertEqual(vt_check.RETRY_WAIT, 10)
+
+    def test_a_lost_request_then_a_429_still_gets_the_minute_wait(self):
+        # The retry of an unanswered lookup met the minute's 429: wait it out and try once more, as a 429 alone is.
+        replies = [socket.timeout("timed out"), vt_error(429, "QuotaExceededError"),
+                   vt_object("domain", "evil.com", malicious=12)]
+
+        def fetch(path):
+            reply = replies.pop(0)
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+
+        results = self.run_check(["evil.com"], fetch)
+
+        self.assertEqual(self.statuses(results), {"evil.com": "added"})
+        self.assertEqual(self.sleeps, [vt_check.RETRY_WAIT, vt_check.QUOTA_WAIT])
+
+    def test_a_network_failure_on_both_tries_costs_that_indicator_only(self):
+        fake = FakeVT({"/domains/bad.example.net": vt_object("domain", "bad.example.net", malicious=12)})
+
+        def fetch(path):
+            if path == "/domains/evil.com":
+                raise urllib.error.URLError("timed out")
+            return fake(path)
+
+        results = self.run_check(["evil.com", "bad.example.net"], fetch, delay=15)
+
+        self.assertEqual(self.statuses(results), {"evil.com": "unreachable", "bad.example.net": "added"})
+        self.assertEqual(results[0].detail, "timed out")
+        self.assertEqual(self.sleeps, [vt_check.RETRY_WAIT, 15])
+        self.assertIn("bad.example.net", self.feed.read_text())
+
+    def test_every_transport_failure_reads_as_unreachable(self):
+        failures = [
+            (urllib.error.URLError("timed out"), "timed out"),
+            (urllib.error.URLError(socket.timeout("timed out")), "timed out"),
+            (urllib.error.URLError(socket.timeout()), "timeout"),  # an empty reason: the brief needs the parentheses
+            (socket.timeout("timed out"), "timed out"),
+            (OSError(), "OSError"),
+            (ConnectionResetError(54, "Connection reset by peer"), "Connection reset by peer"),
+            (http.client.RemoteDisconnected("Remote end closed connection without response"), "Remote end closed"),
+            (http.client.IncompleteRead(b""), "IncompleteRead"),
+            (json.JSONDecodeError("Expecting value", "", 0), "Expecting value"),
+            (UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"), "invalid start byte"),
+        ]
+        for exception, phrase in failures:
+            with self.subTest(exception=repr(exception)):
+                def fetch(path):
+                    raise exception
+
+                status, detail, stats = vt_check.lookup(fetch, "Domain", "evil.com")
+
+                self.assertEqual((status, stats), ("unreachable", None))
+                self.assertIn(phrase, detail)
+                self.assertTrue(detail, "an empty detail would print `x: unreachable` without the reason")
+
+    def test_a_malformed_key_or_a_bug_in_the_request_is_not_unreachable(self):
+        # http.client refuses a bad header value before any connection: a malformed API key, not a lost request.
+        for exception in (ValueError("Invalid header value b'abc\\ndef'"),
+                          UnicodeEncodeError("latin-1", "\u2019", 0, 1, "ordinal not in range(256)"),
+                          KeyError("x-apikey")):
+            with self.subTest(exception=repr(exception)):
+                def fetch(path):
+                    raise exception
+
+                with self.assertRaises(type(exception)):
+                    vt_check.lookup(fetch, "Domain", "evil.com")
+
+    def test_an_answer_without_the_object_is_an_error_not_a_crash(self):
+        for body in ({"message": "maintenance"}, {"data": {"id": "evil.com"}}, {"data": []}, []):
+            with self.subTest(body=body):
+                fake = FakeVT({"/domains/evil.com": (200, body),
+                               "/domains/bad.example.net": vt_object("domain", "bad.example.net", malicious=12)})
+                self.feed.write_text(HEADER + EXISTING)
+
+                results = self.run_check(["evil.com", "bad.example.net"], fake)
+
+                self.assertEqual(self.statuses(results), {"evil.com": "error", "bad.example.net": "added"})
+                self.assertEqual(results[0].detail, "HTTP 200 without the object's attributes")
+
+    def test_three_unreachable_in_a_row_end_the_run_like_a_quota_stop(self):
+        def fetch(path):
+            raise urllib.error.URLError("no route to host")
+
+        results = self.run_check(["a.example", "b.example", "c.example", "d.example"], fetch, delay=15)
+
+        self.assertEqual(self.statuses(results), {"a.example": "unreachable", "b.example": "unreachable",
+                                                  "c.example": "unreachable", "d.example": "unchecked"})
+        self.assertEqual(self.sleeps, [vt_check.RETRY_WAIT, 15, vt_check.RETRY_WAIT, 15, vt_check.RETRY_WAIT])
+        self.assertEqual(vt_check.UNREACHABLE_STOP, 3)
+        self.assertEqual(vt_check.stop_reason(results), "unreachable")
+        self.assertEqual(self.feed.read_text(), HEADER + EXISTING)
+
+    def test_an_answer_in_between_starts_the_count_again(self):
+        fake = FakeVT({"/domains/c.example": vt_object("domain", "c.example", malicious=12)})
+
+        def fetch(path):
+            if path == "/domains/c.example":
+                return fake(path)
+            raise urllib.error.URLError("no route to host")
+
+        results = self.run_check(["a.example", "b.example", "c.example", "d.example", "e.example"], fetch)
+
+        self.assertEqual(self.statuses(results), {
+            "a.example": "unreachable", "b.example": "unreachable", "c.example": "added",
+            "d.example": "unreachable", "e.example": "unreachable"})
+        self.assertIsNone(vt_check.stop_reason(results))
+
+    def test_stop_reason_tells_a_quota_stop_from_an_unanswering_service(self):
+        quota = [vt_check.Result("a", "added", ""), vt_check.Result("b", "quota", ""), vt_check.Result("c", "unchecked", "")]
+        down = [vt_check.Result("a", "unreachable", ""), vt_check.Result("b", "unreachable", ""),
+                vt_check.Result("c", "unreachable", "")]
+        fine = [vt_check.Result("a", "unreachable", ""), vt_check.Result("b", "not-found", "")]
+        # Rows and indicators recorded without a lookup (a row not due, an indicator in the feed) do not
+        # break the streak, in a run or after it: recheck() records the rows not due after the stop as "kept".
+        kept = down + [vt_check.Result("d", "kept", "due 2027-01-01"), vt_check.Result("e", "kept", "no due date")]
+        mixed = down[:2] + [vt_check.Result("c", "in-feed", ""), vt_check.Result("d", "unreachable", "")]
+
+        self.assertEqual(vt_check.stop_reason(quota), "quota")
+        self.assertEqual(vt_check.stop_reason(down), "unreachable")
+        self.assertEqual(vt_check.stop_reason(down + [vt_check.Result("d", "unchecked", "")]), "unreachable")
+        self.assertEqual(vt_check.stop_reason(kept), "unreachable")
+        self.assertEqual(vt_check.stop_reason(mixed), "unreachable")
+        self.assertIsNone(vt_check.stop_reason(fine))
+        self.assertIsNone(vt_check.stop_reason([]))
+
     def test_appends_on_a_new_line_when_feed_lacks_trailing_newline(self):
         self.feed.write_text(HEADER + EXISTING.rstrip("\n"))
         fake = FakeVT({"/domains/evil.com": vt_object("domain", "evil.com", malicious=12)})
@@ -568,6 +714,41 @@ class RecheckTest(unittest.TestCase):
             + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - confirmed 2026-10-19\n"
             + OLD_IP + OLD_URL,
         )
+
+    def test_an_unreachable_lookup_leaves_that_row_as_it_was(self):
+        self.feed.write_text(HEADER + OLD + OLD_IP)
+        fake = FakeVT({"/ip_addresses/203.0.113.7": vt_object("ip_address", "203.0.113.7", malicious=6)})
+
+        def fetch(path):
+            if path == "/domains/evil.com":
+                raise urllib.error.URLError("timed out")
+            return fake(path)
+
+        results = self.recheck(fetch)
+
+        self.assertEqual(self.statuses(results), {"evil.com": "unreachable", "203.0.113.7": "refreshed"})
+        self.assertEqual(self.feed.read_text(),
+                         HEADER + OLD + "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,confirmed 2026-10-19\n")
+        self.assertEqual(self.sleeps, [vt_check.RETRY_WAIT, vt_check.FREE_API_DELAY])
+
+    def test_three_unreachable_rows_in_a_row_stop_the_recheck_with_the_feed_untouched(self):
+        fourth = f"vt-domain-0000000000,worse.example,Domain,high,high,AB,confirmed {aged(200)}\n"
+        self.feed.write_text(HEADER + OLD + OLD_IP + OLD_URL + fourth + RECENT)
+        calls = []
+
+        def fetch(path):
+            calls.append(path)
+            raise urllib.error.URLError("timed out")
+
+        results = self.recheck(fetch)
+
+        self.assertEqual(self.statuses(results), {"evil.com": "unreachable", "203.0.113.7": "unreachable",
+                                                  "https://bad.example/x": "unreachable", "worse.example": "unchecked",
+                                                  "bad.example.net": "kept"})
+        self.assertEqual(vt_check.stop_reason(results), "unreachable")
+        self.assertNotIn("/domains/worse.example", calls)
+        self.assertEqual(len(calls), 6, "each lookup tried twice")
+        self.assertEqual(self.feed.read_text(), HEADER + OLD + OLD_IP + OLD_URL + fourth + RECENT)
 
     def test_dry_run_reports_changes_without_writing(self):
         self.feed.write_text(HEADER + OLD + OLD_IP)
@@ -837,6 +1018,59 @@ class CommandLineTest(unittest.TestCase):
 
             self.assertEqual(code, 0)
             make_fetch.assert_called_once_with("from-keychain")
+
+    def test_a_service_that_does_not_answer_is_reported_and_exit_1(self):
+        def fetch(path):
+            raise urllib.error.URLError("no route to host")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            feed = Path(tmp) / "feed.csv"
+            feed.write_text(HEADER)
+            out = io.StringIO()
+            with patch.object(vt_check, "make_fetch", return_value=fetch), patch.object(vt_check, "RETRY_WAIT", 0), \
+                    patch.dict(os.environ, cli_env("k"), clear=True), contextlib.redirect_stdout(out):
+                code = vt_check.main(["--feed", str(feed), "--delay", "0",
+                                      "a.example", "b.example", "c.example", "d.example"])
+
+        self.assertEqual(code, 1)
+        self.assertIn("Summary: 3 unreachable, 1 unchecked", out.getvalue())
+        self.assertIn("The reputation service did not answer; 4 indicators still need checking.", out.getvalue())
+
+    def test_a_recheck_the_service_does_not_answer_is_exit_1_even_when_only_fresh_rows_follow(self):
+        def fetch(path):
+            raise urllib.error.URLError("no route to host")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            feed = Path(tmp) / "feed.csv"
+            feed.write_text(HEADER + OLD + OLD_IP + OLD_URL + RECENT)
+            out = io.StringIO()
+            with patch.object(vt_check, "make_fetch", return_value=fetch), patch.object(vt_check, "RETRY_WAIT", 0), \
+                    patch.dict(os.environ, cli_env("k"), clear=True), contextlib.redirect_stdout(out):
+                code = vt_check.main(["--recheck", "--feed", str(feed), "--delay", "0"])
+            after = feed.read_text()
+
+        self.assertEqual(code, 1)
+        self.assertIn("The reputation service did not answer; 3 rows still need checking.", out.getvalue())
+        self.assertEqual(after, HEADER + OLD + OLD_IP + OLD_URL + RECENT)
+
+    def test_the_quota_stops_count_of_what_is_left_includes_the_unanswered_lookups(self):
+        def fetch(path):
+            if path == "/domains/a.example":
+                raise urllib.error.URLError("timed out")
+            return vt_error(429, "QuotaExceededError")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            feed = Path(tmp) / "feed.csv"
+            feed.write_text(HEADER)
+            out = io.StringIO()
+            with patch.object(vt_check, "make_fetch", return_value=fetch), patch.object(vt_check, "RETRY_WAIT", 0), \
+                    patch.object(vt_check, "QUOTA_WAIT", 0), patch.dict(os.environ, cli_env("k"), clear=True), \
+                    contextlib.redirect_stdout(out):
+                code = vt_check.main(["--feed", str(feed), "--delay", "0", "a.example", "b.example", "c.example"])
+
+        self.assertEqual(code, 1)
+        self.assertIn("Summary: 1 unreachable, 1 quota, 1 unchecked", out.getvalue())
+        self.assertIn("Lookup quota reached; 3 indicators still need checking.", out.getvalue())
 
     def test_no_indicators_exits_with_error(self):
         proc = self.run_cli(env_key="dummy")

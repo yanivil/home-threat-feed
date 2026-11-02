@@ -483,8 +483,9 @@ another model; when the model cannot be asked, or refuses in the end, the facts 
 alone with a line saying why (`the model gave no note` for a refusal). The bot logs a failed
 Telegram poll and tries again after 10 s, and starts the watcher again after 10 s if it
 fails; the watcher survives a missing or rotated file. A failed push leaves the commit for
-the next daily run, as today. A check interrupted by a network error (or a refused key) keeps
-and commits the rows added so far and says `stopped: …`. An update the bot cannot handle is
+the next daily run, as today. A check interrupted by a refused key keeps and commits the rows
+added so far and says `stopped: …`; a lookup the service does not answer is `unreachable` and
+costs that indicator only (D14). An update the bot cannot handle is
 logged and skipped, never replayed. Every error is logged to the bot's
 log with a timestamp, and the `/status` reply shows the last one.
 
@@ -495,7 +496,9 @@ spends up to 400 (`MAX_LOOKUPS` lowers it); the bot's checks (one lookup per ind
 say `Reputation service: skipped (a feed check is running)`, so they cannot push a check past
 the 4 a minute; the daily check gives the lock back before its brief, so the brief's notes keep
 the reputation service. A lookup that meets a 429 anyway (`vt_check.lookup_retrying`, in `run`
-and `recheck`) waits 61 s and tries once more; a second 429 is the quota stop as before.
+and `recheck`) waits 61 s and tries once more; a second 429 is the quota stop as before. A
+lookup the service does not answer waits 10 s and tries once more; three unanswered in a row
+end the run the same way (D14).
 
 **Commits.** The bot's commits read `Add N indicator(s) sent from Telegram: <label>` and
 carry no `Co-Authored-By` trailer, like the daily check's: they are a program's commits, not
@@ -994,6 +997,53 @@ for the feed.
 **Outcome.** Built 2026-10-31 in a worktree, test-first, and merged the same day; the bot
 restarted on the new rule.
 
+### D14. A lookup the reputation service does not answer costs that indicator, not the run (decided and built 2026-11-02)
+
+**Problem.** The daily check of 2026-10-31 died at 07:30 on `socket.timeout` inside
+`vt_check.make_fetch`: one of its lookups got no answer within the 30 s timeout, the exception
+left `vt_check.run` through `spark_logs.py`, and the morning ended with a traceback, no rows
+added, no cache written and no brief. `make_fetch` caught only `HTTPError` (an answer with an
+error status); a timeout, a refused or reset connection, a name that did not resolve, a cut
+or non-JSON body all propagated. The news agent had wrapped its own `fetch` to turn such
+failures into `error` verdicts (D7's review); the daily check, `vt_check.py` by hand, the
+monthly `--recheck` and the bot's additions had nothing, and the bot's `stopped: …` line (D6)
+ended a whole batch on the first lost request.
+
+**Decision.** `vt_check.lookup` catches the transport failures (`OSError`, which covers
+`URLError` and the socket errors, `http.client.HTTPException`, and `json.JSONDecodeError` or
+`UnicodeDecodeError` for a body that is not JSON; a `ValueError` raised before the request goes
+out, `http.client` refusing a malformed key as a header value, is a bug and still propagates)
+and returns a result of its own, `unreachable (<reason>)`, so every caller gets
+the same behaviour: `lookup_retrying` tries the lookup once more after `RETRY_WAIT` (10 s), as
+it already tried a 429 again after 61 s; a lookup unanswered both times is recorded as
+`unreachable`, nothing is cached for it (the daily and news caches write only verdicts) and
+the run goes on to the next indicator. `UNREACHABLE_STOP` (3) unanswered lookups in a row end
+the run the way the quota stop does: the rest are `unchecked`, the feed holds the rows done so
+far, and the program says `The reputation service did not answer; N … still need checking.`
+(`vt_check.py` and the news agent) or `…; rerun tomorrow for the rest.` (`spark_logs.py`, exit
+1 like the quota stop; the day's outbound lookups are then left for another day too). A 404
+or an error status counts as an answer and starts the count again. `vt_check.stop_reason`
+tells the callers whether a run ended early and why. The daily summary line gains `did not
+answer: N` when there were any; the morning brief lists `unreachable` lookups among its
+errors, grouped like the other failed lookups, and the stop line with them; the news agent
+removed its own wrapper (the same failures are `unreachable` now, exit 2 as before, with the
+stop reported in so many words); the bot's reply carries `<indicator>: unreachable (<reason>)`
+and `N unreachable` in its counts line instead of stopping, and logs no error for it.
+A lost request whose retry meets the minute's 429 still gets the 61 s wait and one more try;
+a 200 whose body lacks the object is an `error` verdict rather than a `KeyError`; and the
+quota stop's count of what is left includes the unanswered lookups before it. Everything else
+is as it was: a refused key still raises `VTError`, a 429 is still the quota stop, and a crash
+inside the bot's check still says `stopped: …`.
+
+**Known limit.** Unanswered lookups that alternate with answered ones never make three in a
+row, and each costs up to 70 s (two 30 s timeouts and the wait): a flaky hour lengthens the
+daily check and its lock window instead of ending it. A cap on a run's total is left for the
+tuning under open item 4, on evidence that it happens.
+
+**Outcome.** Built 2026-11-02 in a worktree, test-first (the five test modules that touch a
+lookup), reviewed once (eight findings, seven fixed, the known limit above recorded), and
+merged the same day; the bot restarted on the new `vt_check`.
+
 ## 5. Operating it
 
 - Is the system up? Send `/status` to the bot first: five lines, the receiver, the last daily
@@ -1055,3 +1105,6 @@ restarted on the new rule.
 8. Done 2026-10-31: the first tuning under item 4. Inbound detections from a source already in
    the feed, or blocked by IP reputation alone, no longer alert live; the brief counts them
    (D13).
+9. Done 2026-11-02: a lookup the reputation service does not answer is an `unreachable` result
+   tried once more, three in a row end the run like a quota stop, and no program crashes on it
+   (D14). The 2026-10-31 daily check had died on a socket timeout.

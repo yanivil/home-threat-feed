@@ -41,12 +41,15 @@ SHA_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 ADDED_RE = re.compile(r"(\S+): added \(([^)]*)\)$")
 HIT_RE = re.compile(r"OUTBOUND HIT  (\S+)  \((.*?)\)  reached by (.*?)  <- check these devices")
 LOOKUPS_RE = re.compile(r"Added to the feed: (\d+)  clean: (\d+)  unknown to the service: (\d+)")
-# What the run log says when something went wrong: vt_check.run prints "<x>: error (HTTP ...)" and
-# "<x>: quota (... - stopping)", spark_logs.py "Lookup quota reached; ..." on a quota stop and,
-# through argparse, "spark_logs.py: error: ..." when it could not start (no VirusTotal key).
-PROBLEMS = ("ERROR", ": error (", ": quota ", "Lookup quota reached", ": error: ")
+# What the run log says when something went wrong: vt_check.run prints "<x>: error (HTTP ...)",
+# "<x>: quota (... - stopping)" and "<x>: unreachable (timed out)" (no answer from the service);
+# spark_logs.py "Lookup quota reached; ..." on a quota stop and "The reputation service did not
+# answer; ..." when three unanswered lookups in a row ended the check; and, through argparse,
+# "spark_logs.py: error: ..." when it could not start (no VirusTotal key).
+PROBLEMS = ("ERROR", ": error (", ": quota ", ": unreachable (", "Lookup quota reached",
+            "The reputation service did not answer", ": error: ")
 TRACEBACK = "Traceback (most recent call last):"
-LOOKUP_ERROR_RE = re.compile(r"\S+: (error|quota) \((.*)\)$")  # one failed lookup, as vt_check.run prints it
+LOOKUP_ERROR_RE = re.compile(r"\S+: (error|quota|unreachable) \((.*)\)$")  # one failed lookup, as vt_check.run prints it
 ERROR_LINES = 5  # the brief lists this many error lines, then counts the rest
 
 

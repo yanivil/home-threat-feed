@@ -12,6 +12,7 @@ import tempfile
 import traceback
 import types
 import unittest
+import urllib.error
 from collections import Counter
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -67,15 +68,16 @@ def lookup_errors(count, code="ServiceUnavailable", status=503):
 
 def check_output(responses):
     """What `spark_logs.py --check` prints for the daily run's $run_log, against a VirusTotal that
-    answers `responses`: one outbound name and one inbound source to look up. A crash adds its
-    traceback after the output, as the script's 2>&1 does."""
+    answers `responses` (a dict of API paths, or a fetch of its own): one outbound name and one inbound
+    source to look up. A crash adds its traceback after the output, as the script's 2>&1 does."""
     out = io.StringIO()
+    fetch = responses if callable(responses) else FakeVT(responses)
     with tempfile.TemporaryDirectory() as tmp:
         write_capture(tmp, date(2026, 10, 20), [OUTBOUND_URL] + [INBOUND_DROP] * 5)
         feed = Path(tmp, "feed.csv")
         feed.write_text(HEADER)
-        with patch.object(vt_check, "make_fetch", return_value=FakeVT(responses)), \
-                patch.object(vt_check, "QUOTA_WAIT", 0), \
+        with patch.object(vt_check, "make_fetch", return_value=fetch), \
+                patch.object(vt_check, "QUOTA_WAIT", 0), patch.object(vt_check, "RETRY_WAIT", 0), \
                 patch.dict(os.environ, cli_env("k"), clear=True), contextlib.redirect_stdout(out):
             try:
                 spark_logs.main(["--dir", tmp, "--check", "--today", "2026-10-20", "--feed", str(feed), "--delay", "0"])
@@ -203,6 +205,30 @@ class ParseRunLogTest(unittest.TestCase):
             "109.205.211.205: error (HTTP 500 InternalError)",
             "evil.example: quota (QuotaExceededError - stopping)",
             "Lookup quota reached; rerun tomorrow for the rest.",
+        ])
+
+    def test_a_service_that_does_not_answer_reads_as_errors_in_the_producers_own_words(self):
+        def fetch(path):
+            raise urllib.error.URLError("timed out")
+
+        log = check_output(fetch)
+
+        self.assertNotIn("Traceback", log)
+        self.assertEqual(spark_brief.parse_run_log(log)["errors"], [
+            "109.205.211.205: unreachable (timed out)",
+            "evil.example: unreachable (timed out)",
+        ])
+
+    def test_unreachable_lookups_are_grouped_and_the_stop_line_listed(self):
+        errors = spark_brief.parse_run_log(
+            "185.1.2.1: unreachable (timed out)\n185.1.2.2: unreachable (timed out)\n185.1.2.3: unreachable (timed out)\n"
+            "185.1.2.4: unchecked\n"
+            "Added to the feed: 0  clean: 0  unknown to the service: 0  left for another day: 0  did not answer: 3\n"
+            "The reputation service did not answer; rerun tomorrow for the rest.\n")["errors"]
+
+        self.assertEqual(spark_brief._error_lines(errors), [
+            "3 lookups: unreachable (timed out)",
+            "The reputation service did not answer; rerun tomorrow for the rest.",
         ])
 
     def test_a_crash_reads_as_its_exception_line(self):

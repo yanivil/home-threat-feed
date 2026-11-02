@@ -82,6 +82,13 @@ All notable changes to this feed are recorded here.
   `--trusted` now also report `in-feed` for an address inside one of the feed's `IP Range` rows
   instead of looking it up or adding it as a second row.
 
+### Fixed
+- A lookup the reputation service does not answer (a timeout, a refused or reset connection, a
+  reply cut short) no longer ends the program with a traceback: `vt_check` tries it once more
+  after 10 seconds, then reports it as `unreachable` and goes on; three unanswered in a row
+  stop the run like the quota does, with the rows done so far kept. The daily check of
+  2026-10-31 had died that way, with no brief. Design D14.
+
 ## [1.0.0] - 2026-10-19
 
 ### Added

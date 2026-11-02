@@ -23,7 +23,7 @@ jobs:
 
       - name: Re-verify stale rows
         id: recheck
-        # A quota stop exits 1 but leaves refreshed rows worth committing.
+        # A quota stop, or a service that stopped answering, exits 1 but leaves refreshed rows worth committing.
         continue-on-error: true
         env:
           # The old secret name serves until the new one is stored.
@@ -58,5 +58,5 @@ jobs:
       - name: Fail the job if the re-check stopped early
         if: steps.recheck.outcome == 'failure'
         run: |
-          echo "::error::The re-check stopped early (quota or API error); rows done so far were committed. Re-run tomorrow to continue."
+          echo "::error::The re-check stopped early (quota, the service not answering, or an API error); rows done so far were committed. Re-run tomorrow to continue."
           exit 1

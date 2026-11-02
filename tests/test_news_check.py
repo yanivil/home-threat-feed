@@ -317,7 +317,7 @@ class NewsCheckTest(unittest.TestCase):
         self.assertEqual(self.head(self.origin), self.head())
         [notice] = self.notices()
         self.assertIn("exited 2", notice)
-        self.assertIn("the reputation service refused the key or lookups failed; the rows done so far are in", notice)
+        self.assertIn("the reputation service refused the key, did not answer or lookups failed; the rows done so far are in", notice)
         self.assertFalse(self.calls("brief")[0]["locked"], "the lock is given back before the notice")
 
     def test_a_missing_vt_key_fails_the_check_with_a_notice(self):

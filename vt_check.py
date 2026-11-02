@@ -26,6 +26,7 @@ no service: the engine counts stay in this program's output and never reach the 
 import argparse
 import base64
 import hashlib
+import http.client
 import ipaddress
 import json
 import os
@@ -44,6 +45,9 @@ API_BASE = "https://www.virustotal.com/api/v3"
 FEED = Path(__file__).resolve().parent / "spark-ioc-feed.csv"
 FREE_API_DELAY = 15  # free key allows 4 lookups per minute
 QUOTA_WAIT = 61  # after a 429, seconds before the one more try: the minute's four lookups are spent
+RETRY_WAIT = 10  # after a lookup the service did not answer, seconds before the one more try
+UNREACHABLE_STOP = 3  # unanswered lookups in a row that end a run: the service is down, not one request lost
+NOT_A_LOOKUP = ("kept", "in-feed", "duplicate", "invalid")  # results recorded without asking the service
 
 HASH_TYPES = {32: "MD5", 40: "SHA1", 64: "SHA256"}
 HEX_RE = re.compile(r"[0-9a-f]+")
@@ -218,9 +222,17 @@ def lookup(fetch, ioc_type, value):
     """Fetch an indicator's VirusTotal object.
 
     Return (None, "", last_analysis_stats) on success, or (status, detail, None)
-    with status "quota", "not-found" or "error". Raise VTError on a refused key.
+    with status "quota", "not-found", "error" or "unreachable" (no answer: a timeout, a refused or
+    reset connection, a name that did not resolve, a cut or non-JSON body). Raise VTError on a
+    refused key.
     """
-    status, body = fetch(api_path(ioc_type, value))
+    try:
+        status, body = fetch(api_path(ioc_type, value))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError, http.client.HTTPException) as e:
+        # URLError and the socket errors, a body cut short or not JSON. A ValueError raised before the request
+        # goes out (http.client refusing a malformed key as a header value) is a bug, not a lost request: it propagates.
+        reason = e.reason if isinstance(e, urllib.error.URLError) else e
+        return "unreachable", str(reason) or type(reason).__name__, None
     error = (body.get("error") or {}).get("code", "") if isinstance(body, dict) else ""
     if status in (401, 403):
         raise VTError(f"The reputation service refused the API key: HTTP {status} {error}")
@@ -230,17 +242,39 @@ def lookup(fetch, ioc_type, value):
         return "not-found", "the service has no record", None
     if status != 200:
         return "error", f"HTTP {status} {error}", None
-    return None, "", body["data"]["attributes"].get("last_analysis_stats", {})
+    try:
+        return None, "", body["data"]["attributes"].get("last_analysis_stats", {})
+    except (KeyError, TypeError, AttributeError):  # a 200 without the object: the service's problem, not ours
+        return "error", "HTTP 200 without the object's attributes", None
 
 
 def lookup_retrying(fetch, ioc_type, value, sleep=time.sleep):
     """lookup(), with a 429 waited out once (QUOTA_WAIT seconds of `sleep`): a lookup made elsewhere
-    (a note, /who) can spend the minute's share of the free key. A second 429 is the quota stop."""
+    (a note, /who) can spend the minute's share of the free key. A second 429 is the quota stop. A
+    lookup the service did not answer is tried once more after RETRY_WAIT seconds first, so a lost
+    request whose retry meets the minute's 429 still gets the minute's wait."""
     found = lookup(fetch, ioc_type, value)
+    if found[0] == "unreachable":
+        sleep(RETRY_WAIT)
+        found = lookup(fetch, ioc_type, value)
     if found[0] == "quota":
         sleep(QUOTA_WAIT)
         found = lookup(fetch, ioc_type, value)
     return found
+
+
+def stop_reason(results):
+    """Why run() or recheck() ended before its last indicator: "quota" after the quota stop,
+    "unreachable" after UNREACHABLE_STOP lookups in a row that the service did not answer, else None.
+    Results recorded without a lookup (NOT_A_LOOKUP: a row not yet due, an indicator in the feed) do not
+    break the streak, as they do not in the run itself."""
+    statuses = [r.status for r in results]
+    if "quota" in statuses:
+        return "quota"
+    tail = [s for s in statuses if s not in NOT_A_LOOKUP][-UNREACHABLE_STOP:]
+    if "unchecked" in statuses or (len(tail) == UNREACHABLE_STOP and set(tail) == {"unreachable"}):
+        return "unreachable"
+    return None
 
 
 def run(indicators, feed_path, fetch, *, min_malicious=None, dry_run=False,
@@ -260,6 +294,7 @@ def run(indicators, feed_path, fetch, *, min_malicious=None, dry_run=False,
     checked = set()
     results = []
     stopped = False
+    unanswered = 0  # lookups in a row the service did not answer
 
     def record(raw, status, detail=""):
         results.append(Result(raw, status, detail))
@@ -287,9 +322,11 @@ def run(indicators, feed_path, fetch, *, min_malicious=None, dry_run=False,
 
         problem, detail, stats = lookup_retrying(fetch, ioc_type, value, sleep)
         if problem:
-            stopped = problem == "quota"
+            unanswered = unanswered + 1 if problem == "unreachable" else 0  # a 404 or 500 is an answer
+            stopped = problem == "quota" or unanswered >= UNREACHABLE_STOP
             record(raw, problem, detail)
             continue
+        unanswered = 0
         malicious = stats.get("malicious", 0)
         ratio = f"{ioc_type} {malicious}/{sum(stats.values())} malicious"
         if malicious < min_for(ioc_type, min_malicious):
@@ -410,7 +447,7 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False
     check becomes an ordinary checked row that way ("verified"); rows that fell
     below are removed. Every other row, the header and the row order stay exactly
     as they were. The file is rewritten after each change, so a run that stops
-    early (quota, Ctrl-C) leaves it consistent.
+    early (quota, a service that does not answer, Ctrl-C) leaves it consistent.
     """
     today = today or date.today().isoformat()
     today_date = date.fromisoformat(today)
@@ -420,6 +457,7 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False
     results = []
     looked_up = False
     stopped = False
+    unanswered = 0  # lookups in a row the service did not answer
 
     def record(value, status, detail="", quiet=False):
         results.append(Result(value, status, detail))
@@ -451,9 +489,11 @@ def recheck(feed_path, fetch, *, max_age=None, min_malicious=None, dry_run=False
 
         problem, detail, stats = lookup_retrying(fetch, ioc_type, value, sleep)
         if problem:
-            stopped = problem == "quota"
+            unanswered = unanswered + 1 if problem == "unreachable" else 0  # a 404 or 500 is an answer
+            stopped = problem == "quota" or unanswered >= UNREACHABLE_STOP
             record(value, problem, detail)
             continue
+        unanswered = 0
         malicious = stats.get("malicious", 0)
         total = sum(stats.values())
         note, trusted = _closing_note(comment)
@@ -632,9 +672,12 @@ def main(argv=None):
 
     counts = Counter(r.status for r in results)
     say("Summary: " + ", ".join(f"{n} {status}" for status, n in counts.most_common()))
-    if counts["quota"]:
+    stop = stop_reason(results)
+    if stop:
         what = "rows" if args.recheck else "indicators"
-        say(f"Lookup quota reached; {counts['unchecked'] + 1} {what} still need checking.")
+        left = counts["unchecked"] + counts["unreachable"] + (1 if stop == "quota" else 0)
+        why = "Lookup quota reached" if stop == "quota" else "The reputation service did not answer"
+        say(f"{why}; {left} {what} still need checking.")
         return 1
     return 0
 

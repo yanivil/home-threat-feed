@@ -23,12 +23,11 @@ runs both steps, the model call outside the feed lock and the lookups inside it.
 Standard library only (Python 3.9). The Anthropic key comes from the Keychain (ANTHROPIC_API_KEY,
 service spark-ioc-feed), the VirusTotal key as vt_check reads it. Exit codes: 0 done, 2 the model
 gave no usable answer (an error status, a refusal, a reply cut short or without the JSON object) or,
-with --check, VirusTotal refused the key or lookups failed (the rows done so far are in the feed),
-3 a key is missing, 4 the VirusTotal quota stopped the check.
+with --check, VirusTotal refused the key, did not answer or lookups failed (the rows done so far are
+in the feed), 3 a key is missing, 4 the VirusTotal quota stopped the check.
 """
 
 import argparse
-import http.client
 import ipaddress
 import json
 import re
@@ -379,27 +378,16 @@ def recent_lookups(directory):
     return merged
 
 
-def _answering(fetch):
-    """`fetch` with a network failure, a cut body or a body that is not JSON answered as an error status: one
-    lookup's failure is one "error" result (not cached, so tried another day), and the run goes on to the next
-    candidate instead of ending."""
-    def wrapped(path):
-        try:
-            return fetch(path)
-        except (OSError, ValueError, http.client.HTTPException) as e:  # URLError, timeouts, IncompleteRead, bad JSON
-            return 0, {"error": {"code": str(getattr(e, "reason", None) or e)}}
-    return wrapped
-
-
 def check(candidates_path, feed_path, cache_path, fetch, *, today=None, dry_run=False,
           delay=vt_check.FREE_API_DELAY, sleep=None, out=print):
     """Look the candidates file up as `vt_check.py -f` would (vt_check.run, default thresholds), adding the
     flagged ones to the feed, and record every verdict (added, clean, not found; never an error) in
     `cache_path`, the news job's cache, so the next days skip them. A dry run looks up and changes nothing on
-    disk. A refused key (vt_check.VTError) ends the run; a network failure costs one lookup."""
+    disk. A refused key (vt_check.VTError) ends the run; a lookup the service did not answer ("unreachable",
+    tried once more by vt_check) costs that candidate, and three in a row end the run (vt_check.UNREACHABLE_STOP)."""
     today = today or date.today().isoformat()
     entries = vt_check.read_indicators([str(candidates_path)], [])
-    results = vt_check.run(entries, feed_path, _answering(fetch), dry_run=dry_run, delay=delay,
+    results = vt_check.run(entries, feed_path, fetch, dry_run=dry_run, delay=delay,
                            sleep=sleep or time.sleep, today=today, out=out)
     if not dry_run:
         cache = spark_logs.load_cache(cache_path)
@@ -469,11 +457,17 @@ def _check(args, say):
         return 2
     counts = Counter(r.status for r in results)
     say("News check: " + ", ".join(f"{n} {status}" for status, n in counts.most_common()))
-    if counts["quota"]:
-        say(f"Lookup quota reached; {counts['unchecked'] + 1} candidates still need checking.")
+    stop = vt_check.stop_reason(results)
+    if stop == "quota":
+        say(f"Lookup quota reached; {counts['unchecked'] + counts['unreachable'] + 1} candidates still need checking.")
         return 4
-    if counts["error"]:
-        say(f"news agent: {counts['error']} lookups failed (the service unreachable or an error status, see above); "
+    if stop == "unreachable":
+        say(f"The reputation service did not answer; {counts['unchecked'] + counts['unreachable']} candidates "
+            "still need checking.")
+        return 2
+    failed = counts["error"] + counts["unreachable"]
+    if failed:
+        say(f"news agent: {failed} lookups failed (the service did not answer or gave an error status, see above); "
             "they are candidates again tomorrow")
         return 2
     return 0

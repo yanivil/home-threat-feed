@@ -568,7 +568,7 @@ class AddTest(BotTestCase):
             "Committed and pushed."])
         self.assertEqual(self.git.commands(), ["pull", "diff", "diff", "add", "commit", "push"])
 
-    def test_a_network_error_mid_check_keeps_and_commits_what_was_added(self):
+    def test_a_network_error_mid_check_costs_that_indicator_and_commits_what_was_added(self):
         def fetch(path):
             if path == vt_check.api_path("IP", "185.1.2.9"):
                 raise urllib.error.URLError("timed out")
@@ -579,15 +579,14 @@ class AddTest(BotTestCase):
 
         self.assertEqual(reply.splitlines(), [
             "evil.com: added (Domain 11/94 malicious)",
-            "stopped: <urlopen error timed out>",
-            "1 added, 0 clean, 0 unknown to the service, 0 already in the feed",
+            "185.1.2.9: unreachable (timed out)",
+            "1 added, 0 clean, 0 unknown to the service, 0 already in the feed, 1 unreachable",
             "Committed and pushed."])
         self.assertIn(",evil.com,Domain,high,high,AB,sent from Telegram - confirmed 2026-10-28\n",
                       self.feed.read_text())
         self.assertEqual(self.git.calls[4][3], "Add 1 indicator sent from Telegram")
         self.assertFalse(self.lock.exists())
-        self.assertRegex(bot.status().splitlines()[-1],
-                         r"^last error: \d{4}-\d{2}-\d{2} \d{2}:\d{2} .*stopped: <urlopen error timed out>$")
+        self.assertEqual(bot.status().splitlines()[-1], "last error: none")
 
     def test_a_systemexit_mid_check_still_releases_the_lock(self):
         def fetch(path):

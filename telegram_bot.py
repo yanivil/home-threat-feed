@@ -340,7 +340,7 @@ class Bot:
                 vt_check.add_trusted(pairs, self.feed, today=today, out=lines.append)
             else:
                 vt_check.run(pairs, self.feed, fetch, sleep=self.sleep, today=today, out=lines.append)
-        except Exception as e:  # a refused key, the network, an odd answer: commit the rows already written
+        except Exception as e:  # a refused key, a bug: commit the rows already written (a lost request is `unreachable`)
             stopped = f"stopped: {e}"
             self.error(f"the check of {len(indicators)} indicator(s) {stopped}")
         statuses = Counter(m.group(1) for m in map(STATUS_RE.match, lines) if m)  # vt_check's lines only

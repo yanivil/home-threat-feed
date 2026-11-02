@@ -303,7 +303,7 @@ def check(found, feed_path, cache_path, fetch, *, today=None, max_lookups=None, 
     inbound, outbound = picked["inbound"], picked["ips"] + picked["names"]
     names = candidate_names(found["outbound"], allow)
     report = {"added": [], "outbound_hits": [], "clean": 0, "not_found": 0, "skipped": skipped, "quota": False,
-              "stamped": []}
+              "unreachable": 0, "down": False, "stamped": []}
 
     def run(items, label, dry_run):
         if not items:
@@ -312,9 +312,11 @@ def check(found, feed_path, cache_path, fetch, *, today=None, max_lookups=None, 
                             dry_run=dry_run, delay=delay, sleep=sleep, today=today, out=out)
 
     results = run(inbound, f"Inbound probe of WAN - Spark syslog {today}", dry_run=False)
-    if inbound and outbound and not any(r.status == "quota" for r in results):
-        sleep(delay)
-    if not any(r.status == "quota" for r in results):
+    if vt_check.stop_reason(results):  # a quota stop or a service that does not answer ends the day's check
+        report["skipped"] = skipped + outbound  # the outbound lookups wait for another day too
+    else:
+        if inbound and outbound:
+            sleep(delay)
         results += run(outbound, f"Outbound destination - Spark syslog {today}", dry_run=True)
 
     for r in results:
@@ -334,6 +336,9 @@ def check(found, feed_path, cache_path, fetch, *, today=None, max_lookups=None, 
             report["clean"] += 1
         elif r.status == "quota":
             report["quota"] = True
+        elif r.status == "unreachable":  # not cached: tried again another day
+            report["unreachable"] += 1
+    report["down"] = vt_check.stop_reason(results) == "unreachable"
     Path(cache_path).write_text(json.dumps(cache, indent=1, sort_keys=True))
     # Every inbound source that is a feed IP, the ones just added included, probed us today:
     # note it, so --recheck runs its longer clock from the last sighting (vt_check.SEEN_MAX_AGE).
@@ -411,13 +416,17 @@ def main(argv=None):
                    max_lookups=args.max_lookups, recheck_days=args.recheck_days, allow=allow, **thresholds,
                    delay=args.delay, out=say)
     say(f"Added to the feed: {len(report['added'])}  clean: {report['clean']}  unknown to the service: {report['not_found']}"
-        f"  left for another day: {len(report['skipped'])}")
+        f"  left for another day: {len(report['skipped'])}"
+        + (f"  did not answer: {report['unreachable']}" if report["unreachable"] else ""))
     for indicator, ratio, devices, family in report["outbound_hits"]:
         say(f"OUTBOUND HIT  {indicator}  ({ratio})  reached by {', '.join(devices)}  <- check these devices")
         if len(family) > 1:
             say(f"  the family's hosts: {', '.join(family)}")
     if report["quota"]:
         say("Lookup quota reached; rerun tomorrow for the rest.")
+        return 1
+    if report["down"]:
+        say("The reputation service did not answer; rerun tomorrow for the rest.")
         return 1
     return 0
 

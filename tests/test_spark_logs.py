@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -497,6 +498,39 @@ class CheckTest(unittest.TestCase):
         self.assertTrue(report["quota"])
         self.assertEqual(report["added"], [])
         self.assertEqual(report["outbound_hits"], [])
+        self.assertEqual(report["skipped"], ["a.example"])
+
+    def test_an_unreachable_lookup_is_counted_and_not_cached(self):
+        fake = FakeVT({"/ip_addresses/185.1.2.2": vt_object("ip_address", "185.1.2.2", malicious=10)})
+
+        def fetch(path):
+            if path == "/ip_addresses/185.1.2.1":
+                raise urllib.error.URLError("timed out")
+            return fake(path)
+        found = {"inbound": {"185.1.2.1": 5, "185.1.2.2": 5}, "outbound": {}}
+
+        report = self.check(found, fake=fetch)
+
+        self.assertEqual((report["unreachable"], report["down"]), (1, False))
+        self.assertEqual(report["added"], ["185.1.2.2"])
+        self.assertEqual(set(json.loads(self.cache.read_text())), {"185.1.2.2"})
+
+    def test_a_service_that_does_not_answer_ends_the_check_with_outbound_left_for_another_day(self):
+        calls = []
+
+        def fetch(path):
+            calls.append(path)
+            raise urllib.error.URLError("no route to host")
+        found = {"inbound": {"185.1.2.1": 5, "185.1.2.2": 5, "185.1.2.3": 5},
+                 "outbound": {"a.example": {"count": 1, "devices": ["10.0.0.1"]}}}
+
+        report = self.check(found, fake=fetch)
+
+        self.assertEqual((report["unreachable"], report["down"], report["quota"]), (3, True, False))
+        self.assertEqual(len(calls), 6, "each inbound lookup tried twice, the outbound name never")
+        self.assertNotIn("/domains/a.example", calls)
+        self.assertEqual(report["skipped"], ["a.example"], "the outbound lookups wait for another day")
+        self.assertEqual(json.loads(self.cache.read_text()), {})
 
 
 class CommandLineTest(unittest.TestCase):
@@ -574,7 +608,8 @@ class CommandLineTest(unittest.TestCase):
         self.assertIn("seen 1+ times, at most 1 a run", out)
 
     def test_check_passes_the_defaults_on(self):
-        done = {"added": [], "outbound_hits": [], "clean": 0, "not_found": 0, "skipped": [], "quota": False}
+        done = {"added": [], "outbound_hits": [], "clean": 0, "not_found": 0, "skipped": [], "quota": False,
+                "unreachable": 0, "down": False}
         with tempfile.TemporaryDirectory() as tmp, \
                 patch.object(spark_logs, "check", return_value=done) as check, \
                 patch.dict(os.environ, cli_env("k"), clear=True), patch("builtins.print"):
@@ -588,8 +623,22 @@ class CommandLineTest(unittest.TestCase):
         self.assertEqual((kwargs["min_ip_hits"], kwargs["min_inbound_hits"], kwargs["max_inbound"]), (3, 5, 20))
         self.assertEqual(kwargs["allow"], spark_logs.ALLOWED_SUFFIXES | {"mine.example"})
 
+    def test_a_service_that_did_not_answer_is_reported_and_exit_1(self):
+        done = {"added": [], "outbound_hits": [], "clean": 0, "not_found": 0, "skipped": ["x"], "quota": False,
+                "unreachable": 3, "down": True}
+        with tempfile.TemporaryDirectory() as tmp, patch.object(spark_logs, "check", return_value=done), \
+                patch.dict(os.environ, cli_env("k"), clear=True), patch("builtins.print") as printed:
+            Path(tmp, "feed.csv").write_text(HEADER)
+            code = spark_logs.main(["--dir", tmp, "--check", "--today", TODAY, "--feed", str(Path(tmp, "feed.csv"))])
+
+        self.assertEqual(code, 1)
+        lines = [c.args[0] for c in printed.call_args_list if c.args]
+        self.assertIn("Added to the feed: 0  clean: 0  unknown to the service: 0  left for another day: 1  did not answer: 3",
+                      lines)
+        self.assertIn("The reputation service did not answer; rerun tomorrow for the rest.", lines)
+
     def test_a_family_hit_lists_the_hosts_behind_the_apex(self):
-        done = {"added": [], "clean": 0, "not_found": 0, "skipped": [], "quota": False,
+        done = {"added": [], "clean": 0, "not_found": 0, "skipped": [], "quota": False, "unreachable": 0, "down": False,
                 "outbound_hits": [("cdn.example", "Domain 9/89 malicious", ["192.168.1.100"], ["a.cdn.example", "b.cdn.example", "c.cdn.example"]),
                                   ("evil.example", "Domain 9/89 malicious", ["192.168.1.101"], ["evil.example"])]}
         with tempfile.TemporaryDirectory() as tmp, patch.object(spark_logs, "check", return_value=done), \
