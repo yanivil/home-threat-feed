@@ -423,7 +423,7 @@ vt-ip-e5064c3b12,176.65.149.67,IP,medium,high,AB,Inbound probe of WAN - Spark lo
 vt-ip-172185de7a,135.148.63.92,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-29 - confirmed 2026-10-20
 vt-ip-68be4b65f8,194.88.98.115,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-30 - confirmed 2026-10-20
 vt-ip-db89d83e69,198.235.24.238,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-29 - confirmed 2026-10-20
-vt-ip-8cd0895d8d,203.25.208.145,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - confirmed 2026-10-20
+vt-ip-8cd0895d8d,203.25.208.145,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-11-03 - confirmed 2026-10-20
 vt-ip-fa46c979f1,182.40.103.253,IP,medium,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-30 - confirmed 2026-10-20
 vt-ip-57d3d1093b,31.14.32.8,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - confirmed 2026-10-20
 vt-ip-7d5187c1dd,92.118.39.71,IP,high,high,AB,Inbound probe of WAN - Spark logs 2026-10-20 - seen in Spark logs 2026-10-29 - confirmed 2026-10-20
@@ -477,7 +477,7 @@ vt-ip-67f79de5ca,185.242.226.126,IP,high,high,AB,Inbound probe of WAN - Spark sy
 vt-ip-bd4cd0687e,45.77.61.56,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-30 - confirmed 2026-10-21
 vt-ip-9a8486e1e3,192.141.94.58,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-134923bf02,85.217.140.9,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
-vt-ip-9057be1984,160.119.76.170,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
+vt-ip-9057be1984,160.119.76.170,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-11-03 - confirmed 2026-10-21
 vt-ip-d430312125,87.120.104.79,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-fb03ac9af5,185.136.15.12,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-6d982b1c16,45.142.193.169,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
@@ -494,7 +494,7 @@ vt-ip-fa2aea0482,193.47.62.187,IP,medium,high,AB,Inbound probe of WAN - Spark sy
 vt-ip-1948feb5d7,79.124.59.106,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-429ea9dda2,45.74.28.6,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
 vt-ip-9fcde7a68f,41.33.45.100,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
-vt-ip-51afdbb8b2,160.119.76.171,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
+vt-ip-51afdbb8b2,160.119.76.171,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-11-03 - confirmed 2026-10-21
 vt-ip-1bd39a1085,31.14.32.7,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-df9c1a90a5,94.154.43.114,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-f486c4da4f,85.217.140.37,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
@@ -534,7 +534,7 @@ vt-ip-093d893a9b,150.107.38.251,IP,high,high,AB,Inbound probe of WAN - Spark sys
 vt-ip-b1c2357925,79.124.56.138,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
 vt-ip-778d41dbc3,193.163.125.97,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-e22101e7fd,193.163.125.82,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
-vt-ip-873be2bc1d,45.135.193.198,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
+vt-ip-873be2bc1d,45.135.193.198,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-11-03 - confirmed 2026-10-21
 vt-ip-fb1f1cb28a,193.163.125.80,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-82488cbcb7,93.174.95.106,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
 vt-ip-05c5df2799,66.132.172.250,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
@@ -1836,3 +1836,5 @@ vt-url-4f81b47faa,https://js-static.cfd/embed.js?v=24,URL,low,high,AB,News 2026-
 vt-url-3aa290c1f2,https://cf-id.com/?ray-id=nz0ovm2jq2g68i,URL,low,high,AB,News 2026-10-29 ClickFix fake Cloudflare verification pages - confirmed 2026-11-01
 vt-ip-3b1866c0d4,216.180.246.195,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-01 - seen in Spark logs 2026-11-01 - confirmed 2026-11-01
 vt-ip-85d1f10391,45.90.13.169,IP,high,high,AB,News 2026-10-28 router and camera botnet infrastructure - confirmed 2026-11-02
+vt-ip-a0498dbdd2,62.210.142.21,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-03 - seen in Spark logs 2026-11-03 - confirmed 2026-11-03
+vt-ip-c2b09a988b,81.12.33.38,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-03 - seen in Spark logs 2026-11-03 - confirmed 2026-11-03
