@@ -1838,3 +1838,4 @@ vt-ip-3b1866c0d4,216.180.246.195,IP,medium,high,AB,Inbound probe of WAN - Spark 
 vt-ip-85d1f10391,45.90.13.169,IP,high,high,AB,News 2026-10-28 router and camera botnet infrastructure - confirmed 2026-11-02
 vt-ip-a0498dbdd2,62.210.142.21,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-03 - seen in Spark logs 2026-11-03 - confirmed 2026-11-03
 vt-ip-c2b09a988b,81.12.33.38,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-03 - seen in Spark logs 2026-11-03 - confirmed 2026-11-03
+vt-domain-6af9fcbd58,managecare.in,Domain,low,high,AB,News 2026-10-29 Indian bank card-protection phishing pages - confirmed 2026-11-04
