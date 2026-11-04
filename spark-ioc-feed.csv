@@ -478,7 +478,7 @@ vt-ip-bd4cd0687e,45.77.61.56,IP,high,high,AB,Inbound probe of WAN - Spark syslog
 vt-ip-9a8486e1e3,192.141.94.58,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-134923bf02,85.217.140.9,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-9057be1984,160.119.76.170,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-11-03 - confirmed 2026-10-21
-vt-ip-d430312125,87.120.104.79,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
+vt-ip-d430312125,87.120.104.79,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-11-04 - confirmed 2026-10-21
 vt-ip-fb03ac9af5,185.136.15.12,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-6d982b1c16,45.142.193.169,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 vt-ip-1c189c7943,5.188.206.30,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
@@ -1773,7 +1773,7 @@ vt-ip-bed5038749,213.230.93.71,IP,medium,high,AB,Inbound probe of WAN - Spark da
 vt-ip-0435af33fc,195.184.76.69,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
 vt-ip-3b933ca4bc,193.176.29.23,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
 vt-ip-721f12d6db,103.146.159.173,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
-vt-ip-9ccdd20cb0,86.38.187.165,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
+vt-ip-9ccdd20cb0,86.38.187.165,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - seen in Spark logs 2026-11-04 - confirmed 2026-10-22
 vt-ip-137bd6049b,66.132.195.50,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
 vt-ip-a230c85954,66.117.5.228,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
 vt-ip-ee517e5bff,195.178.110.159,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
