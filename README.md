@@ -99,7 +99,9 @@ by accident), a VALUE of its TYPE and normalised (lower-case domains and hashes,
 addresses, ranges as `a.b.c.d-a.b.c.e`), no VALUE or UNIQ-NAME twice, no hidden character, and
 none of the hosts this system itself needs (github.com, raw.githubusercontent.com,
 api.telegram.org, api.anthropic.com, www.virustotal.com) nor a Domain that covers one of them,
-and no COMMENT that names the lookup service (the feed says `confirmed <date>`, not where).
+no COMMENT that names the lookup service or credits a research outlet or agency (the feed says
+`confirmed <date>` and `External report <date>`, not where), and no UNIQ-NAME that names the
+service (a confirmed row is `confirmed-<type>-<hash of the value>`).
 Every writer runs it before committing: the daily check (after its pull and again before its
 commit), the Telegram bot and the monthly re-check; a hand edit is committed the same way
 (`python3 feed_lint.py && git commit …`, as in the recipes below). By hand, `python3 feed_lint.py`
@@ -407,7 +409,7 @@ Send the bot a message and it answers in the same chat. `/help` lists what it un
 - **Indicators, with no command.** A message of indicators (IPs, domains, URLs, hashes;
   defanged input such as `evil[.]com` and `hxxps://` is fine), then an optional label:
   ```
-  evil[.]com hxxps://bad[.]example/x MuddyWater - Unit 42
+  evil[.]com hxxps://bad[.]example/x MuddyWater campaign
   ```
   Every leading word that is an indicator is checked against the reputation service and added
   when enough engines flag it (the thresholds under "Adding indicators checked against a
@@ -439,8 +441,10 @@ Send the bot a message and it answers in the same chat. `/help` lists what it un
   (`ALLOWED_SUFFIXES` and `syslog/allow.txt`), and `github.com`, `raw.githubusercontent.com`
   (where the gateway pulls this feed from), `api.telegram.org`, `api.anthropic.com` and
   `www.virustotal.com`, or a domain that covers one of those (`telegram.org`): the same rule as
-  the lint's, so a value taken here is never one the lint then refuses to commit. There is no
-  override and no `/remove`: for such a value, or to take a
+  the lint's, so a value taken here is never one the lint then refuses to commit; a label that
+  names the lookup service or credits a research outlet or agency is refused for the same reason
+  (`refused: the label credits a source (CISA); the feed names none, send the indicators with
+  another label`). There is no override and no `/remove`: for such a value, or to take a
   row out, edit the CSV on the Mac.
 - **`/who <indicator>`** says who is behind an indicator and what it did here: the facts and the
   note described under "Alerts" below.

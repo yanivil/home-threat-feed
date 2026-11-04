@@ -11,10 +11,10 @@ from pathlib import Path
 import unifi_list
 
 HEADER = "# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT\n"
-IP = "vt-ip-0011223344,185.1.2.7,IP,medium,high,AB,Inbound probe of WAN - confirmed 2026-10-02\n"
-IP2 = "vt-ip-5566778899,185.1.3.47,IP,high,high,AB,Inbound probe of WAN - confirmed 2026-10-03\n"
+IP = "confirmed-ip-0011223344,185.1.2.7,IP,medium,high,AB,Inbound probe of WAN - confirmed 2026-10-02\n"
+IP2 = "confirmed-ip-5566778899,185.1.3.47,IP,high,high,AB,Inbound probe of WAN - confirmed 2026-10-03\n"
 RANGE = "scanner-example-net,185.1.4.0-185.1.4.255,IP Range,high,medium,AB,Example scanner - port sweeps\n"
-DOMAIN = "vt-domain-1a2b3c4d5e,evil.example,Domain,high,high,AB,MuddyWater - confirmed 2026-10-01\n"
+DOMAIN = "confirmed-domain-1a2b3c4d5e,evil.example,Domain,high,high,AB,MuddyWater - confirmed 2026-10-01\n"
 URL = "trusted-url-5566778899,https://evil.example/login.php?id=1,URL,high,high,AB,Phishing kit\n"
 MD5 = "trusted-md5-aabbccddee,44d88612fea8a8f36de82e1278abb02f,MD5,high,high,AV,EICAR test file MD5\n"
 
@@ -37,14 +37,14 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(unifi_list.render(HEADER + "# a note\n" + IP), "185.1.2.7\n")
 
     def test_an_address_inside_a_range_row_is_not_repeated(self):
-        inside = "vt-ip-9988776655,185.1.4.9,IP,medium,high,AB,seen in the sweep\n"
+        inside = "confirmed-ip-9988776655,185.1.4.9,IP,medium,high,AB,seen in the sweep\n"
         self.assertEqual(unifi_list.render(HEADER + inside + IP + RANGE), "185.1.2.7\n185.1.4.0/24\n")
 
     def test_the_same_value_twice_is_listed_once(self):
         self.assertEqual(unifi_list.render(HEADER + IP + IP), "185.1.2.7\n")
 
     def test_ipv6_rows_are_left_out(self):
-        v6 = "vt-ip-aabbccddee,2001:db8::7,IP,medium,high,AB,probe\n"
+        v6 = "confirmed-ip-aabbccddee,2001:db8::7,IP,medium,high,AB,probe\n"
         v6_range = "scanner-v6,2001:db8::-2001:db8::ff,IP Range,high,medium,AB,sweep\n"
         self.assertEqual(unifi_list.render(HEADER + v6 + IP + v6_range), "185.1.2.7\n")
 

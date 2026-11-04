@@ -19,7 +19,7 @@ import vt_check
 TODAY = "2026-10-29"
 HEADER = "# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT\n"
 FEED_ROWS = (
-    "vt-domain-0000000001,known.example,Domain,high,high,AB,confirmed 2026-10-01\n"
+    "confirmed-domain-0000000001,known.example,Domain,high,high,AB,confirmed 2026-10-01\n"
     "range-0000000001,185.1.3.0-185.1.3.255,IP Range,high,high,AB,a blocked range\n"
 )
 
@@ -348,6 +348,9 @@ class SelectTests(unittest.TestCase):
             # the lookup service's name: the lint would refuse the row after the fact, so drop it before
             ("Loader samples uploaded to VirusTotal", "https://reports.example/a"),
             ("Stealer seen on VT", "https://reports.example/a"),
+            # a research outlet or agency, whatever the source: the feed credits none (feed_lint.SOURCE_RE)
+            ("Unit 42 on a new loader", "https://reports.example/a"),
+            ("CISA advisory on Medusa", "https://reports.example/a"),
         ]:
             self.assertEqual(news_agent.clean_theme(theme, source), "", theme)
             kept, _ = select([cand("bad.example", theme=theme, source=source)])
@@ -358,6 +361,9 @@ class SelectTests(unittest.TestCase):
         # the generic labels of a source's host are not the outlet
         self.assertEqual(news_agent.clean_theme("Research blog on news security", "https://research.blog.example/x"),
                          "Research blog on news security")
+        # a brand the threat impersonates is the theme, not a credit
+        self.assertEqual(news_agent.clean_theme("ClickFix fake Cloudflare pages", "https://reports.example/a"),
+                         "ClickFix fake Cloudflare pages")
 
 
 class FileTests(unittest.TestCase):

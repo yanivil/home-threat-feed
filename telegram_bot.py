@@ -60,7 +60,7 @@ NOTE_QUEUE = 10  # notes waiting for the note thread; one more is dropped
 # and Bot.never_block applies it at intake together with spark_logs' vendor list.
 
 HELP = """Send indicators (IPs, domains, URLs, hashes; defanged is fine), then an optional label:
-  evil[.]com hxxps://bad[.]example/x MuddyWater - Unit 42
+  evil[.]com hxxps://bad[.]example/x MuddyWater campaign
 They are checked against a reputation service and the flagged ones added to the feed.
 /trust <indicators> [label] - add them without a lookup
 /who <indicator> - who is behind it, and what it did here
@@ -267,11 +267,16 @@ class Bot:
     def add(self, indicators, label, trusted):
         """Add the indicators to the feed, after a VirusTotal check unless `trusted`, then commit and
         push the feed; returns the reply. At most MAX_INDICATORS are taken, and one the gateway must
-        never block (never_block) is refused, and so is a label that names the lookup service: the
-        lint would refuse the row after the fact and stall every later commit until a hand edit."""
+        never block (never_block) is refused, and so is a label that names the lookup service or credits
+        a research outlet or agency (feed_lint.SOURCE_RE): the lint would refuse the row after the fact
+        and stall every later commit until a hand edit."""
         named = feed_lint.SERVICE_RE.search(label)
         if named:
             return (f"refused: the label names a lookup service ({named.group()}); "
+                    "the feed names none, send the indicators with another label")
+        credited = feed_lint.SOURCE_RE.search(label)
+        if credited:
+            return (f"refused: the label credits a source ({credited.group()}); "
                     "the feed names none, send the indicators with another label")
         taken, rest = indicators[:MAX_INDICATORS], len(indicators) - MAX_INDICATORS
         refused = [f"refused: {value} is on the never-block list" for value in taken if self.never_block(value)]

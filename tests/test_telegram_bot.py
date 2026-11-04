@@ -80,9 +80,9 @@ OUTBOUND_EMULATION = detection("10:22:00", "detect", LAN_DEVICE, "185.1.2.72", "
 OUTBOUND_IPS = detection("10:23:00", "drop", LAN_DEVICE, "185.1.2.73", "IPS", "Header Spoofing")
 
 FEED = (HEADER
-        + "vt-domain-c2,c2.example.net,Domain,high,high,AB,MuddyWater - confirmed 2026-10-01\n"
-        + "vt-ip-scanner,93.152.221.36,IP,medium,high,AB,confirmed 2026-10-19\n"
-        + "trusted-ip-x,185.1.2.7,IP,high,high,AB,Cyberint - added unchecked 2026-10-01\n"
+        + "confirmed-domain-c2,c2.example.net,Domain,high,high,AB,MuddyWater - confirmed 2026-10-01\n"
+        + "confirmed-ip-scanner,93.152.221.36,IP,medium,high,AB,confirmed 2026-10-19\n"
+        + "trusted-ip-x,185.1.2.7,IP,high,high,AB,Vendor - added unchecked 2026-10-01\n"
         + "colocatel,45.155.205.0-45.155.205.255,IP Range,high,medium,AB,Colocatel\n")
 
 DAILY_LOG = """\
@@ -212,8 +212,8 @@ class LogTest(unittest.TestCase):
 
 class ParseMessageTest(unittest.TestCase):
     def test_bare_text_is_a_check_of_the_leading_indicators_and_the_rest_is_the_label(self):
-        self.assertEqual(telegram_bot.parse_message("evil[.]com 185.1.2.9 MuddyWater - Unit 42"),
-                         ("check", ["evil.com", "185.1.2.9"], "MuddyWater - Unit 42"))
+        self.assertEqual(telegram_bot.parse_message("evil[.]com 185.1.2.9 MuddyWater - Campaign 42"),
+                         ("check", ["evil.com", "185.1.2.9"], "MuddyWater - Campaign 42"))
 
     def test_defanged_urls_are_refanged(self):
         self.assertEqual(telegram_bot.parse_message("hxxps://bad[.]example/x"), ("check", ["https://bad.example/x"], ""))
@@ -230,8 +230,8 @@ class ParseMessageTest(unittest.TestCase):
         self.assertEqual(telegram_bot.parse_message("/delete evil.com")[0], "help")
 
     def test_commas_and_newlines_in_the_label_become_spaces(self):
-        self.assertEqual(telegram_bot.parse_message("evil.com Unit 42,\nMuddyWater, APT34"),
-                         ("check", ["evil.com"], "Unit 42 MuddyWater APT34"))
+        self.assertEqual(telegram_bot.parse_message("evil.com Campaign 42,\nMuddyWater, APT34"),
+                         ("check", ["evil.com"], "Campaign 42 MuddyWater APT34"))
 
     def test_a_comma_after_an_indicator_separates_it_from_the_next(self):
         self.assertEqual(telegram_bot.parse_message("a.example, b.example, Campaign"),
@@ -241,8 +241,8 @@ class ParseMessageTest(unittest.TestCase):
         for text in ("a.example,b.example", "a.example , b.example", "a.example ,b.example,", "a.example,,b.example"):
             with self.subTest(text=text):
                 self.assertEqual(telegram_bot.parse_message(text), ("check", ["a.example", "b.example"], ""))
-        self.assertEqual(telegram_bot.parse_message("185.1.2.9,evil[.]com,Unit 42 report"),
-                         ("check", ["185.1.2.9", "evil.com"], "Unit 42 report"))
+        self.assertEqual(telegram_bot.parse_message("185.1.2.9,evil[.]com,Campaign 42 report"),
+                         ("check", ["185.1.2.9", "evil.com"], "Campaign 42 report"))
 
     def test_a_url_with_a_comma_is_not_shortened_into_another_url(self):
         verb, indicators, label = telegram_bot.parse_message("hxxps://bad[.]example/a?x=1,2 Campaign")
@@ -251,8 +251,8 @@ class ParseMessageTest(unittest.TestCase):
         self.assertEqual(label, "hxxps://bad[.]example/a?x=1 2 Campaign")
 
     def test_the_label_starts_at_the_first_token_that_is_not_an_indicator(self):
-        self.assertEqual(telegram_bot.parse_message("/trust 185.1.2.9 Cyberint report on bad.example"),
-                         ("trust", ["185.1.2.9"], "Cyberint report on bad.example"))
+        self.assertEqual(telegram_bot.parse_message("/trust 185.1.2.9 Vendor report on bad.example"),
+                         ("trust", ["185.1.2.9"], "Vendor report on bad.example"))
 
     def test_a_date_argument_is_left_in_the_label(self):
         self.assertEqual(telegram_bot.parse_message("/sources 2026-10-20"), ("sources", [], "2026-10-20"))
@@ -316,23 +316,23 @@ class BotTestCase(unittest.TestCase):
 
 class AddTest(BotTestCase):
     def test_bare_text_is_checked_and_added_then_committed_and_pushed(self):
-        self.updates([message("evil[.]com 185.1.2.9 MuddyWater - Unit 42")])
+        self.updates([message("evil[.]com 185.1.2.9 MuddyWater - Campaign 42")])
         self.bot.run_once()
         self.assertIn("evil.com: added (Domain 11/94 malicious)", self.tg.sent[-1])
         self.assertIn("185.1.2.9: clean (IP 1/94 malicious)", self.tg.sent[-1])
         self.assertEqual([c[:3] for c in self.git.calls], [["git", "pull", "--rebase"], ["git", "diff", "--quiet"],
                                                            ["git", "diff", "--numstat"], ["git", "add", "spark-ioc-feed.csv"],
                                                            ["git", "commit", "-m"], ["git", "push", "--quiet"]])
-        self.assertIn("MuddyWater - Unit 42", self.feed.read_text())
+        self.assertIn("MuddyWater - Campaign 42", self.feed.read_text())
         self.assertFalse((self.repo / "syslog" / ".feed-lock").exists())
 
     def test_the_row_says_it_came_from_telegram_and_the_commit_names_the_label(self):
-        self.send("evil[.]com 185.1.2.9 MuddyWater - Unit 42")
+        self.send("evil[.]com 185.1.2.9 MuddyWater - Campaign 42")
 
         self.assertTrue(self.feed.read_text().endswith(
-            ",evil.com,Domain,high,high,AB,MuddyWater - Unit 42 - sent from Telegram - confirmed 2026-10-28\n"))
+            ",evil.com,Domain,high,high,AB,MuddyWater - Campaign 42 - sent from Telegram - confirmed 2026-10-28\n"))
         commit = self.git.calls[4]
-        self.assertEqual(commit, ["git", "commit", "-m", "Add 1 indicator sent from Telegram: MuddyWater - Unit 42",
+        self.assertEqual(commit, ["git", "commit", "-m", "Add 1 indicator sent from Telegram: MuddyWater - Campaign 42",
                                   "--", "spark-ioc-feed.csv"])
         self.assertEqual(self.git.calls[0], ["git", "pull", "--rebase", "--autostash", "--quiet"])
         for kwargs in self.git.kwargs:
@@ -352,11 +352,11 @@ class AddTest(BotTestCase):
         self.assertEqual(self.git.calls[4][3], "Add 1 indicator sent from Telegram")
 
     def test_trust_adds_without_a_lookup(self):
-        self.send("/trust 185.1.2.10 Cyberint")
+        self.send("/trust 185.1.2.10 Vendor")
 
         self.assertEqual(self.vt.calls, [])
         row = self.feed.read_text().splitlines()[-1]
-        self.assertTrue(row.endswith(",185.1.2.10,IP,high,high,AB,Cyberint - sent from Telegram - "
+        self.assertTrue(row.endswith(",185.1.2.10,IP,high,high,AB,Vendor - sent from Telegram - "
                                      "added unchecked 2026-10-28"), row)
         self.assertEqual(self.git.commands(), ["pull", "diff", "diff", "add", "commit", "push"])
         self.assertEqual(self.tg.sent[-1].splitlines()[-2:], ["1 added, 0 already in the feed", "Committed and pushed."])
@@ -374,7 +374,7 @@ class AddTest(BotTestCase):
     def test_rows_an_interrupted_check_left_are_committed_by_the_next_one(self):
         # A SIGTERM after the rows were written and before the commit: the replayed message finds them in-feed.
         with self.feed.open("a") as f:
-            f.write("vt-domain-1,evil.com,Domain,high,high,AB,sent from Telegram - confirmed 2026-10-28\n")
+            f.write("confirmed-domain-1,evil.com,Domain,high,high,AB,sent from Telegram - confirmed 2026-10-28\n")
 
         self.send("evil.com")
 
@@ -444,11 +444,11 @@ class AddTest(BotTestCase):
         self.assertEqual(commit[4:], ["--", "spark-ioc-feed.csv"])
 
     def test_a_label_with_quotes_and_hidden_marks_reaches_the_feed_and_the_commit_clean(self):
-        self.send('/trust 185.1.2.10 "Unit\x1b 42"\u202e\u200b')
+        self.send('/trust 185.1.2.10 "Campaign\x1b 42"\u202e\u200b')
 
         row = self.feed.read_text().splitlines()[-1]
-        self.assertEqual(row.split(",")[6], "Unit 42 - sent from Telegram - added unchecked 2026-10-28")
-        self.assertEqual(self.git.calls[4], ["git", "commit", "-m", "Add 1 indicator sent from Telegram: Unit 42",
+        self.assertEqual(row.split(",")[6], "Campaign 42 - sent from Telegram - added unchecked 2026-10-28")
+        self.assertEqual(self.git.calls[4], ["git", "commit", "-m", "Add 1 indicator sent from Telegram: Campaign 42",
                                              "--", "spark-ioc-feed.csv"])
         for text in (row, self.git.calls[4][3]):
             self.assertFalse(any(c in text for c in '"\x1b\u202e\u200b'), repr(text))
@@ -484,6 +484,16 @@ class AddTest(BotTestCase):
         self.assertFalse(self.bot.never_block("notgithub.com"))
         self.assertFalse(self.bot.never_block("https://telegram.org/malware.exe"), "a URL blocks one page")
 
+    def test_a_label_that_credits_a_source_is_refused_before_anything_runs(self):
+        # The feed's rows say `External report <date>`, never which outlet or agency published the report.
+        self.send("185.1.5.7 Laundry Bear - CISA AA26-204A")
+
+        self.assertEqual(self.tg.sent[-1], "refused: the label credits a source (CISA); "
+                                           "the feed names none, send the indicators with another label")
+        self.assertEqual((self.git.calls, self.vt.calls), ([], []))
+        self.assertEqual(self.feed.read_text(), FEED)
+        self.assertFalse(self.lock.exists())
+
     def test_a_check_refuses_a_never_block_value_and_checks_the_rest(self):
         self.send("raw.githubusercontent.com evil[.]com")
 
@@ -499,7 +509,7 @@ class AddTest(BotTestCase):
                 raise ValueError("embedded null byte")
             return self.git(args, **kwargs)
 
-        reply = self.make_bot(git=git).add(["185.1.2.10"], "Unit 42", trusted=True)
+        reply = self.make_bot(git=git).add(["185.1.2.10"], "Campaign 42", trusted=True)
 
         self.assertIn("git commit failed, the rows are in the feed file but not committed: embedded null byte", reply)
 
@@ -954,7 +964,7 @@ class AlertTest(BotTestCase):
 
         self.assertEqual([text.split(" — ")[1] if " — " in text else text for text in self.tg.sent], [
             "192.168.2.121 tried to reach c2.example.net (MuddyWater - confirmed 2026-10-01)",
-            "192.168.2.121 tried to reach 185.1.2.7 (Cyberint - added unchecked 2026-10-01)",
+            "192.168.2.121 tried to reach 185.1.2.7 (Vendor - added unchecked 2026-10-01)",
             "Threat Prevention: Anti-Malware Scanner from 185.1.2.66 to 203.0.113.47",
             "note on c2.example.net", "note on 185.1.2.7", "note on 185.1.2.66"])
 
@@ -1061,14 +1071,14 @@ class RealGitTest(unittest.TestCase):
         (self.repo / "other.txt").write_text("the owner's own edit, staged\n")
         self.git("add", "other.txt", cwd=self.repo)
 
-        reply = self.bot.add(["185.1.2.10"], "Unit 42", trusted=True)
+        reply = self.bot.add(["185.1.2.10"], "Campaign 42", trusted=True)
 
         self.assertTrue(reply.endswith("Committed and pushed."), reply)
         self.assertEqual(self.git("log", "--format=%s", cwd=self.repo).splitlines(),
-                         ["Add 1 indicator sent from Telegram: Unit 42", "Edit other.txt elsewhere", "seed"])
+                         ["Add 1 indicator sent from Telegram: Campaign 42", "Edit other.txt elsewhere", "seed"])
         self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD", cwd=self.repo), "spark-ioc-feed.csv")
         self.assertEqual(self.git("rev-parse", "main", cwd=self.origin), self.git("rev-parse", "HEAD", cwd=self.repo))
-        self.assertIn(",185.1.2.10,IP,high,high,AB,Unit 42 - sent from Telegram - added unchecked",
+        self.assertIn(",185.1.2.10,IP,high,high,AB,Campaign 42 - sent from Telegram - added unchecked",
                       self.git("show", "HEAD:spark-ioc-feed.csv", cwd=self.repo))
         self.assertIn("other.txt", self.git("status", "--porcelain", cwd=self.repo), "the owner's edit is kept")
 

@@ -33,6 +33,34 @@ NEVER_BLOCK = frozenset({"github.com", "raw.githubusercontent.com", "api.telegra
 # The public rows say what was done (`confirmed <date>`, `added unchecked <date>`), never where: the
 # lookup service's terms keep its results private, so its name and its counts stay out of the file.
 SERVICE_RE = re.compile(r"virustotal|\bvt\b", re.IGNORECASE)
+# A hand-added row says `External report <date>`, never which outlet or agency published the report.
+# The list names publishers: the research units and agencies the imports used to credit, and the
+# usual others. A security vendor is in by its research arm where that is how it is credited (Talos,
+# Unit 42, Securelist, SentinelLabs) or by its brand where the brand is (Kaspersky, ESET, Bitdefender,
+# Proofpoint); a theme that names such a brand as a lure is dropped whole, the row still added. Left
+# out on purpose, since a label names them as the subject: brands whose products are targets
+# (Microsoft, Cisco, Fortinet, Cloudflare, Sophos, Trend Micro, Palo Alto Networks; their research arms
+# are in) and the internet scanners (Censys, Shadowserver, GreyNoise), which the feed labels by operator.
+SOURCE_NAMES = (
+    "Unit 42", "Talos", "Securelist", "Kaspersky", "GReAT", "Group-IB", "CERT-UA", "CISA", "FBI", "NSA",
+    "CNMF", "ESET", "SentinelLabs", "Bitdefender", "Morphisec", "SOCRadar", "Mandiant", "Arctic Wolf",
+    "Deepwatch", "CYFIRMA", "Proofpoint", "Volexity", "Claroty", "Team82", "Uptycs", "Beazley",
+    "Check Point Research", "Cyberint", "Recorded Future", "Insikt", "CrowdStrike",
+    "Microsoft Threat Intelligence", "MSTIC", "Google Threat Intelligence", "GTIG", "Threat Analysis Group",
+    "Sophos X-Ops", "FortiGuard", "ThreatLabz", "Black Lotus Labs", "X-Force", "Huntress", "Rapid7",
+    "Malwarebytes Labs", "Trellix", "Intezer", "Sekoia", "Cyble", "abuse.ch", "AlienVault",
+    "Elastic Security Labs",
+)
+_SEPARATOR = r"[\s\-\u2010\u2011\u2012\u2013\u2014]"  # a space, or a hyphen or dash of any width
+
+
+def _source_pattern(name):
+    """The name as a whole word, its inner spaces and hyphens optional (Unit 42, Unit42, Group IB, Group‑IB)."""
+    return (_SEPARATOR + "?").join(re.escape(part) for part in re.split(_SEPARATOR, name))
+
+
+SOURCE_RE = re.compile(r"(?<![A-Za-z0-9])(?:" + "|".join(_source_pattern(n) for n in SOURCE_NAMES)
+                       + r")(?![A-Za-z0-9])", re.IGNORECASE)
 _AN = {"IP", "IP Range", "MD5"}
 # The hidden characters most often typed or pasted, named for the owner; the rest get their Unicode
 # name, or their category's when they have none (a lone surrogate is how read() keeps a byte that is
@@ -151,6 +179,10 @@ def problems(text):
             found.append(f"line {number}: UNIQ-NAME {name} repeats line {names[name]}")
         else:
             names[name] = number
+        service = SERVICE_RE.search(name)
+        if service:  # a confirmed row is `confirmed-<type>-<hash>`; the old prefix was the service's abbreviation
+            found.append(f"line {number}: UNIQ-NAME {name} names a lookup service ({service.group()}): "
+                         "use confirmed-<type>-<hash>")
         if not value:
             found.append(f"line {number}: VALUE is empty")
         if not kind:
@@ -179,6 +211,9 @@ def problems(text):
         named = SERVICE_RE.search(comment)
         if named:
             found.append(f"line {number}: COMMENT mentions {named.group()}: the feed names no lookup service")
+        credited = SOURCE_RE.search(comment)
+        if credited:
+            found.append(f"line {number}: COMMENT credits {credited.group()}: the feed names no source")
     return found
 
 

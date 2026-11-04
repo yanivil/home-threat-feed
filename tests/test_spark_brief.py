@@ -30,7 +30,7 @@ REPO = Path(__file__).resolve().parent.parent
 DAY = date(2026, 10, 28)  # a Wednesday: the day the brief reports, sent on the morning of the 29th
 TODAY = date(2026, 10, 29)
 HEAVY, LIGHT, NEW = "93.152.221.36", "109.205.211.205", "47.79.34.208"
-FEED = HEADER + (f"vt-ip-0a1b2c3d4e,{HEAVY},IP,high,high,AB,"
+FEED = HEADER + (f"confirmed-ip-0a1b2c3d4e,{HEAVY},IP,high,high,AB,"
                  "Inbound probe of WAN - Spark syslog 2026-09-01 - confirmed 2026-09-01\n")
 RUN_LOG = """2026-10-29 07:30:01 Daily check starting: last 2 day(s)
 47.79.34.208: added (IP 11/94 malicious)
@@ -185,7 +185,7 @@ class ParseRunLogTest(unittest.TestCase):
 
     def test_outbound_dry_run_lines_and_other_statuses_are_not_added_rows(self):
         run = spark_brief.parse_run_log(
-            "c2.example.net: would-add (Domain 9/94 malicious -> vt-domain-1,c2.example.net,Domain,...)\n"
+            "c2.example.net: would-add (Domain 9/94 malicious -> confirmed-domain-1,c2.example.net,Domain,...)\n"
             "198.51.100.5: not-found (the service has no record)\n"
             "198.51.100.6: in-feed\n"
             "198.51.100.7: added (IP 7/94 malicious)\n")
@@ -300,8 +300,8 @@ class NextRecheckTest(unittest.TestCase):
 
     def test_next_recheck_is_the_earliest_due_date(self):
         feed = (HEADER
-                + f"vt-ip-1,203.0.113.7,IP,medium,high,AB,confirmed {aged(50)}\n"
-                + f"vt-domain-1,evil.com,Domain,high,high,AB,APT28 - confirmed {aged(100)}\n")
+                + f"confirmed-ip-1,203.0.113.7,IP,medium,high,AB,confirmed {aged(50)}\n"
+                + f"confirmed-domain-1,evil.com,Domain,high,high,AB,APT28 - confirmed {aged(100)}\n")
 
         self.assertEqual(spark_brief.next_recheck(feed, self.TODAY), self.TODAY + timedelta(days=10))
 
@@ -312,7 +312,7 @@ class NextRecheckTest(unittest.TestCase):
         self.assertIsNone(spark_brief.next_recheck("", self.TODAY))
 
     def test_rows_already_overdue_are_due_today(self):
-        feed = HEADER + f"vt-ip-1,203.0.113.7,IP,medium,high,AB,confirmed {aged(90)}\n"
+        feed = HEADER + f"confirmed-ip-1,203.0.113.7,IP,medium,high,AB,confirmed {aged(90)}\n"
 
         self.assertEqual(spark_brief.next_recheck(feed, self.TODAY), self.TODAY)
 
@@ -508,7 +508,7 @@ class ComposeTest(unittest.TestCase):
 
     def test_the_brief_is_built_from_the_capture_the_run_log_and_the_feed(self):
         write_capture(self.dir, DAY, CAPTURE)
-        row = f"vt-ip-1,{NEW},IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-29 - confirmed 2026-10-29"
+        row = f"confirmed-ip-1,{NEW},IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-29 - confirmed 2026-10-29"
 
         text = self.compose([row])
 
@@ -607,7 +607,7 @@ class AddedRowsTest(unittest.TestCase):
         return commit_feed(self.repo, text, when=when)
 
     def row(self, n, comment="Inbound probe of WAN - Spark syslog 2026-10-29"):
-        return f"vt-ip-{n},198.51.100.{n},IP,medium,high,AB,{comment}"
+        return f"confirmed-ip-{n},198.51.100.{n},IP,medium,high,AB,{comment}"
 
     def test_a_directory_without_a_repository_or_commits_has_no_rows(self):
         with tempfile.TemporaryDirectory() as tmp:

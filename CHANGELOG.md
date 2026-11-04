@@ -42,6 +42,13 @@ All notable changes to this feed are recorded here.
   reply names the line to fix. See the README, "Format", and `docs/system-design.md`, D8.
 
 ### Changed
+- A confirmed row is named `confirmed-<type>-<hash>` instead of `vt-<type>-<hash>` (726 rows
+  renamed; a gateway that keys on `UNIQ-NAME` sees them leave and return once, the values blocked
+  throughout), the 241 hand-added rows that still credited a research outlet or agency say
+  `External report <date>` like the rest, and the lint refuses a `UNIQ-NAME` that names a lookup
+  service and a `COMMENT` that credits a source (the bot refuses such a label, the news agent
+  drops such a theme). The monthly workflow reads only the `REPUTATION_API_KEY` secret now that
+  it is stored. Design D12, second decision.
 - Live alerts no longer go out for an inbound Threat Prevention row whose source is already in
   the feed or that the gateway blocked by IP reputation alone; the morning brief counts them
   as before. One scanner range in the feed had produced dozens of alerts a night. Design D13.

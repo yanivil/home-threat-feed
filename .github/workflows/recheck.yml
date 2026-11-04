@@ -26,8 +26,7 @@ jobs:
         # A quota stop, or a service that stopped answering, exits 1 but leaves refreshed rows worth committing.
         continue-on-error: true
         env:
-          # The old secret name serves until the new one is stored.
-          REPUTATION_API_KEY: ${{ secrets.REPUTATION_API_KEY || secrets.VT_API_KEY }}
+          REPUTATION_API_KEY: ${{ secrets.REPUTATION_API_KEY }}
           MAX_AGE: ${{ inputs.max_age }}
         run: |
           if [ -z "$REPUTATION_API_KEY" ]; then

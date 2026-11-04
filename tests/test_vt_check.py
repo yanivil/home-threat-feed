@@ -52,11 +52,11 @@ def aged(days):
 
 # Rows as vt_check.py writes them, dated relative to TODAY. --recheck looks IPs up
 # again after 60 days, domains and URLs after 180, hashes never.
-OLD = "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - confirmed 2026-03-01\n"  # 232 days
-OLD_IP = "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,confirmed 2026-07-15\n"  # 96 days
-OLD_URL = "vt-url-5a1d6f0c2e,https://bad.example/x,URL,medium,high,AB,confirmed 2026-02-01\n"  # 260 days
-OLD_HASH = f"vt-sha256-9634a68018,{SHA256},SHA256,high,high,AV,confirmed 2026-06-30\n"  # 111 days
-RECENT = "vt-domain-ec0f4e8e0a,bad.example.net,Domain,high,high,AB,confirmed 2026-10-01\n"  # 18 days
+OLD = "confirmed-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - confirmed 2026-03-01\n"  # 232 days
+OLD_IP = "confirmed-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,confirmed 2026-07-15\n"  # 96 days
+OLD_URL = "confirmed-url-5a1d6f0c2e,https://bad.example/x,URL,medium,high,AB,confirmed 2026-02-01\n"  # 260 days
+OLD_HASH = f"confirmed-sha256-9634a68018,{SHA256},SHA256,high,high,AV,confirmed 2026-06-30\n"  # 111 days
+RECENT = "confirmed-domain-ec0f4e8e0a,bad.example.net,Domain,high,high,AB,confirmed 2026-10-01\n"  # 18 days
 
 
 def vt_object(obj_type, obj_id, malicious, suspicious=0, undetected=20, harmless=60):
@@ -202,7 +202,7 @@ class RunTest(unittest.TestCase):
         self.assertEqual(
             self.feed.read_text(),
             HEADER + EXISTING
-            + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,confirmed 2026-10-19\n",
+            + "confirmed-domain-e3daa29865,evil.com,Domain,high,high,AB,confirmed 2026-10-19\n",
         )
 
     def test_an_address_inside_a_feed_ip_range_is_in_feed_and_not_looked_up(self):
@@ -222,7 +222,7 @@ class RunTest(unittest.TestCase):
         row = self.feed.read_text().splitlines()[2]
         self.assertEqual(
             row,
-            "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,"
+            "confirmed-domain-e3daa29865,evil.com,Domain,high,high,AB,"
             "APT28 via CISA AA26-201A - confirmed 2026-10-19",
         )
 
@@ -237,8 +237,8 @@ class RunTest(unittest.TestCase):
 
         added = self.feed.read_text().splitlines()[2:]
         self.assertEqual(added, [
-            f"vt-sha256-9634a68018,{sha256},SHA256,high,high,AV,confirmed 2026-10-19",
-            "vt-ip-2d2878d281,8.8.4.4,IP,medium,high,AB,confirmed 2026-10-19",
+            f"confirmed-sha256-9634a68018,{sha256},SHA256,high,high,AV,confirmed 2026-10-19",
+            "confirmed-ip-2d2878d281,8.8.4.4,IP,medium,high,AB,confirmed 2026-10-19",
         ])
 
     def test_ips_need_five_engines_and_other_types_three(self):
@@ -541,7 +541,7 @@ class RunTest(unittest.TestCase):
 
         lines = self.feed.read_text().splitlines()
         self.assertEqual(lines[1], EXISTING.rstrip("\n"))
-        self.assertTrue(lines[2].startswith("vt-domain-e3daa29865,evil.com,"))
+        self.assertTrue(lines[2].startswith("confirmed-domain-e3daa29865,evil.com,"))
 
 
 class RecheckTest(unittest.TestCase):
@@ -574,7 +574,7 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(
             self.feed.read_text(),
             HEADER + EXISTING
-            + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - confirmed 2026-10-19\n",
+            + "confirmed-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - confirmed 2026-10-19\n",
         )
 
     def test_confidence_follows_the_new_detection_count(self):
@@ -689,7 +689,7 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(self.feed.read_bytes().split(b"\n")[0], HEADER.rstrip("\n").encode())
         self.assertEqual(self.feed.read_text().splitlines(), [
             HEADER.rstrip("\n"),
-            "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,confirmed 2026-10-19",
+            "confirmed-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,confirmed 2026-10-19",
             EXISTING.rstrip("\n"),
         ])
 
@@ -711,7 +711,7 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(
             self.feed.read_text(),
             HEADER
-            + "vt-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - confirmed 2026-10-19\n"
+            + "confirmed-domain-e3daa29865,evil.com,Domain,high,high,AB,APT28 - confirmed 2026-10-19\n"
             + OLD_IP + OLD_URL,
         )
 
@@ -728,11 +728,11 @@ class RecheckTest(unittest.TestCase):
 
         self.assertEqual(self.statuses(results), {"evil.com": "unreachable", "203.0.113.7": "refreshed"})
         self.assertEqual(self.feed.read_text(),
-                         HEADER + OLD + "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,confirmed 2026-10-19\n")
+                         HEADER + OLD + "confirmed-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,confirmed 2026-10-19\n")
         self.assertEqual(self.sleeps, [vt_check.RETRY_WAIT, vt_check.FREE_API_DELAY])
 
     def test_three_unreachable_rows_in_a_row_stop_the_recheck_with_the_feed_untouched(self):
-        fourth = f"vt-domain-0000000000,worse.example,Domain,high,high,AB,confirmed {aged(200)}\n"
+        fourth = f"confirmed-domain-0000000000,worse.example,Domain,high,high,AB,confirmed {aged(200)}\n"
         self.feed.write_text(HEADER + OLD + OLD_IP + OLD_URL + fourth + RECENT)
         calls = []
 
@@ -794,7 +794,7 @@ class RecheckTest(unittest.TestCase):
     def trusted(self, value, ioc_type, days, name="trusted-x"):
         product = "AV" if ioc_type in ("MD5", "SHA1", "SHA256") else "AB"
         return (f"{name},{value},{ioc_type},high,high,{product},"
-                f"MuddyWater - Cyberint export - added unchecked {aged(days)}\n")
+                f"MuddyWater - External export - added unchecked {aged(days)}\n")
 
     def test_trusted_row_verified_after_90_days_becomes_a_checked_row(self):
         self.feed.write_text(HEADER + self.trusted("157.230.234.35", "IP", 90))
@@ -805,7 +805,7 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(self.statuses(results)["157.230.234.35"], "verified")
         self.assertEqual(
             self.feed.read_text(),
-            HEADER + "trusted-x,157.230.234.35,IP,medium,high,AB,MuddyWater - Cyberint export - confirmed 2026-10-19\n",
+            HEADER + "trusted-x,157.230.234.35,IP,medium,high,AB,MuddyWater - External export - confirmed 2026-10-19\n",
         )
 
     def test_trusted_row_not_flagged_after_90_days_is_removed(self):
@@ -829,7 +829,7 @@ class RecheckTest(unittest.TestCase):
     # An IP that probed this network carries "seen in Spark logs <date>" and is re-verified 180
     # days after its last sighting, however old its VirusTotal check is.
     def seen_ip(self, checked_days, seen_days):
-        return (f"vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,Inbound probe of WAN - Spark syslog - "
+        return (f"confirmed-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,Inbound probe of WAN - Spark syslog - "
                 f"seen in Spark logs {aged(seen_days)} - confirmed {aged(checked_days)}\n")
 
     def test_an_ip_seen_in_the_logs_waits_180_days_from_its_last_sighting(self):
@@ -850,7 +850,7 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(self.statuses(results)["203.0.113.7"], "refreshed")
         self.assertEqual(
             self.feed.read_text().splitlines()[1],
-            f"vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,Inbound probe of WAN - Spark syslog - "
+            f"confirmed-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,Inbound probe of WAN - Spark syslog - "
             f"seen in Spark logs {aged(180)} - confirmed 2026-10-19",
         )
 
@@ -879,7 +879,7 @@ class RowDueTest(unittest.TestCase):
         self.assertEqual(self.due("URL", f"confirmed {aged(10)}"), date.fromisoformat(aged(10 - 180)))
 
     def test_a_row_added_without_a_check_is_due_after_90_days(self):
-        self.assertEqual(self.due("Domain", f"Qilin - Cyberint export - added unchecked {aged(20)}"),
+        self.assertEqual(self.due("Domain", f"Qilin - External export - added unchecked {aged(20)}"),
                          date.fromisoformat(aged(20 - 90)))
 
     def test_an_ip_seen_in_the_logs_is_not_due_before_180_days_from_the_sighting(self):
@@ -923,13 +923,13 @@ class StampSeenTest(unittest.TestCase):
 
         self.assertEqual(stamped, ["203.0.113.7", "198.51.100.9"])
         self.assertEqual(self.feed.read_text(), HEADER
-                         + "vt-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,seen in Spark logs 2026-10-19 - confirmed 2026-07-15\n"
+                         + "confirmed-ip-7b3f0a9c21,203.0.113.7,IP,medium,high,AB,seen in Spark logs 2026-10-19 - confirmed 2026-07-15\n"
                          + f"trusted-ip-1,198.51.100.9,IP,high,high,AB,Cyberint - seen in Spark logs 2026-10-19 - "
                            f"added unchecked {aged(5)}\n")
 
     def test_refreshes_a_stamp_older_than_30_days_and_leaves_a_fresh_one(self):
         def row(value, days):
-            return f"vt-ip-{value[-1]},{value},IP,medium,high,AB,seen in Spark logs {aged(days)} - confirmed 2026-07-15\n"
+            return f"confirmed-ip-{value[-1]},{value},IP,medium,high,AB,seen in Spark logs {aged(days)} - confirmed 2026-07-15\n"
         self.feed.write_text(HEADER + row("203.0.113.1", 30) + row("203.0.113.2", 29))
 
         stamped = vt_check.stamp_seen(self.feed, ["203.0.113.1", "203.0.113.2"], today=TODAY)
@@ -1134,7 +1134,7 @@ class TrustedTest(unittest.TestCase):
 
     def test_adds_rows_without_any_lookup(self):
         results = vt_check.add_trusted(
-            [("evil.com", "APT29 - Cyberint export 2026-10-22"), (SHA256, "APT29 - Cyberint export 2026-10-22")],
+            [("evil.com", "APT29 - External export 2026-10-22"), (SHA256, "APT29 - External export 2026-10-22")],
             self.feed, today=TODAY, out=lambda *a: None,
         )
 
@@ -1143,9 +1143,9 @@ class TrustedTest(unittest.TestCase):
             self.feed.read_text(),
             HEADER + EXISTING
             + "trusted-domain-e3daa29865,evil.com,Domain,high,high,AB,"
-              "APT29 - Cyberint export 2026-10-22 - added unchecked 2026-10-19\n"
+              "APT29 - External export 2026-10-22 - added unchecked 2026-10-19\n"
             + f"trusted-sha256-9634a68018,{SHA256},SHA256,high,high,AV,"
-              "APT29 - Cyberint export 2026-10-22 - added unchecked 2026-10-19\n",
+              "APT29 - External export 2026-10-22 - added unchecked 2026-10-19\n",
         )
 
     def test_skips_feed_members_duplicates_and_invalid_values(self):

@@ -173,7 +173,7 @@ def confidence(malicious):
 
 def feed_row(ioc_type, value, stats, label, today):
     malicious = stats.get("malicious", 0)
-    name = f"vt-{ioc_type.lower()}-{hashlib.sha1(value.encode()).hexdigest()[:10]}"
+    name = f"confirmed-{ioc_type.lower()}-{hashlib.sha1(value.encode()).hexdigest()[:10]}"
     product = "AV" if ioc_type in HASH_TYPES.values() else "AB"
     comment = f"confirmed {today}"
     label = " ".join(label.replace(",", " ").split())

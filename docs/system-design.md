@@ -79,9 +79,9 @@ the daily check ends by sending the brief, the news job sends none; see D6 and D
 ## 3. Rules the system enforces
 
 **Feed format.** The Check Point custom-feed CSV: `UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT`.
-`UNIQ-NAME` is `vt-<type>-<sha1 prefix>` for rows checked against the reputation service and
-`trusted-<type>-<...>` for rows added without a check; the prefix is derived from the value,
-so a value maps to one name. `COMMENT` carries the provenance and the dates the rules below
+`UNIQ-NAME` is `confirmed-<type>-<sha1 prefix>` for rows checked against the reputation service
+(`vt-` until D12's second decision, 2026-11-04) and `trusted-<type>-<...>` for rows added
+without a check; the hash is derived from the value, so a value maps to one name. `COMMENT` carries the provenance and the dates the rules below
 read.
 
 **Admission.** A candidate is added when engines flag it: 5 or more for an IP (hosting
@@ -947,26 +947,61 @@ log and failure lines (`Lookup quota reached`, `N candidates for lookup from M n
 names, the Keychain account, the never-block host): the owner chose the public face over a
 rename of every identifier, and the lint rule covers the column readers see.
 
-**Known limits.** The 697 confirmed rows keep their `vt-` names: a `UNIQ-NAME` is the
-identifier the gateway shows in its logs, so renaming them is a visible change the owner
-decides; it is one rewrite plus a lint rule on the column if wanted. The commit history and
-past Actions logs keep the old wording and counts; rewriting the history of a public
-repository was not worth its cost. The monthly workflow's log, public like the repository,
-still lists each re-checked row with its engine count; making the job print only its summary
-is a follow-up if the owner wants it. The band is derived from the count, so a reader who
-knows the code can still infer the service; the terms are about what is distributed, and the
-count no longer is. About 250 other rows added by hand still credit the public report they came
-from by its outlet or agency (Unit 42, Group-IB, Kaspersky Securelist, Cisco
-Talos, Morphisec, CISA, CERT-UA and others);
-news-agent rows never do (D7), and whether a hand-added row may is the owner's decision: if
-not, it is one more rewrite to `External report` plus a lint rule.
+**Decision (2026-11-04).** The owner took both items the first decision left open: the
+confirmed rows are renamed, and no hand-added row credits its publisher. (f) `UNIQ-NAME` is
+`confirmed-<type>-<sha1 prefix>` for a row the lookup admitted (`vt_check.feed_row`; the hash
+and the `trusted-` form are unchanged), and the lint refuses a name that matches the service
+rule, so the old prefix cannot return. One rewrite of the committed feed renames the 726 `vt-`
+rows; a gateway that keys on the name sees them leave and return at its next fetch, the values
+blocked throughout. (g) The 241 rows whose `COMMENT` credited a research outlet or agency
+(`<label> - <outlet or advisory> <date> - <note>`) say `External report <date>` like the 46 of
+the first decision, so every hand-added row reads `<label> - External report <date> - <note>`
+or `<label> - External export <date> - <note>`. `feed_lint.SOURCE_NAMES` lists the research
+units and agencies the imports used to credit and the usual publishers; `feed_lint.SOURCE_RE`
+matches a listed name as a whole word, case and the space or hyphen inside it ignored; the lint
+refuses a `COMMENT` it matches (`COMMENT credits Unit 42: the feed names no source`), the bot
+refuses such a label at intake and the news agent drops such a theme whole, as with the service
+rule, so no row needs the lint to catch it. (h) The monthly workflow reads only the
+`REPUTATION_API_KEY` secret: it was stored on 2026-11-04 (piped from the Keychain, never shown)
+and the old secret deleted the same minute, so the fallback went.
+
+**Known limits.** The commit history and past Actions logs keep the old wording, names and
+credits; rewriting the history of a public repository was not worth its cost. The monthly
+workflow's log, public like the repository, still lists each re-checked row with its engine
+count; making the job print only its summary is a follow-up if the owner wants it. The band is
+derived from the count, so a reader who knows the code can still infer the service; the terms
+are about what is distributed, and the count no longer is. The source list names publishers,
+not the brands whose products a threat targets (Microsoft, Cisco, Fortinet, Cloudflare, Sophos,
+Trend Micro, Palo Alto Networks) nor the internet scanners the feed labels by operator (Censys,
+Shadowserver, GreyNoise): a theme or label names those as the subject, so they are in by their
+research arms only (Microsoft Threat Intelligence; Talos for Cisco; Unit 42 for Palo Alto
+Networks) and a label that credits the bare brand passes the lint. The vendors the imports
+credited by brand (Kaspersky, ESET, Bitdefender, Proofpoint, CrowdStrike) and the agencies
+(CISA, FBI, NSA, CERT-UA) stay in by that name, so a news theme that uses one as a lure or a
+subject (a fake installer, a seized domain) is dropped whole and the row carries the bare
+`News <date>` label; the indicator is added all the same. The rewrite went by the comment's
+structure, not the list, so the rows that credited Microsoft, Sophos, Trend Micro and Splunk
+were scrubbed too, and the advisory numbers that stood with a credit (`AA26-097A`,
+`JCSA-20260826-01`) went with it, since they point at the publisher; the actor names in the
+labels (`UAC-0277`) remain. A publisher the list lacks passes until it is added.
 
 **Outcome.** Built 2026-10-30 in a worktree, test-first: 633 tests green both ways, the feed
 lint clean (1,811 rows, 0 mentions), `unifi-blocklist.txt` unchanged (489 entries). Merged to
 main, the bot restarted and pushed the same day (8bc7782), with the wiki pages and the
 Discussions reworded in the same hour on the owner's word. The workflow reads the `REPUTATION_API_KEY` secret and, while it is
 missing, the old one, so the monthly run of 2026-11-01 is unaffected; the owner adds the new
-secret under Settings → Secrets and variables → Actions and deletes the old one at leisure.
+secret under Settings → Secrets and variables → Actions and deletes the old one at leisure
+(done 2026-11-04 and the fallback removed, see (h) below).
+
+**Outcome (2026-11-04).** The second decision built the same day in a worktree, test-first:
+658 tests green plain and with `-I`, the lint clean on 1,840 rows, 726 names and 241 comments
+rewritten by a script that checked every `VALUE` unchanged (`unifi-blocklist.txt` is the
+same), the workflow's fallback removed, the README, CHANGELOG and the wiki page that showed a
+`vt-` row and a credit reworded with it. Reviewed once before the merge (seven findings, none
+critical): the source list lost the brands and scanners a label names as the subject and the
+dash class widened, both above; the lost advisory numbers and the first outcome's stale
+sentence are recorded; and the bot is restarted right after the merge, since the running one
+would otherwise write a `vt-` name the next job's lint refuses.
 
 ### D13. Inbound reputation blocks and feed members do not alert live (decided and built 2026-10-31)
 
@@ -1100,8 +1135,10 @@ merged the same day; the bot restarted on the new `vt_check`.
 7. Done 2026-10-30: the reputation service's public API terms restrict redistributing its
    results, so the feed's `COMMENT` note carries neither the service's name nor the engine
    count (`confirmed <date>` / `added unchecked <date>`), the public face names no lookup
-   service, and `CONFIDENCE` stays as this feed's own band (D12). Left open under D12's known
-   limits: the `vt-` row names, and the engine counts in the monthly workflow's public log.
+   service, and `CONFIDENCE` stays as this feed's own band (D12). Done 2026-11-04, the rest:
+   confirmed rows are `confirmed-<type>-<hash>`, no hand-added row credits its publisher, and
+   the lint holds both (D12, second decision). Left open under D12's known limits: the engine
+   counts in the monthly workflow's public log.
 8. Done 2026-10-31: the first tuning under item 4. Inbound detections from a source already in
    the feed, or blocked by IP reputation alone, no longer alert live; the brief counts them
    (D13).

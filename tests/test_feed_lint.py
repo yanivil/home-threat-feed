@@ -15,14 +15,14 @@ HEADER_PROBLEM = ("line 1: the header must be exactly "
                   "`# UNIQ-NAME,VALUE,TYPE,CONFIDENCE,SEVERITY,PRODUCT,COMMENT`")
 # One row of every TYPE, as the tools write them.
 ROWS = (
-    "vt-domain-1a2b3c4d5e,evil.example,Domain,high,high,AB,MuddyWater - confirmed 2026-10-01\n"
-    "vt-ip-0011223344,185.1.2.7,IP,medium,high,AB,Inbound probe of WAN - confirmed 2026-10-02\n"
+    "confirmed-domain-1a2b3c4d5e,evil.example,Domain,high,high,AB,MuddyWater - confirmed 2026-10-01\n"
+    "confirmed-ip-0011223344,185.1.2.7,IP,medium,high,AB,Inbound probe of WAN - confirmed 2026-10-02\n"
     "scanner-example-net,185.1.2.0-185.1.2.255,IP Range,high,medium,AB,Example scanner - port sweeps 2026-10-03\n"
     "trusted-url-5566778899,https://evil.example/login.php?id=1,URL,high,high,AB,"
     "Phishing kit - added unchecked 2026-10-04\n"
     "trusted-md5-aabbccddee,44d88612fea8a8f36de82e1278abb02f,MD5,high,high,AV,EICAR test file MD5 - safe to keep\n"
     "trusted-sha1-ffeeddccbb,3395856ce81f2b7382dee72602f798b642f14140,SHA1,high,high,AV,EICAR test file SHA1\n"
-    "vt-sha256-1234567890,275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f,SHA256,low,high,AV,"
+    "confirmed-sha256-1234567890,275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f,SHA256,low,high,AV,"
     "EICAR - confirmed 2026-10-05\n"
 )
 GOOD = HEADER + ROWS  # 8 lines: a new row is line 9
@@ -145,6 +145,42 @@ class FeedLintTest(unittest.TestCase):
         # Only the word itself: VTX, a name with the letters inside, is not it.
         self.assertEqual(problems(GOOD + "x-1,other.example,Domain,high,high,AB,VTX report - confirmed 2026-10-01\n"), [])
 
+    def test_the_comment_credits_no_source(self):
+        # A hand-added row says `External report <date>`, never which outlet or agency published it.
+        cases = [
+            ("x-1,other.example,Domain,high,high,AB,APT28 - Unit 42 2026-10-01 - confirmed 2026-10-02", "Unit 42"),
+            ("x-1,other.example,Domain,high,high,AB,Laundry Bear - CISA AA26-204A 2026-07-01 - confirmed 2026-10-02",
+             "CISA"),
+            ("x-1,other.example,Domain,high,high,AB,UAC-0277 - cert-ua UAC-0277 2026-09-01 - added unchecked 2026-10-02",
+             "cert-ua"),
+            ("x-1,other.example,Domain,high,high,AB,Stealer - Unit42 2026-10-01 - confirmed 2026-10-02", "Unit42"),
+            ("x-1,other.example,Domain,high,high,AB,Mirage Kitten - Kaspersky Securelist 2026-10-01 - confirmed 2026-10-02",
+             "Kaspersky"),
+        ]
+        for row, word in cases:
+            with self.subTest(row=row):
+                self.assertEqual(problems(GOOD + row + "\n"),
+                                 [f"line 9: COMMENT credits {word}: the feed names no source"])
+        # A dash of another width inside the name is still the name.
+        self.assertEqual(problems(GOOD + "x-1,other.example,Domain,high,high,AB,Handala - Group\u2011IB 2026-10-01 - confirmed 2026-10-02\n"),
+                         ["line 9: COMMENT credits Group\u2011IB: the feed names no source"])
+        # A brand a threat targets or impersonates, or a scanner named as the subject, is not a credit, and a
+        # name inside a longer word is not the name.
+        for comment in ("ClickFix fake Cloudflare verification pages - confirmed 2026-10-01",
+                        "Fake Microsoft 365 sign-in - confirmed 2026-10-01",
+                        "Sophos firewall exploitation - confirmed 2026-10-01",
+                        "Fake Malwarebytes installer - confirmed 2026-10-01",
+                        "Censys scanner - port sweeps of WAN seen 2026-10-01",
+                        "Talosian loader - External report 2026-10-01 - confirmed 2026-10-02"):
+            with self.subTest(comment=comment):
+                self.assertEqual(problems(GOOD + f"x-1,other.example,Domain,high,high,AB,{comment}\n"), [])
+
+    def test_the_name_names_no_lookup_service(self):
+        # A confirmed row is `confirmed-<type>-<hash>`; the old prefix was the service's abbreviation.
+        self.assertEqual(
+            problems(GOOD + "vt-domain-0011223344,other.example,Domain,high,high,AB,confirmed 2026-10-01\n"),
+            ["line 9: UNIQ-NAME vt-domain-0011223344 names a lookup service (vt): use confirmed-<type>-<hash>"])
+
     def test_a_value_appears_once_whatever_its_case(self):
         self.assertEqual(problems(GOOD + "x-1,evil.example,Domain,high,high,AB,c\n"),
                          ["line 9: VALUE evil.example repeats line 2"])
@@ -152,8 +188,8 @@ class FeedLintTest(unittest.TestCase):
                          ["line 9: VALUE https://EVIL.example/login.php?id=1 repeats line 5"])
 
     def test_a_uniq_name_is_unique_and_present(self):
-        self.assertEqual(problems(GOOD + "vt-domain-1a2b3c4d5e,other.example,Domain,high,high,AB,c\n"),
-                         ["line 9: UNIQ-NAME vt-domain-1a2b3c4d5e repeats line 2"])
+        self.assertEqual(problems(GOOD + "confirmed-domain-1a2b3c4d5e,other.example,Domain,high,high,AB,c\n"),
+                         ["line 9: UNIQ-NAME confirmed-domain-1a2b3c4d5e repeats line 2"])
         self.assertEqual(problems(GOOD + ",other.example,Domain,high,high,AB,c\n"), ["line 9: UNIQ-NAME is empty"])
 
     def test_hidden_characters_are_refused_and_named_with_their_column(self):
