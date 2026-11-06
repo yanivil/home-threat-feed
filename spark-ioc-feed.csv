@@ -1776,7 +1776,7 @@ confirmed-ip-721f12d6db,103.146.159.173,IP,high,high,AB,Inbound probe of WAN - S
 confirmed-ip-9ccdd20cb0,86.38.187.165,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - seen in Spark logs 2026-11-04 - confirmed 2026-10-22
 confirmed-ip-137bd6049b,66.132.195.50,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
 confirmed-ip-a230c85954,66.117.5.228,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
-confirmed-ip-ee517e5bff,195.178.110.159,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
+confirmed-ip-ee517e5bff,195.178.110.159,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - seen in Spark logs 2026-11-06 - confirmed 2026-10-22
 confirmed-ip-8c9052bd1b,162.216.150.244,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - seen in Spark logs 2026-11-01 - confirmed 2026-10-22
 confirmed-ip-a03632f2a0,115.190.52.2,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
 confirmed-ip-90864734cf,85.217.140.46,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
@@ -1846,3 +1846,4 @@ confirmed-domain-ef73ecd498,hackersteersman.digital,Domain,high,high,AB,News 202
 confirmed-domain-0b55e27c14,marsalek.cy,Domain,high,high,AB,News 2026-11-05 Marsalek stealer fake game cheats - confirmed 2026-11-06
 confirmed-domain-d15e5b5e59,insightjs.com,Domain,high,high,AB,News 2026-11-05 Game launcher compromise K2F backdoor - confirmed 2026-11-06
 confirmed-domain-77f4eb3188,insightjs.org,Domain,medium,high,AB,News 2026-11-05 Game launcher compromise K2F backdoor - confirmed 2026-11-06
+confirmed-ip-018dabef67,79.124.40.142,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-06 - seen in Spark logs 2026-11-06 - confirmed 2026-11-06
