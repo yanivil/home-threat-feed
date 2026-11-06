@@ -1839,3 +1839,10 @@ confirmed-ip-85d1f10391,45.90.13.169,IP,high,high,AB,News 2026-10-28 router and 
 confirmed-ip-a0498dbdd2,62.210.142.21,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-03 - seen in Spark logs 2026-11-03 - confirmed 2026-11-03
 confirmed-ip-c2b09a988b,81.12.33.38,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-03 - seen in Spark logs 2026-11-03 - confirmed 2026-11-03
 confirmed-domain-6af9fcbd58,managecare.in,Domain,low,high,AB,News 2026-10-29 Indian bank card-protection phishing pages - confirmed 2026-11-04
+confirmed-domain-1b033071dc,hf98x4d.site,Domain,high,high,AB,News 2026-11-05 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-06
+confirmed-domain-7856777707,apdhlhs3.xyz,Domain,high,high,AB,News 2026-11-05 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-06
+confirmed-domain-9ff1368265,j9af4sr.guru,Domain,high,high,AB,News 2026-11-05 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-06
+confirmed-domain-ef73ecd498,hackersteersman.digital,Domain,high,high,AB,News 2026-11-05 Phexia ClickFix first-stage delivery host - confirmed 2026-11-06
+confirmed-domain-0b55e27c14,marsalek.cy,Domain,high,high,AB,News 2026-11-05 Marsalek stealer fake game cheats - confirmed 2026-11-06
+confirmed-domain-d15e5b5e59,insightjs.com,Domain,high,high,AB,News 2026-11-05 Game launcher compromise K2F backdoor - confirmed 2026-11-06
+confirmed-domain-77f4eb3188,insightjs.org,Domain,medium,high,AB,News 2026-11-05 Game launcher compromise K2F backdoor - confirmed 2026-11-06
