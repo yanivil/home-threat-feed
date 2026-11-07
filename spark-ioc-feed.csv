@@ -1847,3 +1847,4 @@ confirmed-domain-0b55e27c14,marsalek.cy,Domain,high,high,AB,News 2026-11-05 Mars
 confirmed-domain-d15e5b5e59,insightjs.com,Domain,high,high,AB,News 2026-11-05 Game launcher compromise K2F backdoor - confirmed 2026-11-06
 confirmed-domain-77f4eb3188,insightjs.org,Domain,medium,high,AB,News 2026-11-05 Game launcher compromise K2F backdoor - confirmed 2026-11-06
 confirmed-ip-018dabef67,79.124.40.142,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-06 - seen in Spark logs 2026-11-06 - confirmed 2026-11-06
+confirmed-domain-f59ac06bb6,neihite.cc,Domain,high,high,AB,News 2026-11-04 Aoki infostealer command-and-control - confirmed 2026-11-07
