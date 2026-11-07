@@ -608,7 +608,7 @@ confirmed-ip-efa1eb5b88,91.230.168.77,IP,medium,high,AB,Inbound probe of WAN - S
 confirmed-ip-6147885e29,31.184.195.246,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
 confirmed-ip-f9753dd77d,193.163.125.89,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
 confirmed-ip-e2564f34eb,91.230.168.145,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
-confirmed-ip-ee3c20fd70,207.90.244.17,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
+confirmed-ip-ee3c20fd70,207.90.244.17,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-11-07 - confirmed 2026-10-22
 confirmed-ip-7e121602f4,156.225.1.10,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
 confirmed-ip-8e7ca401f0,167.71.173.4,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
 confirmed-ip-cea5aba0a1,193.163.125.77,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
@@ -1848,3 +1848,5 @@ confirmed-domain-d15e5b5e59,insightjs.com,Domain,high,high,AB,News 2026-11-05 Ga
 confirmed-domain-77f4eb3188,insightjs.org,Domain,medium,high,AB,News 2026-11-05 Game launcher compromise K2F backdoor - confirmed 2026-11-06
 confirmed-ip-018dabef67,79.124.40.142,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-06 - seen in Spark logs 2026-11-06 - confirmed 2026-11-06
 confirmed-domain-f59ac06bb6,neihite.cc,Domain,high,high,AB,News 2026-11-04 Aoki infostealer command-and-control - confirmed 2026-11-07
+confirmed-ip-3237d49ff0,216.180.246.155,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-07 - seen in Spark logs 2026-11-07 - confirmed 2026-11-07
+confirmed-ip-f71061b7f0,94.183.174.99,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-07 - seen in Spark logs 2026-11-07 - confirmed 2026-11-07
