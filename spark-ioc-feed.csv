@@ -1852,3 +1852,5 @@ confirmed-ip-3237d49ff0,216.180.246.155,IP,medium,high,AB,Inbound probe of WAN -
 confirmed-ip-f71061b7f0,94.183.174.99,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-07 - seen in Spark logs 2026-11-07 - confirmed 2026-11-07
 confirmed-domain-2987712727,oscofneuid.com,Domain,medium,high,AB,News 2026-11-06 Mirax Android banking RAT streaming ads - confirmed 2026-11-08
 confirmed-domain-c7cdcbe6d8,kenobuias.com,Domain,low,high,AB,News 2026-11-06 Mirax Android banking RAT streaming ads - confirmed 2026-11-08
+confirmed-ip-860aee42c3,216.180.246.172,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-08 - seen in Spark logs 2026-11-08 - confirmed 2026-11-08
+confirmed-ip-2082812086,79.124.62.10,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-08 - seen in Spark logs 2026-11-08 - confirmed 2026-11-08
