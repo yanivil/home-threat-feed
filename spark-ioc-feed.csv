@@ -1854,3 +1854,18 @@ confirmed-domain-2987712727,oscofneuid.com,Domain,medium,high,AB,News 2026-11-06
 confirmed-domain-c7cdcbe6d8,kenobuias.com,Domain,low,high,AB,News 2026-11-06 Mirax Android banking RAT streaming ads - confirmed 2026-11-08
 confirmed-ip-860aee42c3,216.180.246.172,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-08 - seen in Spark logs 2026-11-08 - confirmed 2026-11-08
 confirmed-ip-2082812086,79.124.62.10,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-08 - seen in Spark logs 2026-11-08 - confirmed 2026-11-08
+confirmed-domain-18ee4f15d2,67sixcebeh.surf,Domain,high,high,AB,News 2026-11-04 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-09
+confirmed-domain-797c51d983,stv4ec5.shop,Domain,high,high,AB,News 2026-11-04 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-09
+confirmed-domain-b1db242ec6,vg5sgxv.lol,Domain,high,high,AB,News 2026-11-04 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-09
+confirmed-domain-7f9ec877e1,d9mjs.sbs,Domain,high,high,AB,News 2026-11-04 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-09
+confirmed-domain-a972eacff9,jse8x92s.me,Domain,high,high,AB,News 2026-11-04 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-09
+confirmed-domain-ba046e1b48,couhe79.xyz,Domain,high,high,AB,News 2026-11-04 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-09
+confirmed-domain-a61240c80b,xzttyt.xyz,Domain,high,high,AB,News 2026-11-04 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-09
+confirmed-domain-1cde7728ac,secdarvin2026.icu,Domain,high,high,AB,News 2026-11-04 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-09
+confirmed-domain-f0fe630833,oreshnik.top,Domain,high,high,AB,News 2026-11-04 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-09
+confirmed-domain-e29a1f10a7,svo-zv.pro,Domain,high,high,AB,News 2026-11-04 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-09
+confirmed-domain-e836f0b0e9,dhsbdgs.icu,Domain,medium,high,AB,News 2026-11-04 Phexia macOS stealer ClickFix C2 - confirmed 2026-11-09
+confirmed-domain-f32e6cd852,d9j.everunningshoes.com,Domain,low,high,AB,News 2026-11-04 Phexia ClickFix script delivery host - confirmed 2026-11-09
+confirmed-ip-e5d2453062,62.60.226.50,IP,high,high,AB,News 2026-11-04 Phexia stolen data upload server - confirmed 2026-11-09
+confirmed-url-a93f29a23d,http://62.60.226.50/upload.php,URL,high,high,AB,News 2026-11-04 Phexia stolen data upload server - confirmed 2026-11-09
+confirmed-domain-5be87936f6,adhelper.one,Domain,low,high,AB,News 2026-11-04 Malvertised fake Microsoft support scam - confirmed 2026-11-09
