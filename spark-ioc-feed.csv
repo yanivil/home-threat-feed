@@ -466,7 +466,7 @@ confirmed-ip-b06b9e98a4,45.148.10.230,IP,high,high,AB,Inbound probe of WAN - Spa
 confirmed-ip-398ebe418c,176.65.149.27,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
 confirmed-ip-639d1e6b64,176.65.149.30,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
 confirmed-ip-38798af1e3,176.65.149.212,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
-confirmed-ip-153f9de11a,79.124.56.214,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
+confirmed-ip-153f9de11a,79.124.56.214,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-11-09 - confirmed 2026-10-21
 confirmed-ip-5bfba5399f,176.65.149.64,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-30 - confirmed 2026-10-21
 confirmed-ip-9da6067982,185.136.15.90,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
 confirmed-ip-0dec70aabc,176.65.149.230,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
