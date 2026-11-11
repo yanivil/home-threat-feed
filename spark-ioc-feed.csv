@@ -1891,3 +1891,5 @@ confirmed-ip-b56515525f,85.217.140.50,IP,high,high,AB,Inbound probe of WAN - Spa
 confirmed-ip-519eb5e299,85.217.149.69,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-10 - seen in Spark logs 2026-11-10 - confirmed 2026-11-10
 confirmed-ip-37d8eeb830,85.217.149.67,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-10 - seen in Spark logs 2026-11-10 - confirmed 2026-11-10
 confirmed-ip-e6cea09578,85.217.149.7,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-10 - seen in Spark logs 2026-11-10 - confirmed 2026-11-10
+confirmed-domain-ac886d3fad,adhelper.cc,Domain,medium,high,AB,News 2026-11-04 fake Microsoft alert tech-support scam - confirmed 2026-11-11
+confirmed-domain-2184617a3a,call.adhelper.cc,Domain,medium,high,AB,News 2026-11-04 fake Microsoft alert tech-support scam - confirmed 2026-11-11
