@@ -1894,3 +1894,9 @@ confirmed-ip-e6cea09578,85.217.149.7,IP,high,high,AB,Inbound probe of WAN - Spar
 confirmed-domain-ac886d3fad,adhelper.cc,Domain,medium,high,AB,News 2026-11-04 fake Microsoft alert tech-support scam - confirmed 2026-11-11
 confirmed-domain-2184617a3a,call.adhelper.cc,Domain,medium,high,AB,News 2026-11-04 fake Microsoft alert tech-support scam - confirmed 2026-11-11
 confirmed-ip-443fe54da0,184.67.58.230,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-11 - seen in Spark logs 2026-11-11 - confirmed 2026-11-11
+confirmed-domain-0030080f68,elitecheatsx.live,Domain,medium,high,AB,News 2026-11-10 RevStealer game cheat lure distribution - confirmed 2026-11-12
+confirmed-domain-34e0e8ab88,elitemods.shop,Domain,medium,high,AB,News 2026-11-10 RevStealer game cheat lure distribution - confirmed 2026-11-12
+confirmed-domain-1de657b2a4,satano.xyz,Domain,medium,high,AB,News 2026-11-10 RevStealer game cheat lure distribution - confirmed 2026-11-12
+confirmed-domain-c0fb35adf4,resight-cheats.net,Domain,high,high,AB,News 2026-11-10 RevStealer YouTube cheat video lures - confirmed 2026-11-12
+confirmed-domain-cb15062553,yimmodmenu.org,Domain,medium,high,AB,News 2026-11-10 RevStealer related cheat distribution domain - confirmed 2026-11-12
+confirmed-domain-669dd1a5e6,luxurycheats.live,Domain,high,high,AB,News 2026-11-10 RevStealer related cheat distribution domain - confirmed 2026-11-12
