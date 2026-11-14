@@ -517,7 +517,7 @@ confirmed-ip-391f2343d8,3.131.24.55,IP,medium,high,AB,Inbound probe of WAN - Spa
 confirmed-ip-23ac80e95e,34.197.70.90,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
 confirmed-ip-bba5fff6f7,79.124.49.14,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
 confirmed-ip-4f0df574dc,193.163.125.83,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
-confirmed-ip-e04bb9ba52,199.195.248.205,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
+confirmed-ip-e04bb9ba52,199.195.248.205,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-11-14 - confirmed 2026-10-21
 confirmed-ip-ca4062dc0d,193.163.125.93,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
 confirmed-ip-7c81dd79ea,79.124.58.142,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
 confirmed-ip-295b96cbee,213.209.159.25,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
@@ -1924,3 +1924,4 @@ confirmed-domain-45dd687677,blockchainfuturedev.buzz,Domain,medium,high,AB,News 
 confirmed-domain-7e0ad8790c,maccl0ude.com,Domain,high,high,AB,News 2026-11-12 macOS ClickFix lure video host - confirmed 2026-11-14
 confirmed-domain-63adf5cf83,a11.click,Domain,high,high,AB,News 2026-11-12 Typosquat portfolio redirector to installers - confirmed 2026-11-14
 confirmed-domain-792ab36621,netguardsite.com,Domain,low,high,AB,News 2026-11-12 Browser-hijacking Net Guard installer infrastructure - confirmed 2026-11-14
+confirmed-ip-2909c66f91,91.92.42.178,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-14 - seen in Spark logs 2026-11-14 - confirmed 2026-11-14
