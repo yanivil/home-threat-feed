@@ -1908,3 +1908,19 @@ confirmed-domain-d4f3ffa999,cluade.ai,Domain,low,high,AB,News 2026-11-12 AI typo
 confirmed-ip-764a407d25,216.180.246.41,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-13 - seen in Spark logs 2026-11-13 - confirmed 2026-11-13
 confirmed-ip-9658bcd128,113.57.146.66,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-13 - seen in Spark logs 2026-11-13 - confirmed 2026-11-13
 confirmed-ip-11aae1de51,79.124.49.62,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-13 - seen in Spark logs 2026-11-13 - confirmed 2026-11-13
+confirmed-ip-71f833db50,89.34.90.203,IP,high,high,AB,News 2026-11-13 Fake Zillow ClickFix NetSupport RAT - confirmed 2026-11-14
+confirmed-domain-9bf2a8da02,apartments-review8509831.sbs,Domain,medium,high,AB,News 2026-11-13 Fake Zillow ClickFix NetSupport RAT - confirmed 2026-11-14
+confirmed-domain-c4a391ea03,caude.ai,Domain,medium,high,AB,News 2026-11-12 AI typosquats leading to fake installers - confirmed 2026-11-14
+confirmed-domain-f6f56fc422,ckaude.ai,Domain,low,high,AB,News 2026-11-12 AI typosquats leading to fake installers - confirmed 2026-11-14
+confirmed-domain-de0a807228,elevenlebs.io,Domain,medium,high,AB,News 2026-11-12 AI typosquats leading to fake installers - confirmed 2026-11-14
+confirmed-domain-07258a2b7e,perplixity.ai,Domain,medium,high,AB,News 2026-11-12 Monetized AI typosquat redirect portfolio - confirmed 2026-11-14
+confirmed-domain-cdb614a2db,perplecity.ai,Domain,low,high,AB,News 2026-11-12 Monetized AI typosquat redirect portfolio - confirmed 2026-11-14
+confirmed-domain-4f45d2cf29,kiling.ai,Domain,low,high,AB,News 2026-11-12 Monetized AI typosquat redirect portfolio - confirmed 2026-11-14
+confirmed-domain-074bdf13ea,klig.ai,Domain,low,high,AB,News 2026-11-12 Monetized AI typosquat redirect portfolio - confirmed 2026-11-14
+confirmed-domain-efc3e8917c,chatlgpt.com,Domain,high,high,AB,News 2026-11-12 Fake ChatGPT desktop app download - confirmed 2026-11-14
+confirmed-domain-5ab13fa230,midj0urney.org,Domain,high,high,AB,News 2026-11-12 AI typosquat delivering stealer payload - confirmed 2026-11-14
+confirmed-domain-536768b8d4,deepsek.icu,Domain,high,high,AB,News 2026-11-12 AI typosquat delivering Android banking trojan - confirmed 2026-11-14
+confirmed-domain-45dd687677,blockchainfuturedev.buzz,Domain,medium,high,AB,News 2026-11-12 ClickFix fingerprint gate fake verification - confirmed 2026-11-14
+confirmed-domain-7e0ad8790c,maccl0ude.com,Domain,high,high,AB,News 2026-11-12 macOS ClickFix lure video host - confirmed 2026-11-14
+confirmed-domain-63adf5cf83,a11.click,Domain,high,high,AB,News 2026-11-12 Typosquat portfolio redirector to installers - confirmed 2026-11-14
+confirmed-domain-792ab36621,netguardsite.com,Domain,low,high,AB,News 2026-11-12 Browser-hijacking Net Guard installer infrastructure - confirmed 2026-11-14
