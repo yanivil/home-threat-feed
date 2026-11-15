@@ -1925,3 +1925,5 @@ confirmed-domain-7e0ad8790c,maccl0ude.com,Domain,high,high,AB,News 2026-11-12 ma
 confirmed-domain-63adf5cf83,a11.click,Domain,high,high,AB,News 2026-11-12 Typosquat portfolio redirector to installers - confirmed 2026-11-14
 confirmed-domain-792ab36621,netguardsite.com,Domain,low,high,AB,News 2026-11-12 Browser-hijacking Net Guard installer infrastructure - confirmed 2026-11-14
 confirmed-ip-2909c66f91,91.92.42.178,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-14 - seen in Spark logs 2026-11-14 - confirmed 2026-11-14
+confirmed-ip-28ceb63130,216.180.246.56,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-15 - seen in Spark logs 2026-11-15 - confirmed 2026-11-15
+confirmed-ip-0c3b6bac94,216.158.235.118,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-15 - seen in Spark logs 2026-11-15 - confirmed 2026-11-15
