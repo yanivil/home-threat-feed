@@ -1928,3 +1928,5 @@ confirmed-ip-2909c66f91,91.92.42.178,IP,high,high,AB,Inbound probe of WAN - Spar
 confirmed-ip-28ceb63130,216.180.246.56,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-15 - seen in Spark logs 2026-11-15 - confirmed 2026-11-15
 confirmed-ip-0c3b6bac94,216.158.235.118,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-15 - seen in Spark logs 2026-11-15 - confirmed 2026-11-15
 confirmed-domain-bb73d589ae,cheatseller.com,Domain,low,high,AB,News 2026-11-10 RevStealer game cheat distribution hub - confirmed 2026-11-16
+confirmed-ip-5c53fa3af7,216.180.246.165,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-16 - seen in Spark logs 2026-11-16 - confirmed 2026-11-16
+confirmed-ip-db9ef091d3,79.124.58.134,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-16 - seen in Spark logs 2026-11-16 - confirmed 2026-11-16
