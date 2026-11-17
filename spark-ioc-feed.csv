@@ -1930,3 +1930,8 @@ confirmed-ip-0c3b6bac94,216.158.235.118,IP,medium,high,AB,Inbound probe of WAN -
 confirmed-domain-bb73d589ae,cheatseller.com,Domain,low,high,AB,News 2026-11-10 RevStealer game cheat distribution hub - confirmed 2026-11-16
 confirmed-ip-5c53fa3af7,216.180.246.165,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-16 - seen in Spark logs 2026-11-16 - confirmed 2026-11-16
 confirmed-ip-db9ef091d3,79.124.58.134,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-16 - seen in Spark logs 2026-11-16 - confirmed 2026-11-16
+confirmed-domain-525b43c0e0,anthropiv.com,Domain,medium,high,AB,News 2026-11-12 AI tool typosquat malware lure - confirmed 2026-11-17
+confirmed-domain-64538b1811,chstgpt.com,Domain,medium,high,AB,News 2026-11-12 AI tool typosquat malware lure - confirmed 2026-11-17
+confirmed-domain-050e6c8762,notbooklm.com,Domain,low,high,AB,News 2026-11-12 AI tool typosquat malware lure - confirmed 2026-11-17
+confirmed-domain-313e14a5d9,preplexity.ai,Domain,medium,high,AB,News 2026-11-12 AI typosquat search hijack redirect - confirmed 2026-11-17
+confirmed-domain-64e8fcdc97,leonardi.ai,Domain,low,high,AB,News 2026-11-12 AI tool typosquat malware lure - confirmed 2026-11-17
