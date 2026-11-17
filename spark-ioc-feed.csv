@@ -444,7 +444,7 @@ confirmed-ip-c23901346b,193.176.31.157,IP,high,high,AB,Inbound probe of WAN - Sp
 confirmed-ip-8895ce858a,95.215.218.163,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - confirmed 2026-10-20
 confirmed-ip-ba7e003792,20.171.192.135,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - seen in Spark logs 2026-11-01 - confirmed 2026-10-20
 confirmed-ip-e964b249d9,89.37.172.130,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-20 - seen in Spark logs 2026-10-30 - confirmed 2026-10-20
-confirmed-ip-74377016a6,194.180.49.121,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - confirmed 2026-10-21
+confirmed-ip-74377016a6,194.180.49.121,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-11-17 - confirmed 2026-10-21
 confirmed-ip-6a624ab1d4,195.182.16.23,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
 confirmed-ip-3e0c9c4551,185.224.128.16,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
 confirmed-ip-d4884d4e3d,78.128.114.174,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-21 - seen in Spark logs 2026-10-29 - confirmed 2026-10-21
@@ -1935,3 +1935,4 @@ confirmed-domain-64538b1811,chstgpt.com,Domain,medium,high,AB,News 2026-11-12 AI
 confirmed-domain-050e6c8762,notbooklm.com,Domain,low,high,AB,News 2026-11-12 AI tool typosquat malware lure - confirmed 2026-11-17
 confirmed-domain-313e14a5d9,preplexity.ai,Domain,medium,high,AB,News 2026-11-12 AI typosquat search hijack redirect - confirmed 2026-11-17
 confirmed-domain-64e8fcdc97,leonardi.ai,Domain,low,high,AB,News 2026-11-12 AI tool typosquat malware lure - confirmed 2026-11-17
+confirmed-ip-66d3cbe07f,45.141.233.67,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-17 - seen in Spark logs 2026-11-17 - confirmed 2026-11-17
