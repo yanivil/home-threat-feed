@@ -1936,3 +1936,6 @@ confirmed-domain-050e6c8762,notbooklm.com,Domain,low,high,AB,News 2026-11-12 AI 
 confirmed-domain-313e14a5d9,preplexity.ai,Domain,medium,high,AB,News 2026-11-12 AI typosquat search hijack redirect - confirmed 2026-11-17
 confirmed-domain-64e8fcdc97,leonardi.ai,Domain,low,high,AB,News 2026-11-12 AI tool typosquat malware lure - confirmed 2026-11-17
 confirmed-ip-66d3cbe07f,45.141.233.67,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-17 - seen in Spark logs 2026-11-17 - confirmed 2026-11-17
+confirmed-domain-2ff85e125a,clsude.ai,Domain,low,high,AB,News 2026-11-12 AI-tool typosquats delivering ClickFix malware - confirmed 2026-11-18
+confirmed-domain-6613786b92,deepceek.com,Domain,low,high,AB,News 2026-11-12 AI-tool typosquats delivering ClickFix malware - confirmed 2026-11-18
+confirmed-domain-94b43168be,copiot.com,Domain,low,high,AB,News 2026-11-12 AI-tool typosquats delivering ClickFix malware - confirmed 2026-11-18
