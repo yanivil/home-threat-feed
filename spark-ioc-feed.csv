@@ -558,7 +558,7 @@ confirmed-ip-833fba6516,79.124.58.22,IP,medium,high,AB,Inbound probe of WAN - Sp
 confirmed-ip-64d701b3d7,138.226.239.11,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
 confirmed-ip-52ffac0360,193.163.125.76,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
 confirmed-ip-9d56cc5897,85.217.149.55,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-11-10 - confirmed 2026-10-22
-confirmed-ip-f7f89b0dc4,85.217.140.41,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
+confirmed-ip-f7f89b0dc4,85.217.140.41,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-11-18 - confirmed 2026-10-22
 confirmed-ip-942c99c2ca,172.110.223.173,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
 confirmed-ip-07090f5a17,201.77.3.29,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
 confirmed-ip-f72a6e0cf5,130.12.180.196,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
@@ -583,7 +583,7 @@ confirmed-ip-ef1a4f52dd,185.242.226.95,IP,medium,high,AB,Inbound probe of WAN - 
 confirmed-ip-8170254d3e,185.242.226.91,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
 confirmed-ip-399bb68e8d,185.242.226.60,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-30 - confirmed 2026-10-22
 confirmed-ip-babba52df3,77.90.185.78,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
-confirmed-ip-53057f3424,85.217.140.10,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
+confirmed-ip-53057f3424,85.217.140.10,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-11-18 - confirmed 2026-10-22
 confirmed-ip-57d90af585,94.154.43.43,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
 confirmed-ip-de45539872,192.207.105.196,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
 confirmed-ip-9f9d21f6ca,78.153.140.235,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
@@ -621,7 +621,7 @@ confirmed-ip-95a6cbb79c,85.217.149.26,IP,high,high,AB,Inbound probe of WAN - Spa
 confirmed-ip-8edb44f0c4,156.225.1.99,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
 confirmed-ip-7e25f4c4a8,185.94.111.1,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-10-29 - confirmed 2026-10-22
 confirmed-ip-828ad14b15,77.90.185.20,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-11-01 - confirmed 2026-10-22
-confirmed-ip-7ff125d1b4,85.217.149.56,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
+confirmed-ip-7ff125d1b4,85.217.149.56,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-11-18 - confirmed 2026-10-22
 confirmed-ip-c3de8c9e45,85.217.140.27,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - seen in Spark logs 2026-11-10 - confirmed 2026-10-22
 confirmed-ip-86212bbbcc,94.154.43.7,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
 confirmed-ip-569e80c892,190.104.47.210,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-10-22 - confirmed 2026-10-22
@@ -1779,7 +1779,7 @@ confirmed-ip-a230c85954,66.117.5.228,IP,medium,high,AB,Inbound probe of WAN - Sp
 confirmed-ip-ee517e5bff,195.178.110.159,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - seen in Spark logs 2026-11-06 - confirmed 2026-10-22
 confirmed-ip-8c9052bd1b,162.216.150.244,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - seen in Spark logs 2026-11-01 - confirmed 2026-10-22
 confirmed-ip-a03632f2a0,115.190.52.2,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
-confirmed-ip-90864734cf,85.217.140.46,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
+confirmed-ip-90864734cf,85.217.140.46,IP,high,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - seen in Spark logs 2026-11-18 - confirmed 2026-10-22
 confirmed-ip-b8d203b1d8,84.54.73.46,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
 confirmed-ip-5ec142e840,62.150.237.107,IP,medium,high,AB,Inbound probe of WAN - Spark dashboard 2026-10-22 - confirmed 2026-10-22
 confirmed-ip-b077b152ac,171.225.216.46,IP,medium,high,AB,bot test - sent from Telegram - confirmed 2026-10-29
@@ -1939,3 +1939,5 @@ confirmed-ip-66d3cbe07f,45.141.233.67,IP,medium,high,AB,Inbound probe of WAN - S
 confirmed-domain-2ff85e125a,clsude.ai,Domain,low,high,AB,News 2026-11-12 AI-tool typosquats delivering ClickFix malware - confirmed 2026-11-18
 confirmed-domain-6613786b92,deepceek.com,Domain,low,high,AB,News 2026-11-12 AI-tool typosquats delivering ClickFix malware - confirmed 2026-11-18
 confirmed-domain-94b43168be,copiot.com,Domain,low,high,AB,News 2026-11-12 AI-tool typosquats delivering ClickFix malware - confirmed 2026-11-18
+confirmed-ip-ca4d3fd106,79.124.40.166,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-18 - seen in Spark logs 2026-11-18 - confirmed 2026-11-18
+confirmed-ip-f340a55448,102.220.161.84,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-18 - seen in Spark logs 2026-11-18 - confirmed 2026-11-18
