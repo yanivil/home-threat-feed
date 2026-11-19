@@ -1953,3 +1953,4 @@ confirmed-domain-f84ab41a13,xml.securetrackingnode.com,Domain,medium,high,AB,New
 confirmed-domain-495a4ad94c,biomimicrydevtech.buzz,Domain,medium,high,AB,News 2026-11-12 ClickFix traffic distribution hop - confirmed 2026-11-19
 confirmed-ip-19ef0855f3,185.138.88.3,IP,medium,high,AB,News 2026-11-12 ClickFix PowerShell payload host - confirmed 2026-11-19
 confirmed-domain-5a4081112e,netguardprotect.com,Domain,medium,high,AB,News 2026-11-12 browser-hijacking Net Guard installer - confirmed 2026-11-19
+confirmed-ip-818b69c826,45.156.87.168,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-19 - seen in Spark logs 2026-11-19 - confirmed 2026-11-19
