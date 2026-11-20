@@ -1954,3 +1954,36 @@ confirmed-domain-495a4ad94c,biomimicrydevtech.buzz,Domain,medium,high,AB,News 20
 confirmed-ip-19ef0855f3,185.138.88.3,IP,medium,high,AB,News 2026-11-12 ClickFix PowerShell payload host - confirmed 2026-11-19
 confirmed-domain-5a4081112e,netguardprotect.com,Domain,medium,high,AB,News 2026-11-12 browser-hijacking Net Guard installer - confirmed 2026-11-19
 confirmed-ip-818b69c826,45.156.87.168,IP,high,high,AB,Inbound probe of WAN - Spark syslog 2026-11-19 - seen in Spark logs 2026-11-19 - confirmed 2026-11-19
+confirmed-domain-6454ae64d8,fc27-prime.shop,Domain,high,high,AB,News 2026-11-16 Fake gaming reward EA credential phishing - confirmed 2026-11-20
+confirmed-domain-bf55931643,fc27utprime.com,Domain,low,high,AB,News 2026-11-16 Fake gaming reward EA credential phishing - confirmed 2026-11-20
+confirmed-domain-6452ac3283,fc27utprime.online,Domain,low,high,AB,News 2026-11-16 Fake gaming reward EA credential phishing - confirmed 2026-11-20
+confirmed-domain-c74e7acb60,fedserv.thenewsip.site,Domain,low,high,AB,News 2026-11-16 Fake gaming reward EA credential phishing - confirmed 2026-11-20
+confirmed-domain-3ecc0c6fb1,glariontrust.com,Domain,medium,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-b946d262e7,swiftpremiumcapital.com,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-875a797e2a,northfieldreserve.com,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-83d6bc25ab,brayfinance.online,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-ea10ef11c1,heritageprivate.cc,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-e2b63d2382,sunraytrustbn.sbs,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-8815736046,gulfcoastcu.org,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-ff511230da,kinoxcapital.com,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-c26124f971,westlinedigital.info,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-08cf7b28cc,vaultroyalb.com,Domain,low,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-f65bd70889,ubnazionale.live.loadingloading.com.ng,Domain,medium,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-16879e7027,northgatebnk.com,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-62f1bc80fb,clyntelitecapital.com,Domain,medium,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-1857bafb2b,oakmontfb.com,Domain,low,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-e9366e0cbf,1stggbinc.cc,Domain,medium,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-54f21882ca,ardenovabank.com,Domain,low,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-9d8f1948a6,corepayfinance.com,Domain,low,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-987cfac8c2,premiummaya.com,Domain,low,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-d9e0c82573,bank.firstcp.live,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-32b85f126c,qtbnk.com,Domain,low,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-7a6acbd599,alliancetrustcu.pro,Domain,medium,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-e3ee37ce1d,westernfuturebnk.com,Domain,low,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-a4b333e7f4,sterlingtrusts.pro,Domain,medium,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-ac7aaeafe3,globalheritagestandards.com,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-a0a4efdfe8,apextrustfinbank.com,Domain,medium,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-0ba428fc55,allyunitybn.com,Domain,low,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-f64edd3826,securecapitalcorporationlimited.com,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-14def3d85b,hyperionglobalholdings.com,Domain,low,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
+confirmed-domain-3146d60507,mypgsweep.com,Domain,medium,high,AB,News 2026-11-16 Brand typosquats routing to scams - confirmed 2026-11-20
