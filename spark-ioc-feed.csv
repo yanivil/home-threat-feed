@@ -1987,3 +1987,4 @@ confirmed-domain-0ba428fc55,allyunitybn.com,Domain,low,high,AB,News 2026-11-16 F
 confirmed-domain-f64edd3826,securecapitalcorporationlimited.com,Domain,high,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
 confirmed-domain-14def3d85b,hyperionglobalholdings.com,Domain,low,high,AB,News 2026-11-16 Fake online bank credential phishing - confirmed 2026-11-20
 confirmed-domain-3146d60507,mypgsweep.com,Domain,medium,high,AB,News 2026-11-16 Brand typosquats routing to scams - confirmed 2026-11-20
+confirmed-ip-c80293090a,216.180.246.234,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-20 - seen in Spark logs 2026-11-20 - confirmed 2026-11-20
