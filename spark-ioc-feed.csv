@@ -1989,3 +1989,4 @@ confirmed-domain-14def3d85b,hyperionglobalholdings.com,Domain,low,high,AB,News 2
 confirmed-domain-3146d60507,mypgsweep.com,Domain,medium,high,AB,News 2026-11-16 Brand typosquats routing to scams - confirmed 2026-11-20
 confirmed-ip-c80293090a,216.180.246.234,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-20 - seen in Spark logs 2026-11-20 - confirmed 2026-11-20
 confirmed-ip-dd305b0535,216.180.246.118,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-21 - seen in Spark logs 2026-11-21 - confirmed 2026-11-21
+confirmed-ip-d4a1d0f8c9,216.180.246.64,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-22 - seen in Spark logs 2026-11-22 - confirmed 2026-11-22
