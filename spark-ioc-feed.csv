@@ -1990,3 +1990,10 @@ confirmed-domain-3146d60507,mypgsweep.com,Domain,medium,high,AB,News 2026-11-16 
 confirmed-ip-c80293090a,216.180.246.234,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-20 - seen in Spark logs 2026-11-20 - confirmed 2026-11-20
 confirmed-ip-dd305b0535,216.180.246.118,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-21 - seen in Spark logs 2026-11-21 - confirmed 2026-11-21
 confirmed-ip-d4a1d0f8c9,216.180.246.64,IP,medium,high,AB,Inbound probe of WAN - Spark syslog 2026-11-22 - seen in Spark logs 2026-11-22 - confirmed 2026-11-22
+confirmed-domain-a5cc322add,c2ws.brokerok.org,Domain,medium,high,AB,News 2026-11-18 Bazuka Android banking trojan C2 - confirmed 2026-11-23
+confirmed-domain-f19b143295,c2data.brokerok.org,Domain,low,high,AB,News 2026-11-18 Bazuka Android banking trojan C2 - confirmed 2026-11-23
+confirmed-domain-8ae5bdcd8f,c2proxy.brokerok.org,Domain,medium,high,AB,News 2026-11-18 Bazuka Android banking trojan C2 - confirmed 2026-11-23
+confirmed-domain-92bbcf63ef,c2api.brokerok.org,Domain,medium,high,AB,News 2026-11-18 Bazuka Android banking trojan C2 - confirmed 2026-11-23
+confirmed-ip-0008dd1c91,95.181.213.21,IP,high,high,AB,News 2026-11-18 Bazuka Android banking trojan server - confirmed 2026-11-23
+confirmed-ip-a88fa053da,170.168.61.117,IP,medium,high,AB,News 2026-11-18 Bazuka banking trojan panel and C2 - confirmed 2026-11-23
+confirmed-domain-cac8fbb1a6,gargona.cash,Domain,medium,high,AB,News 2026-11-18 Bazuka banking trojan panel and C2 - confirmed 2026-11-23
